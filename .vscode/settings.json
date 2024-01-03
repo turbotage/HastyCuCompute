@@ -1,0 +1,11 @@
+{
+    "cmake.configureOnOpen": true,
+    "cmake.useCMakePresets": "always",
+    "files.associations": {
+        "type_traits": "cpp",
+        "*.ixx": "cpp",
+        "array": "cpp",
+        "stdexcept": "cpp",
+        "__config": "cpp"
+    }
+}

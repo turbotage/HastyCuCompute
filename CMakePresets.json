@@ -1,0 +1,51 @@
+{
+    "version": 8,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 28,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "MainConfig",
+            "displayName": "Clang 18.0.6 x86_64-pc-linux-gnu",
+            "description": "Using compilers: C = /usr/bin/clang-18, CXX = /usr/bin/clang++-18",
+            "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "generator": "Ninja",
+            "environment": {
+                "MY_INSTALL_PATH": "/home/turbotage/install",
+                "CUDA_ROOT": "/usr/local/cuda-12.3"
+            },
+            "cacheVariables": {
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
+                "CMAKE_C_COMPILER": "/usr/bin/clang-18",
+                "CMAKE_CXX_COMPILER": "/usr/bin/clang++-18",
+                "CMAKE_CUDA_ARCHITECTURES": "89",
+                "CUDAToolkit_ROOT": "$env{CUDA_ROOT}/bin/",
+                "finufft_ROOT": "$env{MY_INSTALL_PATH}/finufft/",
+                "CMAKE_PREFIX_PATH": {
+                    "type": "FILEPATH",
+                    "value": "$env{MY_INSTALL_PATH}/MatX/lib/cmake"
+                }
+            }
+        },
+        {
+            "name": "MainConfigRelease",
+            "description": "",
+            "displayName": "Clang (Release) x86_64-pc-linux-gnu",
+            "inherits": ["MainConfig"],
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+            }
+        },
+        {
+            "name": "MainConfigDebug",
+            "description": "",
+            "displayName": "Clang (Debug) x86_64-pc-linux-gnu",
+            "inherits": ["MainConfig"],
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        }
+    ]
+}
