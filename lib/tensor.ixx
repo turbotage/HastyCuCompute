@@ -1,6 +1,7 @@
 module;
 
 #include <matx.h>
+#include <xtensor/xarray.hpp>
 
 export module tensor;
 

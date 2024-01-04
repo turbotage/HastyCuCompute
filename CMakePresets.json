@@ -14,7 +14,8 @@
             "generator": "Ninja",
             "environment": {
                 "MY_INSTALL_PATH": "/home/turbotage/install",
-                "CUDA_ROOT": "/usr/local/cuda-12.3"
+                "CUDA_ROOT": "/usr/local/cuda-12.3",
+                "VCPKG_ROOT": "/home/turbotage/Documents/GitHub/vcpkg"
             },
             "cacheVariables": {
                 "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
@@ -26,6 +27,10 @@
                 "CMAKE_PREFIX_PATH": {
                     "type": "FILEPATH",
                     "value": "$env{MY_INSTALL_PATH}/MatX/lib/cmake"
+                },
+                "CMAKE_TOOLCHAIN_FILE": {
+                    "type": "FILEPATH",
+                    "value": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
                 }
             }
         },
