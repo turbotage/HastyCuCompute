@@ -1,29 +1,19 @@
 module;
 
-#include <type_traits>
-#include <matx.h>
 #include <cufinufft_opts.h>
 #include <cufinufft.h>
+#include "util.hpp"
 
 export module nufft;
 
-static_assert(alignof(cuda::std::complex<double>) == alignof(cuDoubleComplex));
-static_assert(sizeof(cuda::std::complex<double>) == sizeof(cuDoubleComplex));
-static_assert(alignof(cuda::std::complex<float>) == alignof(cuFloatComplex));
-static_assert(sizeof(cuda::std::complex<float>) == sizeof(cuFloatComplex));
+import tensor;
 
 namespace hasty {
-
-    template<typename T>
-    concept floating_point = std::is_same_v<float, T> || std::is_same_v<double, T>;
-    
-    template<typename T>
-    concept complex_floating_point = std::is_same_v<cuda::std::complex<float>,T> || std::is_same_v<cuda::std::complex<float>,T>;
 
     template<size_t N>
     concept nufft_dim = N > 0 && N < 4;
 
-    export enum nufft_type {
+    export enum struct nufft_type {
         TYPE_1 = 1,
         TYPE_2 = 2,
         TYPE_3 = 3,
@@ -31,14 +21,27 @@ namespace hasty {
         BACKWARD = TYPE_1
     };
 
-    export enum nufft_sign {
+    export enum struct nufft_sign {
         POS = 1,
         NEG = -1,
         DEFAULT_TYPE_1 = POS,
         DEFAULT_TYPE_2 = NEG
     };
 
-    export template<floating_point FPT, size_t DIM, nufft_type NFT> 
+    export enum struct nufft_upsamp {
+        UPSAMP_2_0,
+        UPSAMP_1_25,
+        DEFAULT,
+    };
+
+    export enum struct nufft_cuda_method {
+        GM_NO_SORT,
+        GM_SORT,
+        SM,
+        DEFAULT
+    }; 
+
+    export template<cuda_any_fp FPT, size_t DIM, nufft_type NFT> 
     requires nufft_dim<DIM>
     struct cuda_nufft_opts {
 
@@ -48,9 +51,15 @@ namespace hasty {
 
         int32_t ntransf;
         FPT tol;
+
+        nufft_upsamp upsamp = nufft_upsamp::UPSAMP_2_0;
+        nufft_cuda_method method = nufft_cuda_method::DEFAULT; 
+
+        inline int get_sign() const { return static_cast<int>(sign); }
+
     };
 
-    export template<floating_point FPT, size_t DIM, nufft_type NFT> 
+    export template<cuda_real_fp FPT, size_t DIM, nufft_type NFT> 
     requires nufft_dim<DIM>
     struct cuda_nufft_plan {
     public:
@@ -90,27 +99,27 @@ namespace hasty {
         std::conditional_t<std::is_same_v<FPT,float>, cufinufftf_plan, cufinufft_plan> _finufft_plan = nullptr;
 
         cuda_nufft_opts<FPT, DIM, NFT> _opts;
-        std::array<matx::tensor_t<FPT,1>,DIM> _coords;
+        std::array<tensor<FPT,1>,DIM> _coords;
 
-        template<floating_point F, size_t D, nufft_type N> 
+        template<cuda_real_fp F, size_t D, nufft_type N> 
         requires nufft_dim<D>
         friend std::unique_ptr<cuda_nufft_plan<F, D, N>> nufft_make_plan(const cuda_nufft_opts<F, D, N>& opts);
 
-        template<floating_point F, size_t D, nufft_type N>
+        template<cuda_real_fp F, size_t D, nufft_type N>
         friend cufinufft_opts& cudaplan_finufft_opts(cuda_nufft_plan<F,D,N>& plan);
 
-        template<floating_point F, size_t D, nufft_type N>
-        friend cuda_nufft_opts<F,D,N>& cudaplan_opts(cuda_nufft_plan<F,D,N>& plan);
-
-        template<floating_point F, size_t D, nufft_type N>
+        template<cuda_real_fp F, size_t D, nufft_type N>
         friend std::conditional_t<std::is_same_v<F,float>, cufinufftf_plan, cufinufft_plan>& cudaplan_finufft_plan(cuda_nufft_plan<F,D,N>& plan);
 
-        template<floating_point F, size_t D, nufft_type N>
-        friend std::array<matx::tensor_t<F, 1>,D>& cudaplan_coords(cuda_nufft_plan<F,D,N>& plan);
+        template<cuda_real_fp F, size_t D, nufft_type N>
+        friend cuda_nufft_opts<F,D,N>& cudaplan_opts(cuda_nufft_plan<F,D,N>& plan);
+
+        template<cuda_real_fp F, size_t D, nufft_type N>
+        friend std::array<tensor<F, 1>,D>& cudaplan_coords(cuda_nufft_plan<F,D,N>& plan);
 
     };
 
-    export template<floating_point F, size_t D, nufft_type N> 
+    export template<cuda_real_fp F, size_t D, nufft_type N> 
     requires nufft_dim<D>
     std::unique_ptr<cuda_nufft_plan<F, D, N>> nufft_make_plan(const cuda_nufft_opts<F, D, N>& opts)
     {
@@ -125,12 +134,51 @@ namespace hasty {
 
         cufinufft_default_opts(&ret->_finufft_opts);
         
+        switch (opts.method) {
+            case nufft_cuda_method::GM_NO_SORT:
+            {
+                ret->_finufft_opts.gpu_method = 1;
+                ret->_finufft_opts.gpu_sort = false;
+            } break;
+            case nufft_cuda_method::GM_SORT:
+            {
+                ret->_finufft_opts.gpu_method = 1;
+                ret->_finufft_opts.gpu_sort = true;
+            }break;
+            case nufft_cuda_method::SM:
+            {
+                ret->_finufft_opts.gpu_method = 2;
+                ret->_finufft_opts.gpu_sort = true;
+            }break;
+            case nufft_cuda_method::DEFAULT:
+            break;
+            default:
+                throw std::runtime_error("Invalid nufft_cuda_method");
+        }
+
+        switch (opts.upsamp) {
+            case nufft_upsamp::UPSAMP_2_0:
+            {
+                ret->_finufft_opts.upsampfac = 2.0;
+                //ret->_finufft_opts.gpu_kerevalmeth = 0;
+            }break;
+            case nufft_upsamp::UPSAMP_1_25:
+            {
+                ret->_finufft_opts.upsampfac = 1.25;
+                ret->_finufft_opts.gpu_kerevalmeth = 0;
+            }break;
+            case nufft_upsamp::DEFAULT:
+            {} break;
+            default:
+            throw std::runtime_error("nufft_make_plan encountered invalid nufft_upsamp argument");
+        }
+
         int result;
         if constexpr(std::is_same_v<F, float>) {
-            int result = cufinufftf_makeplan(N, D, opts.nmodes.data(), opts.sign,
+            result = cufinufftf_makeplan(static_cast<int>(N), D, opts.nmodes.data(), opts.get_sign(),
                     opts.ntransf, opts.tol, &ret->_finufft_plan, &ret->_finufft_opts);
         } else {
-            int result = cufinufft_makeplan(N, D, opts.nmodes.data(), opts.sign,
+            result = cufinufft_makeplan(static_cast<int>(N), D, opts.nmodes.data(), opts.get_sign(),
                     opts.ntransf, opts.tol, &ret->_finufft_plan, &ret->_finufft_opts);
         }
 
@@ -140,101 +188,115 @@ namespace hasty {
         return ret;
     }
 
-    template<floating_point F, size_t D, nufft_type N>
-    inline cufinufft_opts& cudaplan_finufft_opts(cuda_nufft_plan<F,D,N>& plan) { return plan._plan_opts; }
+    template<cuda_real_fp F, size_t D, nufft_type N>
+    inline cufinufft_opts& cudaplan_finufft_opts(cuda_nufft_plan<F,D,N>& plan) 
+    { 
+        return plan._finufft_opts; 
+    }
 
-    template<floating_point F, size_t D, nufft_type N>
-    inline cuda_nufft_opts<F,D,N>& cudaplan_opts(cuda_nufft_plan<F,D,N>& plan) { return plan._nufft_opts; }
+    template<cuda_real_fp F, size_t D, nufft_type N>
+    inline std::conditional_t<std::is_same_v<F,float>, cufinufftf_plan, cufinufft_plan>& cudaplan_finufft_plan(cuda_nufft_plan<F,D,N>& plan) 
+    { 
+        return plan._finufft_plan; 
+    } 
 
-    template<floating_point F, size_t D, nufft_type N>
-    inline std::conditional_t<std::is_same_v<F,float>, cufinufftf_plan, cufinufft_plan>& cudaplan_finufft_plan(cuda_nufft_plan<F,D,N>& plan) { return plan._plan; } 
+    template<cuda_real_fp F, size_t D, nufft_type N>
+    inline cuda_nufft_opts<F,D,N>& cudaplan_opts(cuda_nufft_plan<F,D,N>& plan) 
+    { 
+        return plan._opts;
+    }
 
-    template<floating_point F, size_t D, nufft_type N>
-    inline std::array<matx::tensor_t<F, 1>,D>& cudaplan_coords(cuda_nufft_plan<F,D,N>& plan) { return plan._coords; }
+    template<cuda_real_fp F, size_t D, nufft_type N>
+    inline std::array<tensor<F, 1>,D>& cudaplan_coords(cuda_nufft_plan<F,D,N>& plan) 
+    { 
+        return plan._coords; 
+    }
 
 
 
-    template<floating_point FP_TYPE, size_t DIM, nufft_type NUFFT_TYPE> 
-    requires nufft_dim<DIM> && (NUFFT_TYPE == 1 || NUFFT_TYPE == 2)
-    void nufft_setpts(const cuda_nufft_plan<FP_TYPE, DIM, NUFFT_TYPE>& plan, std::array<matx::tensor_t<FP_TYPE, 1>, DIM> coords)
+    export template<cuda_real_fp FPT, size_t DIM, nufft_type NFT> 
+    requires nufft_dim<DIM> && (static_cast<int>(NFT) == 1 || static_cast<int>(NFT) == 2)
+    void nufft_setpts(cuda_nufft_plan<FPT, DIM, NFT>& plan, const std::array<tensor<FPT, 1>, DIM>& coords)
     {
 
-        int M = coords[0].Size(0);
+        int M = coords[0].shape<0>();
 
         auto& plancoords = cudaplan_coords(plan);
         plancoords = coords;
 
         if constexpr(DIM == 2) {
-            if (coords[0].Size(0) != coords[1].Size(1)) {
+            if (coords[0].Size(0) != coords[1].shape<0>()) {
                 throw std::runtime_error("x and y coords have different lengths");
             }
         }
         if constexpr(DIM == 3) {
             if (
-                (coords[0].Size(0) != coords[1].Size(0)) || 
-                (coords[1].Size(0) != coords[2].Size(0)) ||
-                (coords[0].Size(0) != coords[2].Size(0))
+                (coords[0].shape<0> != coords[1].shape<0>) || 
+                (coords[1].shape<0> != coords[2].shape<0>) ||
+                (coords[0].shape<0> != coords[2].shape<0>)
             ){  throw std::runtime_error("x and y coords have different lengths"); }
         }
-
-        constexpr auto setptsfunc = [&](FP_TYPE* x, FP_TYPE* y, FP_TYPE* z) 
+        
+        using namespace std::placeholders;
+        constexpr auto setptsfunc = std::bind([]()
         { 
-            if constexpr(std::is_same_v<FP_TYPE,float>) {
-                return cufinufftf_setpts(cudaplan_finufft_plan(plan), M, x, y, z, 0, nullptr, nullptr, nullptr);
+            if constexpr(std::is_same_v<FPT,float>) {
+                return cufinufftf_setpts;
             } else {
-                return cufinufft_setpts(cudaplan_finufft_plan(plan), M, x, y, z, 0, nullptr, nullptr, nullptr);
+                return cufinufft_setpts;
             }
-        };
+        }(), _1, _2, _3, _4, _5, 0, nullptr, nullptr, nullptr);
+        
 
         int result;
         if constexpr(DIM == 1) {
-            result = setptsfunc(coords[0].Data(), nullptr, nullptr);
+            result = setptsfunc(cudaplan_finufft_plan(plan), M, coords[0].data(), nullptr, nullptr);
         }
         else if constexpr(DIM == 2) {
-            result = setptsfunc(coords[0].Data(), coords[1].Data(), nullptr);
+            result = setptsfunc(cudaplan_finufft_plan(plan), M, coords[0].data(), coords[1].data(), nullptr);
         }
         else if constexpr(DIM == 3) {
-            result = setptsfunc(coords[0].Data(), coords[1].Data(), coords[2].Data());
+            result = setptsfunc(cudaplan_finufft_plan(plan), M, coords[0].data(), coords[1].data(), coords[2].data());
         }
 
         if (result)
             throw std::runtime_error("cufinufft: setpts function failed with code: " + std::to_string(result));
     }
 
-    export template<floating_point FP_TYPE, size_t DIM>
+    export template<cuda_real_fp FPT, size_t DIM>
     requires nufft_dim<DIM>
-    void nufft_execute( const cuda_nufft_plan<FP_TYPE, DIM, nufft_type::TYPE_1>& plan, 
-                        const matx::tensor_t<cuda::std::complex<FP_TYPE>, 2>& input,
-                        matx::tensor_t<cuda::std::complex<FP_TYPE>, DIM+1>& output)
+    void nufft_execute( cuda_nufft_plan<FPT, DIM, nufft_type::TYPE_1>& plan, 
+                        const cutensor_c<FPT, 2>& input,
+                        cutensor_c<FPT, DIM+1>& output)
     {
         int result;
 
-        if constexpr(std::is_same_v<FP_TYPE, float>) {
-            result = cufinufftf_execute(plan->_plan, 
-                static_cast<cuFloatComplex*>(input.Data()), static_cast<cuFloatComplex*>(output.Data()));
+        if constexpr(std::is_same_v<FPT, float>) {
+            result = cufinufftf_execute(cudaplan_finufft_plan(plan), 
+                reinterpret_cast<cuFloatComplex*>(input.Data()), reinterpret_cast<cuFloatComplex*>(output.Data()));
         } else {
-            result = cufinufft_execute(plan->_plan, 
-                static_cast<cuDoubleComplex*>(input.Data(), static_cast<cuDoubleComplex*>(output.Data())));
+            result = cufinufft_execute(cudaplan_finufft_plan(plan), 
+                reinterpret_cast<cuDoubleComplex*>(input.Data(), reinterpret_cast<cuDoubleComplex*>(output.Data())));
         }
 
         if (result)
             throw std::runtime_error("cufinufft: execute failed with error code: " + std::to_string(result));
     }
 
-    export template<floating_point FP_TYPE, size_t DIM>
+    export template<cuda_real_fp FPT, size_t DIM>
     requires nufft_dim<DIM>
-    void nufft_execute( const cuda_nufft_plan<FP_TYPE, DIM, nufft_type::TYPE_2>& plan, 
-                        const matx::tensor_t<cuda::std::complex<FP_TYPE>, DIM+1>& input,
-                        matx::tensor_t<cuda::std::complex<FP_TYPE>, 2>& output)
+    void nufft_execute( cuda_nufft_plan<FPT, DIM, nufft_type::TYPE_2>& plan, 
+                        const cutensor_c<FPT, DIM+1>& input,
+                        cutensor_c<FPT, 2>& output)
     {
         int result;
 
-        if constexpr(std::is_same_v<FP_TYPE, float>) {
-            result = cufinufftf_execute(plan->_plan, 
-                static_cast<cuFloatComplex*>(output.Data()), static_cast<cuFloatComplex*>(input.Data()));
+        if constexpr(std::is_same_v<FPT, float>) {
+            result = cufinufftf_execute(cudaplan_finufft_plan(plan), 
+                reinterpret_cast<cuFloatComplex*>(output.Data()), reinterpret_cast<cuFloatComplex*>(input.Data()));
         } else {
-            result = cufinufft_execute(plan->_plan, 
-                static_cast<cuDoubleComplex*>(output.Data()), static_cast<cuDoubleComplex*>(input.Data()));
+            result = cufinufft_execute(cudaplan_finufft_plan(plan), 
+                reinterpret_cast<cuDoubleComplex*>(output.Data()), reinterpret_cast<cuDoubleComplex*>(input.Data()));
         }
 
         if (result)

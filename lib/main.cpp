@@ -1,37 +1,54 @@
-#include <iostream>
-#include <xtensor/xtensor.hpp>
-#include <xtensor/xio.hpp>
-#include <xtensor/xview.hpp>
-#include <xtensor-io/xhighfive.hpp>
 
-#include <matx.h>
+
 
 import nufft;
 import tensor;
 
-int main() {
-    std::array<size_t, 3> shape = {1,3,3};
-    xt::xtensor<double, 3> test_tensor(shape);
 
-    xt::dump_hdf5("test.h5", "testdata", test_tensor);
 
-    auto test_tensor_back = xt::load_hdf5<xt::xtensor<double, 3>>("test.h5", "testdata");
-
-    std::cout << "test_tensor: " << test_tensor << std::endl;
-
-    std::cout << "test_tensor_back: " << test_tensor_back << std::endl;
+float run_nufft_type2_timing(int ntransf, int nx, int ny, int nz, int nupts, hasty::nufft_cuda_method method, hasty::nufft_upsamp upsamp) {
 
     hasty::cuda_nufft_opts<float, 3, hasty::nufft_type::TYPE_2> opts{
-        .nmodes={128,128,128}, .sign=hasty::nufft_sign::DEFAULT_TYPE_2, .ntransf=32, .tol=1e-5};
+        .nmodes={nx,ny,nz}, 
+        .sign=hasty::nufft_sign::DEFAULT_TYPE_2, 
+        .ntransf=ntransf, 
+        .tol=1e-5,
+        
+        .upsamp=upsamp,
+        .method=method
+        };
 
     auto plan = hasty::nufft_make_plan(opts);
 
-    auto image = matx::make_tensor<cuda::std::complex<float>, 4>({32, 128, 128, 128});
 
-    auto randOp = matx::random<cuda::std::complex<float>>(image.Shape(), matx::UNIFORM);
-    (image = -3.141592f + 2*3.141592f*randOp).run();
     
-    
-    
+
+    hasty::nufft_setpts(*plan, coords);
+
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+
+    cudaDeviceSynchronize();
+
+    cudaEventRecord(start, 0);
+
+    for (int i = 0; i < 100; ++i) {
+        hasty::nufft_execute(*plan, image, kspace);
+    }
+
+    float elapsed;
+    cudaEventRecord(stop, 0);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&elapsed, start, stop);
+
+    return elapsed;
+}
+
+int main() {
+
+    std::cout << "ms: " << run_nufft_type2_timing(32, 128, 128, 128, 300000, 
+        hasty::nufft_cuda_method::DEFAULT, hasty::nufft_upsamp::DEFAULT);
+
     return 0;
 }

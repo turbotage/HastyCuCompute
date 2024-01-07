@@ -7,7 +7,7 @@
     },
     "configurePresets": [
         {
-            "name": "MainConfig",
+            "name": "MainConfigClang",
             "displayName": "Clang 18.0.6 x86_64-pc-linux-gnu",
             "description": "Using compilers: C = /usr/bin/clang-18, CXX = /usr/bin/clang++-18",
             "binaryDir": "${sourceDir}/out/build/${presetName}",
@@ -22,11 +22,12 @@
                 "CMAKE_C_COMPILER": "/usr/bin/clang-18",
                 "CMAKE_CXX_COMPILER": "/usr/bin/clang++-18",
                 "CMAKE_CUDA_ARCHITECTURES": "89",
+                "CMAKE_CUDA_COMPILER": "$env{CUDA_ROOT}/bin/nvcc",
                 "CUDAToolkit_ROOT": "$env{CUDA_ROOT}/bin/",
                 "finufft_ROOT": "$env{MY_INSTALL_PATH}/finufft/",
                 "CMAKE_PREFIX_PATH": {
                     "type": "FILEPATH",
-                    "value": "$env{MY_INSTALL_PATH}/MatX/lib/cmake"
+                    "value": "$env{MY_INSTALL_PATH}/LibTorch/"
                 },
                 "CMAKE_TOOLCHAIN_FILE": {
                     "type": "FILEPATH",
@@ -35,22 +36,23 @@
             }
         },
         {
-            "name": "MainConfigRelease",
+            "name": "MainConfigClangRelease",
             "description": "",
             "displayName": "Clang (Release) x86_64-pc-linux-gnu",
-            "inherits": ["MainConfig"],
+            "inherits": ["MainConfigClang"],
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "RelWithDebInfo"
             }
         },
         {
-            "name": "MainConfigDebug",
+            "name": "MainConfigClangDebug",
             "description": "",
             "displayName": "Clang (Debug) x86_64-pc-linux-gnu",
-            "inherits": ["MainConfig"],
+            "inherits": ["MainConfigClang"],
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug"
             }
         }
+
     ]
 }
