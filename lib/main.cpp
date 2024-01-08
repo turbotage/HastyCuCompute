@@ -1,5 +1,6 @@
 
-
+#include "util.hpp"
+#include <cuda_runtime_api.h>
 
 import nufft;
 import tensor;
@@ -8,7 +9,7 @@ import tensor;
 
 float run_nufft_type2_timing(int ntransf, int nx, int ny, int nz, int nupts, hasty::nufft_cuda_method method, hasty::nufft_upsamp upsamp) {
 
-    hasty::cuda_nufft_opts<float, 3, hasty::nufft_type::TYPE_2> opts{
+    hasty::cuda_nufft_opts<hasty::cuda_f32, 3, hasty::nufft_type::TYPE_2> opts{
         .nmodes={nx,ny,nz}, 
         .sign=hasty::nufft_sign::DEFAULT_TYPE_2, 
         .ntransf=ntransf, 
@@ -20,8 +21,10 @@ float run_nufft_type2_timing(int ntransf, int nx, int ny, int nz, int nupts, has
 
     auto plan = hasty::nufft_make_plan(opts);
 
-
     
+
+
+    auto coords = { hasty::make_tensor<hasty::cuda_f32,1>
 
     hasty::nufft_setpts(*plan, coords);
 

@@ -5,6 +5,9 @@
 
 namespace hasty {
 
+    template<size_t T1, size_t T2>
+    concept less_than = T1 < T2;
+
     template<typename T>
     concept floating_point = std::is_same_v<float, T> || std::is_same_v<double, T>;
 
@@ -18,7 +21,6 @@ namespace hasty {
 
     template<typename T>
     concept is_strong_type = std::is_base_of_v<strong_typedef_base, T> && has_strong_value<T>::value;
-
 
     // export from here
 

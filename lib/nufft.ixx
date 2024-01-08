@@ -50,14 +50,14 @@ namespace hasty {
         nufft_sign sign;
 
         int32_t ntransf;
-        FPT tol;
+        underlying_type<FPT> tol;
 
         nufft_upsamp upsamp = nufft_upsamp::UPSAMP_2_0;
         nufft_cuda_method method = nufft_cuda_method::DEFAULT; 
 
         inline int get_sign() const { return static_cast<int>(sign); }
 
-    };
+    };  
 
     export template<cuda_real_fp FPT, size_t DIM, nufft_type NFT> 
     requires nufft_dim<DIM>
@@ -96,7 +96,7 @@ namespace hasty {
 
     private:
         cufinufft_opts _finufft_opts;
-        std::conditional_t<std::is_same_v<FPT,float>, cufinufftf_plan, cufinufft_plan> _finufft_plan = nullptr;
+        std::conditional_t<std::is_same_v<FPT,cuda_f32>, cufinufftf_plan, cufinufft_plan> _finufft_plan = nullptr;
 
         cuda_nufft_opts<FPT, DIM, NFT> _opts;
         std::array<tensor<FPT,1>,DIM> _coords;
@@ -219,21 +219,21 @@ namespace hasty {
     void nufft_setpts(cuda_nufft_plan<FPT, DIM, NFT>& plan, const std::array<tensor<FPT, 1>, DIM>& coords)
     {
 
-        int M = coords[0].shape<0>();
+        int M = coords[0].template shape<size_t(0)>();
 
         auto& plancoords = cudaplan_coords(plan);
         plancoords = coords;
 
         if constexpr(DIM == 2) {
-            if (coords[0].Size(0) != coords[1].shape<0>()) {
+            if (coords[0].template shape<0>() != coords[1].template shape<0>()) {
                 throw std::runtime_error("x and y coords have different lengths");
             }
         }
         if constexpr(DIM == 3) {
             if (
-                (coords[0].shape<0> != coords[1].shape<0>) || 
-                (coords[1].shape<0> != coords[2].shape<0>) ||
-                (coords[0].shape<0> != coords[2].shape<0>)
+                (coords[0].template shape<0>() != coords[1].template shape<0>()) || 
+                (coords[1].template shape<0>() != coords[2].template shape<0>()) ||
+                (coords[0].template shape<0>() != coords[2].template shape<0>())
             ){  throw std::runtime_error("x and y coords have different lengths"); }
         }
         
@@ -266,17 +266,17 @@ namespace hasty {
     export template<cuda_real_fp FPT, size_t DIM>
     requires nufft_dim<DIM>
     void nufft_execute( cuda_nufft_plan<FPT, DIM, nufft_type::TYPE_1>& plan, 
-                        const cutensor_c<FPT, 2>& input,
-                        cutensor_c<FPT, DIM+1>& output)
+                        const tensor<FPT, 2>& input,
+                        tensor<FPT, DIM+1>& output)
     {
         int result;
 
         if constexpr(std::is_same_v<FPT, float>) {
             result = cufinufftf_execute(cudaplan_finufft_plan(plan), 
-                reinterpret_cast<cuFloatComplex*>(input.Data()), reinterpret_cast<cuFloatComplex*>(output.Data()));
+                reinterpret_cast<cuFloatComplex*>(input.data()), reinterpret_cast<cuFloatComplex*>(output.data()));
         } else {
             result = cufinufft_execute(cudaplan_finufft_plan(plan), 
-                reinterpret_cast<cuDoubleComplex*>(input.Data(), reinterpret_cast<cuDoubleComplex*>(output.Data())));
+                reinterpret_cast<cuDoubleComplex*>(input.data(), reinterpret_cast<cuDoubleComplex*>(output.data())));
         }
 
         if (result)
@@ -286,17 +286,17 @@ namespace hasty {
     export template<cuda_real_fp FPT, size_t DIM>
     requires nufft_dim<DIM>
     void nufft_execute( cuda_nufft_plan<FPT, DIM, nufft_type::TYPE_2>& plan, 
-                        const cutensor_c<FPT, DIM+1>& input,
-                        cutensor_c<FPT, 2>& output)
+                        const tensor<FPT, DIM+1>& input,
+                        tensor<FPT, 2>& output)
     {
         int result;
 
         if constexpr(std::is_same_v<FPT, float>) {
             result = cufinufftf_execute(cudaplan_finufft_plan(plan), 
-                reinterpret_cast<cuFloatComplex*>(output.Data()), reinterpret_cast<cuFloatComplex*>(input.Data()));
+                reinterpret_cast<cuFloatComplex*>(output.data()), reinterpret_cast<cuFloatComplex*>(input.data()));
         } else {
             result = cufinufft_execute(cudaplan_finufft_plan(plan), 
-                reinterpret_cast<cuDoubleComplex*>(output.Data()), reinterpret_cast<cuDoubleComplex*>(input.Data()));
+                reinterpret_cast<cuDoubleComplex*>(output.data()), reinterpret_cast<cuDoubleComplex*>(input.data()));
         }
 
         if (result)
