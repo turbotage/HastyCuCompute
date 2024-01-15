@@ -9,16 +9,16 @@ export module trace;
 namespace hasty {
 
     
-    struct trace {
+    export struct trace {
 
         trace()
         {
             std::vector<at::Tensor> tensorlist;
         }
 
-        void add_line(const std::string_view& line)
+        void add_line(const std::string& line)
         {
-            _tracerstr += "\n\t" + line;
+            _tracestr += "\n\t" + line;
         }
 
     private:
@@ -27,9 +27,9 @@ namespace hasty {
 R"torchscript(
 def trace_function(tensorlist):
 )torchscript";
-    }
+    };
 
 
-    
+
 
 }

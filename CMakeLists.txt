@@ -23,6 +23,7 @@ target_sources(HastyCuCompute
         "lib/tensor.ixx"
         "lib/nufft.ixx"
         "lib/fft.ixx"
+        "lib/trace.ixx"
 )
 
 set(CMAKE_VERBOSE_MAKEFILE ON)
