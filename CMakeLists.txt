@@ -22,6 +22,7 @@ target_sources(HastyCuCompute
     PUBLIC FILE_SET CXX_MODULES FILES
         "lib/tensor.ixx"
         "lib/nufft.ixx"
+        "lib/fft.ixx"
 )
 
 set(CMAKE_VERBOSE_MAKEFILE ON)
@@ -57,6 +58,9 @@ target_include_directories(HastyCuCompute PRIVATE "${finufft_ROOT}/include")
 
 find_package(Torch REQUIRED)
 target_link_libraries(HastyCuCompute PRIVATE ${TORCH_LIBRARIES})
+
+find_package(mathdx REQUIRED COMPONENTS cufftdx)
+target_link_libraries(HastyCuCompute PRIVATE mathdx::cufftdx)
 
 
 

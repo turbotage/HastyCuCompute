@@ -31,6 +31,7 @@ namespace hasty {
 
     template<is_strong_type T>
     using underlying_type = decltype(T::strong_value);
+    
 
     using cpu_f32 = strong_typedef<float, struct cpu_f32_>;
     using cpu_f64 = strong_typedef<double, struct cpu_f64_>;
@@ -45,6 +46,9 @@ namespace hasty {
 
     template<typename T>
     concept cpu_any_fp = requires {cpu_complex_fp<T> || cpu_real_fp<T>;};
+
+    template<typename T>
+    using complexify_cpu_type = std::conditional_t<std::is_same_v<T,cpu_f32>, cpu_c64, cpu_c128>;
 
     
     using cuda_f32 = strong_typedef<float, struct cuda_f32_>;
@@ -63,8 +67,22 @@ namespace hasty {
 
     
     template<typename T>
-    concept any_fp = requires {cuda_any_fp<T> || cpu_any_fp<T>;};
+    using complexify_cuda_type = std::conditional_t<std::is_same_v<T,cuda_f32>, cuda_c64, cuda_c128>;
 
+
+
+    template<typename T>
+    concept any_real_fp = requires { requires cpu_real_fp<T> || cuda_real_fp<T>;};
+
+    template<typename T>
+    concept any_complex_fp = requires { cuda_complex_fp<T> || cpu_complex_fp<T>;};
+
+    template<typename T>
+    concept any_fp = requires { cuda_any_fp<T> || cpu_any_fp<T>; };
+
+
+    template<any_real_fp T>
+    using complexify_type = std::conditional_t<(cuda_real_fp<T>), complexify_cuda_type<T>, complexify_cpu_type<T>>;
 
     template<any_fp FP>
     constexpr at::ScalarType static_type_to_scalar_type()
@@ -92,6 +110,8 @@ namespace hasty {
     static_assert(alignof(cuda_c128) == alignof(cuDoubleComplex));
     static_assert(sizeof(cuda_c128) == sizeof(cuDoubleComplex));
 
+
+    
 
 
 }

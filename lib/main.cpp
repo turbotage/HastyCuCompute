@@ -13,20 +13,27 @@ float run_nufft_type2_timing(int ntransf, int nx, int ny, int nz, int nupts, has
         .nmodes={nx,ny,nz}, 
         .sign=hasty::nufft_sign::DEFAULT_TYPE_2, 
         .ntransf=ntransf, 
-        .tol=1e-5,
+        .tol=1e-4,
         
         .upsamp=upsamp,
         .method=method
         };
 
-    auto plan = hasty::nufft_make_plan(opts);
+    std::unique_ptr<hasty::cuda_nufft_plan<hasty::cuda_f32, 3, hasty::nufft_type::TYPE_2>> plan = 
+        hasty::nufft_make_plan(opts);
 
-    
+
+    hasty::tensor<hasty::cuda_c64, 2> kspace = hasty::make_tensor<hasty::cuda_c64, 2>({ntransf, nupts}, "cuda:0");
+    hasty::tensor<hasty::cuda_c64, 4> image = hasty::make_tensor<hasty::cuda_c64, 4>({ntransf,nx,ny,nz}, "cuda:0");
+
+    std::array<hasty::tensor<hasty::cuda_f32, 1>, 3> coord = { 
+        hasty::make_tensor<hasty::cuda_f32,1>({nupts}, "cuda:0"),
+        hasty::make_tensor<hasty::cuda_f32,1>({nupts}, "cuda:0"),
+        hasty::make_tensor<hasty::cuda_f32,1>({nupts}, "cuda:0") 
+    };
 
 
-    auto coords = { hasty::make_tensor<hasty::cuda_f32,1>
-
-    hasty::nufft_setpts(*plan, coords);
+    hasty::nufft_setpts(*plan, coord);
 
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
@@ -48,10 +55,79 @@ float run_nufft_type2_timing(int ntransf, int nx, int ny, int nz, int nupts, has
     return elapsed;
 }
 
+void type_2_tests(int ntransf, int nx, int ny, int nz, int nupts) {
+    
+    std::cout << "UPSAMP: 2.0\n";
+    {   
+        // GM_NO_SORT
+        std::cout << "GM_NO_SORT: \n";
+        std::cout << "ms: " << run_nufft_type2_timing(ntransf, nx, ny, nz, nupts, 
+            hasty::nufft_cuda_method::GM_NO_SORT, hasty::nufft_upsamp::DEFAULT);
+        std::cout << "ms: " << run_nufft_type2_timing(ntransf, nx, ny, nz, nupts, 
+            hasty::nufft_cuda_method::GM_NO_SORT, hasty::nufft_upsamp::DEFAULT);
+        std::cout << "\n";
+
+        // GM_SORT
+        std::cout << "GM_SORT: \n";
+        std::cout << "ms: " << run_nufft_type2_timing(ntransf, nx, ny, nz, nupts, 
+            hasty::nufft_cuda_method::GM_SORT, hasty::nufft_upsamp::DEFAULT);
+        std::cout << "ms: " << run_nufft_type2_timing(ntransf, nx, ny, nz, nupts, 
+            hasty::nufft_cuda_method::GM_SORT, hasty::nufft_upsamp::DEFAULT);
+        std::cout << "\n";
+
+        // SM
+        std::cout << "SM: \n";
+        std::cout << "ms: " << run_nufft_type2_timing(ntransf, nx, ny, nz, nupts, 
+            hasty::nufft_cuda_method::SM, hasty::nufft_upsamp::DEFAULT);
+        std::cout << "ms: " << run_nufft_type2_timing(ntransf, nx, ny, nz, nupts, 
+            hasty::nufft_cuda_method::SM, hasty::nufft_upsamp::DEFAULT);
+        std::cout << "\n";
+    }
+
+
+    std::cout << "UPSAMP: 1.25\n";
+    {   
+        // GM_NO_SORT
+        std::cout << "GM_NO_SORT: \n";
+        std::cout << "ms: " << run_nufft_type2_timing(ntransf, nx, ny, nz, nupts, 
+            hasty::nufft_cuda_method::GM_NO_SORT, hasty::nufft_upsamp::UPSAMP_1_25);
+        std::cout << "ms: " << run_nufft_type2_timing(ntransf, nx, ny, nz, nupts, 
+            hasty::nufft_cuda_method::GM_NO_SORT, hasty::nufft_upsamp::UPSAMP_1_25);
+        std::cout << "\n";
+
+        // GM_SORT
+        std::cout << "GM_SORT: \n";
+        std::cout << "ms: " << run_nufft_type2_timing(ntransf, nx, ny, nz, nupts, 
+            hasty::nufft_cuda_method::GM_SORT, hasty::nufft_upsamp::UPSAMP_1_25);
+        std::cout << "ms: " << run_nufft_type2_timing(ntransf, nx, ny, nz, nupts, 
+            hasty::nufft_cuda_method::GM_SORT, hasty::nufft_upsamp::UPSAMP_1_25);
+        std::cout << "\n";
+
+        // SM
+        std::cout << "SM: \n";
+        std::cout << "ms: " << run_nufft_type2_timing(ntransf, nx, ny, nz, nupts, 
+            hasty::nufft_cuda_method::SM, hasty::nufft_upsamp::UPSAMP_1_25);
+        std::cout << "ms: " << run_nufft_type2_timing(ntransf, nx, ny, nz, nupts, 
+            hasty::nufft_cuda_method::SM, hasty::nufft_upsamp::UPSAMP_1_25);
+        std::cout << "\n";
+    }
+
+
+}
+
+
 int main() {
 
-    std::cout << "ms: " << run_nufft_type2_timing(32, 128, 128, 128, 300000, 
-        hasty::nufft_cuda_method::DEFAULT, hasty::nufft_upsamp::DEFAULT);
+    int ntransf = 32;
+    int nx = 170;
+    int ny = 170;
+    int nz = 170;
+    int nupts = 175000;
+
+    type_2_tests(ntransf, nx, ny, nz, nupts);
+    
+    
+
 
     return 0;
 }
