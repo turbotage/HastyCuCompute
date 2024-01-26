@@ -1,11 +1,10 @@
-module;
+#pragma once
 
 #include <cufft.h>
 #include <cufftXt.h>
 
 #include "util.hpp"
 
-export module fft;
 
 inline int cufft_check_errors(cufftResult error)
 {

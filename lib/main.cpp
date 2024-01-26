@@ -2,8 +2,8 @@
 #include "util.hpp"
 #include <cuda_runtime_api.h>
 
-import nufft;
-import tensor;
+#include "nufft.hpp"
+#include "tensor.hpp"
 
 
 

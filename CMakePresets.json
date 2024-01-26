@@ -27,7 +27,7 @@
                 "finufft_ROOT": "$env{MY_INSTALL_PATH}/finufft/",
                 "CMAKE_PREFIX_PATH": {
                     "type": "FILEPATH",
-                    "value": "$env{MY_INSTALL_PATH}/LibTorch/;$env{MY_INSTALL_PATH}/nvidia/mathdx/24.01/"
+                    "value": "$env{MY_INSTALL_PATH}/LibTorch/;$env{MY_INSTALL_PATH}/nvidia/mathdx/24.01/;$env{MY_INSTALL_PATH}/MatX/"
                 },
                 "CMAKE_TOOLCHAIN_FILE": {
                     "type": "FILEPATH",

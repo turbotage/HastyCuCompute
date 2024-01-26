@@ -1,10 +1,7 @@
-module;
+#pragma once
 
 #include "util.hpp"
 
-export module tensor;
-
-import trace;
 
 namespace hasty {
 
@@ -16,7 +13,6 @@ namespace hasty {
         {   
             data_ptr = reinterpret_cast<underlying_type<FP>*>(underlying_tensor.mutable_data_ptr()); 
         }
-
 
         std::array<int64_t, RANK> shape;
         at::Tensor underlying_tensor;

@@ -1,7 +1,8 @@
 #pragma once
-#include <cuComplex.h>
-#include <torch/torch.h>
 
+#include <cuComplex.h>
+#include <complex>
+#include <array>
 
 namespace hasty {
 
@@ -84,22 +85,6 @@ namespace hasty {
     template<any_real_fp T>
     using complexify_type = std::conditional_t<(cuda_real_fp<T>), complexify_cuda_type<T>, complexify_cpu_type<T>>;
 
-    template<any_fp FP>
-    constexpr at::ScalarType static_type_to_scalar_type()
-    {
-        if constexpr(std::is_same_v<FP, cpu_f32> || std::is_same_v<FP, cuda_f32>) {
-            return at::ScalarType::Float;
-        }
-        else if constexpr(std::is_same_v<FP, cpu_f64> || std::is_same_v<FP, cuda_f64>) {
-            return at::ScalarType::Double;
-        }
-        else if constexpr(std::is_same_v<FP, cpu_c64> || std::is_same_v<FP, cuda_c64>) {
-            return at::ScalarType::ComplexFloat;
-        }
-        else if constexpr(std::is_same_v<FP, cpu_c128> || std::is_same_v<FP, cuda_c128>) {
-            return at::ScalarType::ComplexDouble;
-        }
-    }
 
     static_assert(alignof(cuda_f32) == alignof(float));
     static_assert(sizeof(cuda_f32) == sizeof(float));

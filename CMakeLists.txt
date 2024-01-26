@@ -18,13 +18,6 @@ set_property(TARGET HastyCuCompute PROPERTY CMAKE_CXX_STANDARD_REQUIRED ON)
 set_property(TARGET HastyCuCompute PROPERTY CUDA_STANDARD 20)
 set_property(TARGET HastyCuCompute PROPERTY CUDA_STANDARD_REQUIRED ON)
 
-target_sources(HastyCuCompute 
-    PUBLIC FILE_SET CXX_MODULES FILES
-        "lib/tensor.ixx"
-        "lib/nufft.ixx"
-        "lib/fft.ixx"
-        "lib/trace.ixx"
-)
 
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
@@ -57,8 +50,8 @@ target_include_directories(HastyCuCompute PRIVATE "${finufft_ROOT}/include")
 
 #set_property(TARGET HastyCuCompute PROPERTY CUDA_SEPARABLE_COMPILATION ON)
 
-find_package(Torch REQUIRED)
-target_link_libraries(HastyCuCompute PRIVATE ${TORCH_LIBRARIES})
+find_package(matx CONFIG REQUIRED)
+target_link_libraries(HastyCuCompute PRIVATE matx::matx)
 
 find_package(mathdx REQUIRED COMPONENTS cufftdx)
 target_link_libraries(HastyCuCompute PRIVATE mathdx::cufftdx)
