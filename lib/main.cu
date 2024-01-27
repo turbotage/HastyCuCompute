@@ -1,7 +1,7 @@
 
-#include "util.hpp"
 #include <cuda_runtime_api.h>
 
+#include "util.hpp"
 #include "nufft.hpp"
 #include "tensor.hpp"
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <cuComplex.h>
+#include <cuda/std/complex.h>
 #include <complex>
 #include <array>
 
