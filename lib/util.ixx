@@ -1,9 +1,15 @@
-#pragma once
+module;
 #include <cuComplex.h>
 #include <torch/torch.h>
 
+export module util;
 
 namespace hasty {
+
+    enum struct device_type {
+        CPU,
+        CUDA
+    };
 
     template<size_t T1, size_t T2>
     concept less_than = T1 < T2;

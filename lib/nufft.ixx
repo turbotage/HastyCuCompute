@@ -6,6 +6,7 @@ module;
 
 export module nufft;
 
+import util;
 import tensor;
 
 namespace hasty {
@@ -40,6 +41,15 @@ namespace hasty {
         SM,
         DEFAULT
     }; 
+
+
+    template<std::floating_point, size_t, device_type>
+    struct nufft_opts; 
+
+    export template<std::floating_point FPT, size_t DIM, device_type DT = device_type::CUDA> 
+    requires is_dim3<DIM>
+    struct nufft_opts
+
 
     export template<cuda_real_fp FPT, size_t DIM, nufft_type NFT> 
     requires is_dim3<DIM>
