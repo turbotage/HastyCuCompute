@@ -6,16 +6,18 @@ export module util;
 
 namespace hasty {
 
+    export {
+
+
     enum struct device_type {
         CPU,
         CUDA
     };
 
+
     template<size_t T1, size_t T2>
     concept less_than = T1 < T2;
 
-    template<typename T>
-    concept floating_point = std::is_same_v<float, T> || std::is_same_v<double, T>;
 
     template <typename T, typename = void>
     struct has_strong_value : std::false_type{};
@@ -54,7 +56,22 @@ namespace hasty {
     concept cpu_any_fp = requires {cpu_complex_fp<T> || cpu_real_fp<T>;};
 
     template<typename T>
-    using complexify_cpu_type = std::conditional_t<std::is_same_v<T,cpu_f32>, cpu_c64, cpu_c128>;
+    using complex_cpu_type_t = std::conditional_t<std::is_same_v<T,cpu_f32>, cpu_c64, cpu_c128>;
+
+
+    using f32 = cpu_f32;
+    using f64 = cpu_f64;
+    using c64 = cpu_c64;
+    using c128 = cpu_c128;
+
+    template<typename T>
+    concept real_fp = std::is_same_v<f32, T> || std::is_same_v<f64,T>;
+
+    template<typename T>
+    concept complex_fp = std::is_same_v<c64,T> || std::is_same_v<c128,T>;
+
+    template<typename T>
+    concept any_fp = requires {real_fp<T> || complex_fp<T>;};
 
     
     using cuda_f32 = strong_typedef<float, struct cuda_f32_>;
@@ -73,22 +90,31 @@ namespace hasty {
 
     
     template<typename T>
-    using complexify_cuda_type = std::conditional_t<std::is_same_v<T,cuda_f32>, cuda_c64, cuda_c128>;
+    using complex_cuda_type_t = std::conditional_t<std::is_same_v<T,cuda_f32>, cuda_c64, cuda_c128>;
 
 
 
     template<typename T>
-    concept any_real_fp = requires { requires cpu_real_fp<T> || cuda_real_fp<T>;};
+    concept any_device_real_fp = requires { requires cpu_real_fp<T> || cuda_real_fp<T>;};
 
     template<typename T>
-    concept any_complex_fp = requires { cuda_complex_fp<T> || cpu_complex_fp<T>;};
+    concept any_device_complex_fp = requires { cuda_complex_fp<T> || cpu_complex_fp<T>;};
 
     template<typename T>
-    concept any_fp = requires { cuda_any_fp<T> || cpu_any_fp<T>; };
+    concept any_device_fp = requires { cuda_any_fp<T> || cpu_any_fp<T>; };
 
 
-    template<any_real_fp T>
-    using complexify_type = std::conditional_t<(cuda_real_fp<T>), complexify_cuda_type<T>, complexify_cpu_type<T>>;
+    template<any_device_real_fp T>
+    using complex_type_t = std::conditional_t<(cuda_real_fp<T>), complexify_cuda_type<T>, complexify_cpu_type<T>>;
+
+
+    template<any_fp
+
+    template<any_fp F, device_type T>
+    using device_type_t = std::conditional_t<T == device_type::CUDA, 
+
+
+
 
     template<any_fp FP>
     constexpr at::ScalarType static_type_to_scalar_type()
@@ -107,6 +133,8 @@ namespace hasty {
         }
     }
 
+
+
     static_assert(alignof(cuda_f32) == alignof(float));
     static_assert(sizeof(cuda_f32) == sizeof(float));
     static_assert(alignof(cuda_f64) == alignof(double));
@@ -115,9 +143,6 @@ namespace hasty {
     static_assert(sizeof(cuda_c64) == sizeof(cuFloatComplex));
     static_assert(alignof(cuda_c128) == alignof(cuDoubleComplex));
     static_assert(sizeof(cuda_c128) == sizeof(cuDoubleComplex));
-
-
-    
-
+    }
 
 }

@@ -1,10 +1,11 @@
 module;
 
-#include "util.hpp"
 #include <unordered_map>
 #include <torch/jit.h>
 
 export module trace;
+
+import util;
 
 namespace hasty {
 

@@ -20,9 +20,9 @@ set_property(TARGET HastyCuCompute PROPERTY CUDA_STANDARD_REQUIRED ON)
 
 target_sources(HastyCuCompute 
     PUBLIC FILE_SET CXX_MODULES FILES
+        "lib/util.ixx"
         "lib/tensor.ixx"
         "lib/nufft.ixx"
-        "lib/fft.ixx"
         "lib/trace.ixx"
 )
 
@@ -59,6 +59,18 @@ target_include_directories(HastyCuCompute PRIVATE "${finufft_ROOT}/include")
 
 find_package(Torch REQUIRED)
 target_link_libraries(HastyCuCompute PRIVATE ${TORCH_LIBRARIES})
+
+if (MSVC)
+  file(GLOB TORCH_DLLS "${TORCH_INSTALL_PREFIX}/lib/*.dll")
+  add_custom_command(TARGET example-app
+                     POST_BUILD
+                     COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                     ${TORCH_DLLS}
+                     $<TARGET_FILE_DIR:example-app>)
+endif (MSVC)
+
+#find_package(matx CONFIG REQUIRED)
+#target_link_libraries(HastyCuCompute PRIVATE matx::matx)
 
 find_package(mathdx REQUIRED COMPONENTS cufftdx)
 target_link_libraries(HastyCuCompute PRIVATE mathdx::cufftdx)

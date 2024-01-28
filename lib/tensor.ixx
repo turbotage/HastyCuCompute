@@ -1,14 +1,16 @@
 module;
 
-#include "util.hpp"
+#include <torch/torch.h>
 
 export module tensor;
 
+import util;
 import trace;
 
 namespace hasty {
 
-    export template<any_fp FP, size_t RANK>
+
+    export template<floating_point FP, size_t RANK, device_type DT>
     struct tensor_impl {
 
         tensor_impl(const std::array<int64_t, RANK>& input_shape, at::Tensor input)
@@ -45,6 +47,7 @@ namespace hasty {
         std::shared_ptr<tensor_impl<FP,RANK>> _pimpl;
     };
 
+    /*
     export template<any_fp FP, size_t RANK>
     tensor<FP, RANK> make_tensor(const std::array<int64_t, RANK>& shape, const std::string& device_str)
     {
@@ -79,5 +82,6 @@ namespace hasty {
         return std::make_unique<creator>(tensorin.sizes(), std::move(tensorin));
     }
 
+    */
 
 }
