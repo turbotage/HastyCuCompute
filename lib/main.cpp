@@ -1,13 +1,13 @@
 
-#include <cuda_runtime_api.h>
+#include "pch.hpp"
 
 import util;
 import nufft;
 import tensor;
 
 
-
-float run_nufft_type2_timing(int ntransf, int nx, int ny, int nz, int nupts, hasty::nufft_cuda_method method, hasty::nufft_upsamp upsamp) {
+/*
+float run_nufft_type2_timing(int ntransf, int nx, int ny, int nz, int nupts, hasty::nufft_method_cuda method, hasty::nufft_upsamp_cuda upsamp) {
 
     hasty::cuda_nufft_opts<hasty::cuda_f32, 3, hasty::nufft_type::TYPE_2> opts{
         .nmodes={nx,ny,nz}, 
@@ -62,25 +62,25 @@ void type_2_tests(int ntransf, int nx, int ny, int nz, int nupts) {
         // GM_NO_SORT
         std::cout << "GM_NO_SORT: \n";
         std::cout << "ms: " << run_nufft_type2_timing(ntransf, nx, ny, nz, nupts, 
-            hasty::nufft_cuda_method::GM_NO_SORT, hasty::nufft_upsamp::DEFAULT);
+            hasty::nufft_method_cuda::GM_NO_SORT, hasty::nufft_upsamp_cuda::DEFAULT);
         std::cout << "ms: " << run_nufft_type2_timing(ntransf, nx, ny, nz, nupts, 
-            hasty::nufft_cuda_method::GM_NO_SORT, hasty::nufft_upsamp::DEFAULT);
+            hasty::nufft_method_cuda::GM_NO_SORT, hasty::nufft_upsamp_cuda::DEFAULT);
         std::cout << "\n";
 
         // GM_SORT
         std::cout << "GM_SORT: \n";
         std::cout << "ms: " << run_nufft_type2_timing(ntransf, nx, ny, nz, nupts, 
-            hasty::nufft_cuda_method::GM_SORT, hasty::nufft_upsamp::DEFAULT);
+            hasty::nufft_method_cuda::GM_SORT, hasty::nufft_upsamp_cuda::DEFAULT);
         std::cout << "ms: " << run_nufft_type2_timing(ntransf, nx, ny, nz, nupts, 
-            hasty::nufft_cuda_method::GM_SORT, hasty::nufft_upsamp::DEFAULT);
+            hasty::nufft_method_cuda::GM_SORT, hasty::nufft_upsamp_cuda::DEFAULT);
         std::cout << "\n";
 
         // SM
         std::cout << "SM: \n";
         std::cout << "ms: " << run_nufft_type2_timing(ntransf, nx, ny, nz, nupts, 
-            hasty::nufft_cuda_method::SM, hasty::nufft_upsamp::DEFAULT);
+            hasty::nufft_method_cuda::SM, hasty::nufft_upsamp_cuda::DEFAULT);
         std::cout << "ms: " << run_nufft_type2_timing(ntransf, nx, ny, nz, nupts, 
-            hasty::nufft_cuda_method::SM, hasty::nufft_upsamp::DEFAULT);
+            hasty::nufft_method_cuda::SM, hasty::nufft_upsamp_cuda::DEFAULT);
         std::cout << "\n";
     }
 
@@ -90,25 +90,25 @@ void type_2_tests(int ntransf, int nx, int ny, int nz, int nupts) {
         // GM_NO_SORT
         std::cout << "GM_NO_SORT: \n";
         std::cout << "ms: " << run_nufft_type2_timing(ntransf, nx, ny, nz, nupts, 
-            hasty::nufft_cuda_method::GM_NO_SORT, hasty::nufft_upsamp::UPSAMP_1_25);
+            hasty::nufft_method_cuda::GM_NO_SORT, hasty::nufft_upsamp_cuda::UPSAMP_1_25);
         std::cout << "ms: " << run_nufft_type2_timing(ntransf, nx, ny, nz, nupts, 
-            hasty::nufft_cuda_method::GM_NO_SORT, hasty::nufft_upsamp::UPSAMP_1_25);
+            hasty::nufft_method_cuda::GM_NO_SORT, hasty::nufft_upsamp_cuda::UPSAMP_1_25);
         std::cout << "\n";
 
         // GM_SORT
         std::cout << "GM_SORT: \n";
         std::cout << "ms: " << run_nufft_type2_timing(ntransf, nx, ny, nz, nupts, 
-            hasty::nufft_cuda_method::GM_SORT, hasty::nufft_upsamp::UPSAMP_1_25);
+            hasty::nufft_method_cuda::GM_SORT, hasty::nufft_upsamp_cuda::UPSAMP_1_25);
         std::cout << "ms: " << run_nufft_type2_timing(ntransf, nx, ny, nz, nupts, 
-            hasty::nufft_cuda_method::GM_SORT, hasty::nufft_upsamp::UPSAMP_1_25);
+            hasty::nufft_method_cuda::GM_SORT, hasty::nufft_upsamp_cuda::UPSAMP_1_25);
         std::cout << "\n";
 
         // SM
         std::cout << "SM: \n";
         std::cout << "ms: " << run_nufft_type2_timing(ntransf, nx, ny, nz, nupts, 
-            hasty::nufft_cuda_method::SM, hasty::nufft_upsamp::UPSAMP_1_25);
+            hasty::nufft_method_cuda::SM, hasty::nufft_upsamp_cuda::UPSAMP_1_25);
         std::cout << "ms: " << run_nufft_type2_timing(ntransf, nx, ny, nz, nupts, 
-            hasty::nufft_cuda_method::SM, hasty::nufft_upsamp::UPSAMP_1_25);
+            hasty::nufft_method_cuda::SM, hasty::nufft_upsamp_cuda::UPSAMP_1_25);
         std::cout << "\n";
     }
 
@@ -116,7 +116,7 @@ void type_2_tests(int ntransf, int nx, int ny, int nz, int nupts) {
 }
 
 
-float run_nufft_type1_timing(int ntransf, int nx, int ny, int nz, int nupts, hasty::nufft_cuda_method method, hasty::nufft_upsamp upsamp) {
+float run_nufft_type1_timing(int ntransf, int nx, int ny, int nz, int nupts, hasty::nufft_method_cuda method, hasty::nufft_upsamp_cuda upsamp) {
 
     hasty::cuda_nufft_opts<hasty::cuda_f32, 3, hasty::nufft_type::TYPE_1> opts{
         .nmodes={nx,ny,nz}, 
@@ -170,25 +170,25 @@ void type_1_tests(int ntransf, int nx, int ny, int nz, int nupts)
         // GM_NO_SORT
         std::cout << "GM_NO_SORT: \n";
         std::cout << "ms: " << run_nufft_type1_timing(ntransf, nx, ny, nz, nupts, 
-            hasty::nufft_cuda_method::GM_NO_SORT, hasty::nufft_upsamp::DEFAULT);
+            hasty::nufft_method_cuda::GM_NO_SORT, hasty::nufft_upsamp_cuda::DEFAULT);
         std::cout << "ms: " << run_nufft_type1_timing(ntransf, nx, ny, nz, nupts, 
-            hasty::nufft_cuda_method::GM_NO_SORT, hasty::nufft_upsamp::DEFAULT);
+            hasty::nufft_method_cuda::GM_NO_SORT, hasty::nufft_upsamp_cuda::DEFAULT);
         std::cout << "\n";
 
         // GM_SORT
         std::cout << "GM_SORT: \n";
         std::cout << "ms: " << run_nufft_type1_timing(ntransf, nx, ny, nz, nupts, 
-            hasty::nufft_cuda_method::GM_SORT, hasty::nufft_upsamp::DEFAULT);
+            hasty::nufft_method_cuda::GM_SORT, hasty::nufft_upsamp_cuda::DEFAULT);
         std::cout << "ms: " << run_nufft_type1_timing(ntransf, nx, ny, nz, nupts, 
-            hasty::nufft_cuda_method::GM_SORT, hasty::nufft_upsamp::DEFAULT);
+            hasty::nufft_method_cuda::GM_SORT, hasty::nufft_upsamp_cuda::DEFAULT);
         std::cout << "\n";
 
         // SM
         std::cout << "SM: \n";
         std::cout << "ms: " << run_nufft_type1_timing(ntransf, nx, ny, nz, nupts, 
-            hasty::nufft_cuda_method::SM, hasty::nufft_upsamp::DEFAULT);
+            hasty::nufft_method_cuda::SM, hasty::nufft_upsamp_cuda::DEFAULT);
         std::cout << "ms: " << run_nufft_type1_timing(ntransf, nx, ny, nz, nupts, 
-            hasty::nufft_cuda_method::SM, hasty::nufft_upsamp::DEFAULT);
+            hasty::nufft_method_cuda::SM, hasty::nufft_upsamp_cuda::DEFAULT);
         std::cout << "\n";
     }
 
@@ -198,28 +198,31 @@ void type_1_tests(int ntransf, int nx, int ny, int nz, int nupts)
         // GM_NO_SORT
         std::cout << "GM_NO_SORT: \n";
         std::cout << "ms: " << run_nufft_type1_timing(ntransf, nx, ny, nz, nupts, 
-            hasty::nufft_cuda_method::GM_NO_SORT, hasty::nufft_upsamp::UPSAMP_1_25);
+            hasty::nufft_method_cuda::GM_NO_SORT, hasty::nufft_upsamp_cuda::UPSAMP_1_25);
         std::cout << "ms: " << run_nufft_type1_timing(ntransf, nx, ny, nz, nupts, 
-            hasty::nufft_cuda_method::GM_NO_SORT, hasty::nufft_upsamp::UPSAMP_1_25);
+            hasty::nufft_method_cuda::GM_NO_SORT, hasty::nufft_upsamp_cuda::UPSAMP_1_25);
         std::cout << "\n";
 
         // GM_SORT
         std::cout << "GM_SORT: \n";
         std::cout << "ms: " << run_nufft_type1_timing(ntransf, nx, ny, nz, nupts, 
-            hasty::nufft_cuda_method::GM_SORT, hasty::nufft_upsamp::UPSAMP_1_25);
+            hasty::nufft_method_cuda::GM_SORT, hasty::nufft_upsamp_cuda::UPSAMP_1_25);
         std::cout << "ms: " << run_nufft_type1_timing(ntransf, nx, ny, nz, nupts, 
-            hasty::nufft_cuda_method::GM_SORT, hasty::nufft_upsamp::UPSAMP_1_25);
+            hasty::nufft_method_cuda::GM_SORT, hasty::nufft_upsamp_cuda::UPSAMP_1_25);
         std::cout << "\n";
 
         // SM
         std::cout << "SM: \n";
         std::cout << "ms: " << run_nufft_type1_timing(ntransf, nx, ny, nz, nupts, 
-            hasty::nufft_cuda_method::SM, hasty::nufft_upsamp::UPSAMP_1_25);
+            hasty::nufft_method_cuda::SM, hasty::nufft_upsamp_cuda::UPSAMP_1_25);
         std::cout << "ms: " << run_nufft_type1_timing(ntransf, nx, ny, nz, nupts, 
-            hasty::nufft_cuda_method::SM, hasty::nufft_upsamp::UPSAMP_1_25);
+            hasty::nufft_method_cuda::SM, hasty::nufft_upsamp_cuda::UPSAMP_1_25);
         std::cout << "\n";
     }
 }
+
+*/
+
 
 int main() {
 
@@ -230,9 +233,9 @@ int main() {
     int nupts = 10000000;
 
     std::cout << "type2\n";
-    type_2_tests(ntransf, nx, ny, nz, nupts);
+    //type_2_tests(ntransf, nx, ny, nz, nupts);
     std::cout << "type1\n";
-    type_1_tests(ntransf, nx, ny, nz, nupts);
+    //type_1_tests(ntransf, nx, ny, nz, nupts);
     
 
 

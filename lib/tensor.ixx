@@ -1,6 +1,6 @@
 module;
 
-#include <torch/torch.h>
+#include "pch.hpp"
 
 export module tensor;
 
@@ -10,41 +10,41 @@ import trace;
 namespace hasty {
 
 
-    export template<floating_point FP, size_t RANK, device_type DT>
+    export template<any_device_fp FPT, size_t RANK>
     struct tensor_impl {
 
         tensor_impl(const std::array<int64_t, RANK>& input_shape, at::Tensor input)
             : shape(input_shape), underlying_tensor(std::move(input))
         {   
-            data_ptr = reinterpret_cast<underlying_type<FP>*>(underlying_tensor.mutable_data_ptr()); 
+            data_ptr = reinterpret_cast<underlying_type<FPT>*>(underlying_tensor.mutable_data_ptr()); 
         }
 
 
         std::array<int64_t, RANK> shape;
         at::Tensor underlying_tensor;
-        underlying_type<FP>* data_ptr = nullptr;
+        underlying_type<FPT>* data_ptr = nullptr;
         std::shared_ptr<trace>  tracectx = nullptr;
     };
 
-    export template<any_fp FP, size_t RANK>
+    export template<any_device_fp FPT, size_t RANK>
     struct tensor {
         
         tensor() = default;
 
         tensor(const std::array<int64_t, RANK>& input_shape, at::Tensor input) 
-            : _pimpl(std::make_shared<tensor_impl<FP, RANK>>(input_shape, std::move(input)))
+            : _pimpl(std::make_shared<tensor_impl<FPT, RANK>>(input_shape, std::move(input)))
         {}
 
         template<size_t R>
         requires less_than<R, RANK>
         int64_t shape() const { return _pimpl->shape[R]; }
 
-        underlying_type<FP>* mutable_data() { return _pimpl->data_ptr; }
-        const underlying_type<FP>* immutable_data() const { return _pimpl->data_ptr; }
-        underlying_type<FP>* const_cast_data() const { return const_cast<underlying_type<FP>*>(_pimpl->data_ptr); }
+        underlying_type<FPT>* mutable_data() { return _pimpl->data_ptr; }
+        const underlying_type<FPT>* immutable_data() const { return _pimpl->data_ptr; }
+        underlying_type<FPT>* const_cast_data() const { return const_cast<underlying_type<FPT>*>(_pimpl->data_ptr); }
 
     private:
-        std::shared_ptr<tensor_impl<FP,RANK>> _pimpl;
+        std::shared_ptr<tensor_impl<FPT,RANK>> _pimpl;
     };
 
     /*
