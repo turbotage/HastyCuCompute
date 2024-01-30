@@ -12,8 +12,29 @@ import tensor;
 
 namespace hasty {
 
+    // UTIL
+
     template<size_t N>
     concept is_dim3 = N > 0 && N < 4;
+
+    template<device_real_fp FPT, size_t DIM>
+    requires is_dim3<DIM>
+    void verify_coords(const std::array<tensor<FPT,1>,DIM>& coords)
+    {
+        if constexpr(DIM == 2) {
+            if (coords[0].template shape<0>() != coords[1].template shape<0>()) {
+                throw std::runtime_error("x and y coords have different lengths");
+            }
+        }
+        if constexpr(DIM == 3) {
+            if (
+                (coords[0].template shape<0>() != coords[1].template shape<0>()) || 
+                (coords[1].template shape<0>() != coords[2].template shape<0>()) ||
+                (coords[0].template shape<0>() != coords[2].template shape<0>())
+            ){  throw std::runtime_error("x,y  x,z  or  y,z  coords have different lengths"); }
+        }
+    }
+
 
     export enum struct nufft_type {
         TYPE_1 = 1,
@@ -30,6 +51,8 @@ namespace hasty {
         DEFAULT_TYPE_2 = NEG
     };
     
+    // CUDA SETTINGS
+
     export enum struct nufft_upsamp_cuda {
         UPSAMP_2_0,
         UPSAMP_1_25,
@@ -42,6 +65,8 @@ namespace hasty {
         SM,
         DEFAULT
     }; 
+
+    // NUFFT OPTS
 
     template<device_real_fp FPT, size_t DIM>
     requires is_dim3<DIM>
@@ -66,11 +91,13 @@ namespace hasty {
 
     };
 
+    // NUFFT PLAN
 
     template<device_real_fp FPT, size_t DIM, nufft_type NT>
     struct nufft_plan;
 
     template<cuda_real_fp FPT, size_t DIM, nufft_type NT>
+    requires is_dim3<DIM>
     struct nufft_plan<FPT,DIM,NT> {
 
         static std::unique_ptr<nufft_plan<FPT,DIM,NT>> make(const nufft_opts<FPT,DIM>& opts)
@@ -144,18 +171,7 @@ namespace hasty {
         void setpts(const std::array<tensor<FPT, 1>,DIM>& coords)
         {
             int32_t M = coords[0].template shape<0>();
-            if constexpr(DIM == 2) {
-                if (coords[0].template shape<0>() != coords[1].template shape<0>()) {
-                    throw std::runtime_error("x and y coords have different lengths");
-                }
-            }
-            if constexpr(DIM == 3) {
-                if (
-                    (coords[0].template shape<0>() != coords[1].template shape<0>()) || 
-                    (coords[1].template shape<0>() != coords[2].template shape<0>()) ||
-                    (coords[0].template shape<0>() != coords[2].template shape<0>())
-                ){  throw std::runtime_error("x and y coords have different lengths"); }
-            }
+            verify_coords(coords);
 
             using namespace std::placeholders;
             constexpr auto setptsfunc = std::bind([]()
@@ -182,9 +198,40 @@ namespace hasty {
                 throw std::runtime_error("cufinufft: setpts function failed with code: " + std::to_string(result));
         }
 
+        template<typename U = NT>
+        typename std::enable_if<U = nufft_type::TYPE_1>::type
+        void execute(const tensor<complex_cuda_t<FPT>,2>& input, tensor<complex_cuda_t<FPT>, DIM+1>& output) const
+        {
+            int result;
 
-        void execute(const tensor<complex_cuda_t<FPT>,>);
+            if (input.template shape<0>() != _opts.ntransf)
+                throw std::runtime_error("")
 
+            if constexpr(std::is_same_v<FPT, cuda_f32>) {
+                result = cufinufftf_execute(_finufft_plan, input.const_cast_data(), output.mutable_data());
+            } else {
+                result = cufinufft_execute(_finufft_plan, input.const_cast_data(), output.mutable_data());
+            }
+
+            if (result)
+                throw std::runtime_error("cufinufft: execute failed with error code: " + std::to_string(result));
+        }
+
+        template<typename U = NT>
+        typename std::enable_if<U = nufft_type::TYPE_2>::type
+        void execute(const tensor<complex_cuda_t<FPT>, DIM+1>& input, tensor<complex_cuda_t<FPT>, 2>& output) const
+        {
+            int result;
+
+            if constexpr(std::is_same_v<FPT, cuda_f32>) {
+                result = cufinufftf_execute(_finufft_plan, output.mutable_data(), input.const_cast_data());
+            } else {
+                result = cufinufft_execute(_finufft_plan, output.mutable_data(), input.const_cast_data());
+            }
+
+            if (result)
+                throw std::runtime_error("cufinufft: execute failed with error code: " + std::to_string(result));
+        }
 
 
         auto& pa_finufft_plan() { return _finufft_plan; }
@@ -206,6 +253,10 @@ namespace hasty {
 
         nufft_opts<FPT,DIM,device_type::CUDA>& pa_opts() { return _opts; }
         const nufft_opts<FPT,DIM,device_type::CUDA>& pa_opts() const { return _opts; }
+
+        const std::array<int64_t, DIM>& nmodes() const { return _opts.nmodes; }
+        int32_t ntransf() const { return _opts.ntransf; }
+        underlying_type<FPT> tol() const { return _opts.tol;}
 
 
         void free() {
@@ -241,8 +292,37 @@ namespace hasty {
             cufinufftf_plan, cufinufft_plan> _finufft_plan;
     };
 
+    // TOEPLITZ KERNEL
+    
+    template<cuda_real_fp FPT, size_t DIM>
+    void toeplitz_kernel(const std::array<tensor<FPT, 1>,DIM>& coords, tensor<complex_cuda_t<FPT>, DIM>& kernel,
+        tensor<complex_cuda_t<FPT>, 2>& nudata)
+    {
+        int M = coords[0].template shape<0>();
+        verify_coords(coords);
+
+        if (nudata.template shape<1>() != M)
+            throw std::runtime_error("shape<1>() of nudata didn't match length of coord vectors");
+
+        nudata.fill(1.0f);
+
+        std::array<int64_t, DIM> nmodes;
+        for_sequence<DIM>([&nmodes, &kernel](auto i) {
+            nmodes[i] = kernel.template shape<i>();
+        });
+
+        auto plan = nufft_plan::make<FPT,DIM,nufft_type::TYPE_1>(nufft_opts<FPT,DIM>{
+            .nmodes = nmodes,
+            .sign = nufft_sign::DEFAULT_TYPE_1,
+            .ntransf = 1,
+            .tol = std::is_same_v<FPT,cuda_f32> ? 1e-5 : 1e-12,
+            .upsamp = nufft_upsamp_cuda::DEFAULT,
+            .method = nufft_method_cuda::DEFAULT
+        });
 
 
+
+    }
 
 
 }

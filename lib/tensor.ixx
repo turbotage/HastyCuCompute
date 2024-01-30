@@ -47,15 +47,6 @@ namespace hasty {
         std::shared_ptr<tensor_impl<FPT,RANK>> _pimpl;
     };
 
-    /*
-    export template<any_fp FP, size_t RANK>
-    tensor<FP, RANK> make_tensor(const std::array<int64_t, RANK>& shape, const std::string& device_str)
-    {
-        at::TensorOptions opts = at::TensorOptions(static_type_to_scalar_type<FP>()).device(device_str);
-
-        return tensor<FP,RANK>(shape, std::move(at::empty(shape, opts)));
-    }
-
     export enum struct tensor_make_opts {
         EMPTY,
         ONES,
@@ -63,6 +54,28 @@ namespace hasty {
         RAND_NORMAL,
         RAND_UNIFORM
     };
+
+    export template<any_fp FP, size_t RANK>
+    tensor<FP, RANK> make_tensor(const std::array<int64_t, RANK>& shape, 
+        const std::string& device_str="cpu", tensor_make_opts make_opts=tensor_make_opts::EMPTY)
+    {
+        at::TensorOptions opts = at::TensorOptions(static_type_to_scalar_type<FP>()).device(device_str);
+
+        switch (make_opts) {
+            case tensor_make_opts::EMPTY:
+                return tensor<FP,RANK>(shape, std::move(at::empty(shape, opts)));
+            case tensor_make_opts::ONES:
+                return tensor<FP,RANK>(shape, std::move(at::ones(shape, opts)));
+            case tensor_make_opts::ZEROS:
+                return tensor<FP,RANK>(shape, std::move(at::zeros(shape, opts)));
+            case tensor_make_opts::RAND_NORMAL:
+                return tensor<FP,RANK>(shape, std::move(at::normal(shape, opts)));
+            case tensor_make_opts::RAND_UNIFORM:
+                return tensor<FP,RANK>(shape, std::move(at::rand(shape, opts)));
+            default:
+                throw std::runtime_error("Unknown tensor_make_opts option");
+        }
+    }
 
     export template<any_fp FP, size_t RANK>
     std::unique_ptr<tensor<FP, RANK>> make_tensor(at::Tensor tensorin)
@@ -78,10 +91,7 @@ namespace hasty {
                 : tensor<FP, RANK>(a, std::move(b)) {}
         };
 
-
         return std::make_unique<creator>(tensorin.sizes(), std::move(tensorin));
     }
-
-    */
 
 }

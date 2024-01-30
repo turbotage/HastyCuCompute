@@ -54,23 +54,6 @@ namespace hasty {
         template<cpu_real_fp T>
         using complex_cpu_t = std::conditional_t<std::is_same_v<T,cpu_f32>, cpu_c64, cpu_c128>;
 
-
-        /*
-        using f32 = cpu_f32;
-        using f64 = cpu_f64;
-        using c64 = cpu_c64;
-        using c128 = cpu_c128;
-
-        template<typename T>
-        concept real_fp = std::is_same_v<f32, T> || std::is_same_v<f64,T>;
-
-        template<typename T>
-        concept complex_fp = std::is_same_v<c64,T> || std::is_same_v<c128,T>;
-
-        template<typename T>
-        concept any_fp = requires {real_fp<T> || complex_fp<T>;};
-        */
-
         
         using cuda_f32 = strong_typedef<float, struct cuda_f32_>;
         using cuda_f64 = strong_typedef<double, struct cuda_f64_>;
@@ -145,29 +128,8 @@ namespace hasty {
             complex_cuda_t<F>, complex_cpu_t<F>>;
                             
 
-        /*
-        template<any_device_real_fp T>
-        using complex_type_t = std::conditional_t<(cuda_real_fp<T>), complex_cuda_type_t<T>, complex_cpu_type_t<T>>;
-        */
 
-
-        /*
-        template<any_fp F>
-        using cuda_type_t = std::conditional_t<std::is_same_v<F,f32> || std::is_same_v<F,f64>,
-                                std::conditional_t<std::is_same_v<F,f32>, cuda_f32, cuda_f64>,
-                                std::conditional_t<std::is_same_v<F,c64>, cuda_c64, cuda_c128>>;
-
-        template<any_fp F>
-        using cpu_type_t = std::conditional_t<std::is_same_v<F,f32> || std::is_same_v<F,f64>,
-                                std::conditional_t<std::is_same_v<F,f32>, cpu_f32, cpu_f64>,
-                                std::conditional_t<std::is_same_v<F,c64>, cpu_c64, cpu_c128>>;
-
-        template<any_fp F, device_type T>
-        using device_type_t = std::conditional_t<T == device_type::CUDA, cuda_type_t<F>, cpu_type_t<F>>;
-        */
-
-
-        template<any_fp FP>
+        template<device_fp FP>
         constexpr at::ScalarType static_type_to_scalar_type()
         {
             if constexpr(std::is_same_v<FP, cpu_f32> || std::is_same_v<FP, cuda_f32>) {
@@ -185,7 +147,6 @@ namespace hasty {
         }
 
 
-        /*
         static_assert(alignof(cuda_f32) == alignof(float));
         static_assert(sizeof(cuda_f32) == sizeof(float));
         static_assert(alignof(cuda_f64) == alignof(double));
@@ -194,7 +155,20 @@ namespace hasty {
         static_assert(sizeof(cuda_c64) == sizeof(cuFloatComplex));
         static_assert(alignof(cuda_c128) == alignof(cuDoubleComplex));
         static_assert(sizeof(cuda_c128) == sizeof(cuDoubleComplex));
-        */
+
+        template<typename T>
+        using optrefw = std::optional<std::reference_wrapper<T>>;
+
+        template <typename T, T... S, typename F>
+        constexpr void for_sequence(std::integer_sequence<T, S...>, F f) {
+            (static_cast<void>(f(std::integral_constant<T, S>{})), ...);
+        }
+
+        template<auto n, typename F>
+        constexpr void for_sequence(F f) {
+            for_sequence(std::make_integer_sequence<decltype(n), n>{}, f);
+        }
+
     }
 
 }
