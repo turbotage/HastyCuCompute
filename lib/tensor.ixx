@@ -9,8 +9,80 @@ import trace;
 
 namespace hasty {
 
+    
+    namespace indexing {
 
-    export template<any_device_fp FPT, size_t RANK>
+        export struct None {};
+
+        export struct Ellipsis {};
+
+        export struct Slice {
+            
+            std::optional<int64_t> start;
+            std::optional<int64_t> end;
+            std::optional<int64_t> step;
+        };
+
+        export template<typename T>
+        concept index_type =   std::is_same_v<T, None> 
+                            || std::is_same_v<T, Ellipsis> 
+                            || std::is_same_v<T, Slice>
+                            || std::is_integral_v<T>;
+
+        export template<index_type... Itx, size_t R>
+        constexpr int64_t get_slice_rank(Itx... idxs)
+        {
+            int none;
+            int ellipsis;
+            int ints;
+
+            //auto idxss = std::make_tuple<Itx...>(std::forward<Itx...>(idxs...));
+            auto idxss = std::make_tuple(idxs...);
+
+            for_sequence<sizeof...(Itx)>([&](auto i) constexpr {
+                if constexpr(std::is_same_v<decltype(idxss.template get<i>()), None>) {
+                    ++none;
+                } else if constexpr(std::is_same_v<decltype(idxss.template get<i>()), Ellipsis>) {
+                    ++ellipsis;
+                } else if constexpr(std::is_integral_v<decltype(idxss.template get<i>())>) {
+                    ++ints;
+                }
+            });
+
+            return R * (dots > 0) + none - ints;
+        }
+
+        template<typename T>
+        c10::optional<T> torch_optional(const std::optional<T>& opt)
+        {
+            if (opt.has_value()) {
+                return c10::optional(opt.value());
+            }
+            return c10::nullopt_t;
+        }
+
+        template<index_type Idx>
+        at::indexing::TensorIndex torchidx(Idx idx) {
+            if constexpr(std::is_same_v<Idx, None>) {
+                return at::indexing::None;
+            } 
+            else if constexpr(std::is_same_v<Idx, Ellipsis>) {
+                return at::indexing::Ellipsis;
+            }
+            else if constexpr(std::is_same_v<Idx, Slice>) {
+                return at::indexing::Slice(
+                    torch_optional(idx.start),
+                    torch_optional(idx.end),
+                    torch_optional(idx.step));
+            } else if constexpr(std::is_integral_v<Idx>) {
+                return idx;
+            }
+        }
+
+    }
+
+
+    export template<device_fp FPT, size_t RANK>
     struct tensor_impl {
 
         tensor_impl(const std::array<int64_t, RANK>& input_shape, at::Tensor input)
@@ -19,14 +91,15 @@ namespace hasty {
             data_ptr = reinterpret_cast<underlying_type<FPT>*>(underlying_tensor.mutable_data_ptr()); 
         }
 
+        underlying_type<FPT>* mutable_data() { return static_cast<underlying_type<FPT>*>(underlying_tensor.mutable_data()); }
+        const underlying_type<FPT>* data() { return static_cast<const underlying_type<FPT>*>(underlying_tensor.data()); }
 
         std::array<int64_t, RANK> shape;
         at::Tensor underlying_tensor;
-        underlying_type<FPT>* data_ptr = nullptr;
         std::shared_ptr<trace>  tracectx = nullptr;
     };
 
-    export template<any_device_fp FPT, size_t RANK>
+    export template<device_fp FPT, size_t RANK>
     struct tensor {
         
         tensor() = default;
@@ -39,13 +112,22 @@ namespace hasty {
         requires less_than<R, RANK>
         int64_t shape() const { return _pimpl->shape[R]; }
 
-        underlying_type<FPT>* mutable_data() { return _pimpl->data_ptr; }
-        const underlying_type<FPT>* immutable_data() const { return _pimpl->data_ptr; }
-        underlying_type<FPT>* const_cast_data() const { return const_cast<underlying_type<FPT>*>(_pimpl->data_ptr); }
+        underlying_type<FPT>* mutable_data() { return } { return _pimpl->mutable_data(); }
+        const underlying_type<FPT>* data() { return _pimpl->data();}
+
+        template<cpu_fp F>
+        void fill(F val) { _pimpl->underlying_tensor.fill_(val); }
+
+        template<index_type... IdxArgs>
+        auto operator[](IdxArgs... indices) {
+            constexpr auto RETRANK = get_slice_rank(indices...);
+
+        }
 
     private:
         std::shared_ptr<tensor_impl<FPT,RANK>> _pimpl;
     };
+
 
     export enum struct tensor_make_opts {
         EMPTY,
@@ -55,7 +137,7 @@ namespace hasty {
         RAND_UNIFORM
     };
 
-    export template<any_fp FP, size_t RANK>
+    export template<device_fp FP, size_t RANK>
     tensor<FP, RANK> make_tensor(const std::array<int64_t, RANK>& shape, 
         const std::string& device_str="cpu", tensor_make_opts make_opts=tensor_make_opts::EMPTY)
     {
@@ -77,7 +159,7 @@ namespace hasty {
         }
     }
 
-    export template<any_fp FP, size_t RANK>
+    export template<device_fp FP, size_t RANK>
     std::unique_ptr<tensor<FP, RANK>> make_tensor(at::Tensor tensorin)
     {
         if (tensorin.ndimension() != RANK)
