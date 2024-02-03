@@ -215,6 +215,7 @@ namespace hasty {
             (static_cast<void>(f(std::integral_constant<T, S>{})), ...);
         }
 
+        template<auto n, typename F>
         constexpr void for_sequence(F f) {
             for_sequence(std::make_integer_sequence<decltype(n), n>{}, f);
         }
