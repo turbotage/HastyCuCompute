@@ -5,7 +5,6 @@ module;
 export module tensor;
 
 import util;
-import trace;
 
 namespace hasty {
 
@@ -94,31 +93,31 @@ namespace hasty {
         else if constexpr(std::is_same_v<Idx, Slice>) {
             // If the Slice has start, end, and step values, format them as "start:end:step"
             if (idx.start.has_value() && idx.end.has_value() && idx.step.has_value()) {
-                return fmt::format("{}:{}:{}", idx.start.value(), idx.end.value(), idx.step.value());
+                return std::format("{}:{}:{}", idx.start.value(), idx.end.value(), idx.step.value());
             } 
             // If the Slice has only start and end values, format them as "start:end"
             else if (idx.start.has_value() && idx.end.has_value()) {
-                return fmt::format("{}:{}", idx.start.value(), idx.end.value());
+                return std::format("{}:{}", idx.start.value(), idx.end.value());
             } 
             // If the Slice has only start and step values, format them as "start::step"
             else if (idx.start.has_value() && idx.step.has_value()) {
-                return fmt::format("{}::{}", idx.start.value(), idx.step.value());
+                return std::format("{}::{}", idx.start.value(), idx.step.value());
             } 
             // If the Slice has only end and step values, format them as ":end:step"
             else if (idx.end.has_value() && idx.step.has_value()) {
-                return fmt::format(":{}:{}", idx.end.value(), idx.step.value());
+                return std::format(":{}:{}", idx.end.value(), idx.step.value());
             } 
             // If the Slice has only a start value, format it as "start:"
             else if (idx.start.has_value()) {
-                return fmt::format("{}:", idx.start.value());
+                return std::format("{}:", idx.start.value());
             } 
             // If the Slice has only an end value, format it as ":end"
             else if (idx.end.has_value()) {
-                return fmt::format(":{}", idx.end.value());
+                return std::format(":{}", idx.end.value());
             } 
             // If the Slice has only a step value, format it as "::step"
             else if (idx.step.has_value()) {
-                return fmt::format("::{}", idx.step.value());
+                return std::format("::{}", idx.step.value());
             }
         } 
         else if constexpr(std::is_integral_v<Idx>) {
@@ -230,6 +229,73 @@ namespace hasty {
             _pimpl->underlying_tensor.div_(other._pimpl->underlying_tensor);
         }
 
+        template<device_fp F1, device_fp F2, size_t R1, size_t R2>
+        requires std::same_as<device_type_t<F1>, device_type_t<F2>>
+        friend auto operator+(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs) {
+            constexpr size_t RETRANK = R1 > R2 ? R1 : R2;
+
+            at::Tensor newtensor = lhs._pimpl->underlying_tensor + rhs._pimpl->underlying_tensor;
+            std::array<int64_t, RETRANK> new_shape;
+
+            assert(newtensor.ndimension() == RETRANK);
+
+            for_sequence<RETRANK>([&](auto i) {
+                new_shape[i] = newtensor.size(i);
+            });
+
+            return tensor<nonloss_type_t<F1,F2>, RETRANK>(new_shape, std::move(newtensor));
+        }
+
+        template<device_fp F1, device_fp F2, size_t R1, size_t R2>
+        requires std::same_as<device_type_t<F1>, device_type_t<F2>>
+        friend auto operator-(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs) {
+            constexpr size_t RETRANK = R1 > R2 ? R1 : R2;
+
+            at::Tensor newtensor = lhs._pimpl->underlying_tensor - rhs._pimpl->underlying_tensor;
+            std::array<int64_t, RETRANK> new_shape;
+
+            assert(newtensor.ndimension() == RETRANK);
+
+            for_sequence<RETRANK>([&](auto i) {
+                new_shape[i] = newtensor.size(i);
+            });
+
+            return tensor<nonloss_type_t<F1,F2>, RETRANK>(new_shape, std::move(newtensor));
+        }
+
+        template<device_fp F1, device_fp F2, size_t R1, size_t R2>
+        requires std::same_as<device_type_t<F1>, device_type_t<F2>>
+        friend auto operator*(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs) {
+            constexpr size_t RETRANK = R1 > R2 ? R1 : R2;
+
+            at::Tensor newtensor = lhs._pimpl->underlying_tensor * rhs._pimpl->underlying_tensor;
+            std::array<int64_t, RETRANK> new_shape;
+
+            assert(newtensor.ndimension() == RETRANK);
+
+            for_sequence<RETRANK>([&](auto i) {
+                new_shape[i] = newtensor.size(i);
+            });
+
+            return tensor<nonloss_type_t<F1,F2>, RETRANK>(new_shape, std::move(newtensor));
+        }
+
+        template<device_fp F1, device_fp F2, size_t R1, size_t R2>
+        requires std::same_as<device_type_t<F1>, device_type_t<F2>>
+        friend auto operator/(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs) {
+            constexpr size_t RETRANK = R1 > R2 ? R1 : R2;
+
+            at::Tensor newtensor = lhs._pimpl->underlying_tensor / rhs._pimpl->underlying_tensor;
+            std::array<int64_t, RETRANK> new_shape;
+
+            assert(newtensor.ndimension() == RETRANK);
+
+            for_sequence<RETRANK>([&](auto i) {
+                new_shape[i] = newtensor.size(i);
+            });
+
+            return tensor<nonloss_type_t<F1,F2>, RETRANK>(new_shape, std::move(newtensor));
+        }
 
     private:
         std::shared_ptr<tensor_impl<FPT,RANK>> _pimpl;

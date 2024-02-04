@@ -4,6 +4,7 @@ module;
 
 export module trace;
 
+import tensor;
 import util;
 
 namespace hasty {
@@ -29,7 +30,7 @@ def trace_function(tensorlist):
     };
 
     export template<device_fp FPT, size_t RANK>
-    export struct trace_tensor {
+    struct trace_tensor {
 
 
         trace_tensor(std::string name)

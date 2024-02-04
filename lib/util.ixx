@@ -28,6 +28,16 @@ namespace hasty {
             CUDA
         };
 
+        enum struct precission {
+            F32,
+            F64
+        };
+
+        enum struct complexity {
+            REAL,
+            COMPLEX
+        };
+
         template<typename T, typename U>
         struct strong_typedef : public strong_typedef_base {
             T strong_value;
@@ -178,6 +188,25 @@ namespace hasty {
                 std::is_same_v<F, cuda_c128>;
         }
 
+        template<device_fp F>
+        constexpr bool is_32bit_precission()
+        {
+            return
+                std::is_same_v<F, cpu_f32> ||
+                std::is_same_v<F, cuda_f32> ||
+                std::is_same_v<F, cpu_c64> ||
+                std::is_same_v<F, cuda_c64>;
+        }
+
+        template<device_fp F>
+        constexpr bool is_64bit_precission()
+        {
+            return
+                std::is_same_v<F, cpu_f64> ||
+                std::is_same_v<F, cuda_f64> ||
+                std::is_same_v<F, cpu_c128> ||
+                std::is_same_v<F, cuda_c128>;
+        }
 
         template<device_fp FP>
         constexpr at::ScalarType static_type_to_scalar_type()
@@ -196,6 +225,63 @@ namespace hasty {
             }
         }
 
+        template<device_fp FP>
+        constexpr device_type device_type_func()
+        {
+            if constexpr(is_cuda<FP>()) {
+                return device_type::CUDA;
+            } else if constexpr(is_cpu<FP>()) {
+                return device_type::CPU;
+            } else {
+                throw std::runtime_error("Invalid device type");
+            }
+        }
+
+        template<device_fp FP>
+        using device_type_t = decltype(device_type_func<FP>());
+
+
+        template<device_fp F1, device_fp F2>
+        constexpr auto nonloss_type_func() {
+            auto types = []<device_fp FP1, device_fp FP2>() {
+                return std::is_same_v<FP1, F1> && std::is_same_v<FP2, F2> ||
+                    std::is_same_v<FP1, F2> && std::is_same_v<FP2, F1>;
+            };
+
+            if        constexpr(std::is_same_v<device_type_t<F1>,device_type_t<F2>>) {
+                throw std::runtime_error("Types must have same device in nonless_type_func");
+            } else if constexpr(std::is_same_v<F1,F2>) {
+                return F1();
+            } else if constexpr(types.template operator()<cpu_f32, cpu_f64>()) {
+                return cpu_f64();
+            } else if constexpr(types.template operator()<cpu_f32, cpu_c128>()) {
+                return cpu_c128();
+            } else if constexpr(types.template operator()<cpu_f64, cpu_c64>()) {
+                return cpu_c128();
+            } else if constexpr(types.template operator()<cpu_f64, cpu_c128>()) {
+                return cpu_c128();
+            } else if constexpr(types.template operator()<cpu_c64, cpu_c128>()) {
+                return cpu_c128();
+            } else if constexpr(types.template operator()<cuda_f32, cuda_f64>()) {
+                return cuda_f64();
+            } else if constexpr(types.template operator()<cuda_f32, cuda_c64>()) {
+                return cuda_c64();
+            } else if constexpr(types.template operator()<cuda_f32, cuda_c128>()) {
+                return cuda_c128();
+            } else if constexpr(types.template operator()<cuda_f64, cuda_c64>()) {
+                return cuda_c128();
+            } else if constexpr(types.template operator()<cuda_f64, cuda_c128>()) {
+                return cuda_c128();
+            } else if constexpr(types.template operator()<cuda_c64, cuda_c128>()) {
+                return cuda_c128();
+            } else {
+                throw std::runtime_error("Invalid device type");
+            }
+
+        }
+
+        template<device_fp F1, device_fp F2>
+        using nonloss_type_t = decltype(nonloss_type_func<F1, F2>());
 
         static_assert(alignof(cuda_f32) == alignof(float));
         static_assert(sizeof(cuda_f32) == sizeof(float));

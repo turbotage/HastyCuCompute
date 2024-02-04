@@ -2,9 +2,9 @@
 #include "pch.hpp"
 
 import util;
-import nufft;
 import tensor;
-
+import nufft;
+import trace;
 
 /*
 float run_nufft_type2_timing(int ntransf, int nx, int ny, int nz, int nupts, hasty::nufft_method_cuda method, hasty::nufft_upsamp_cuda upsamp) {
