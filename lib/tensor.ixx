@@ -27,6 +27,8 @@ namespace hasty {
                         || std::is_same_v<T, Slice>
                         || std::is_integral_v<T>;
 
+    using TensorIndex = std::variant<None, Ellipsis, Slice, int64_t>;
+
     export template<index_type... Itx, size_t R>
     constexpr int64_t get_slice_rank(Itx... idxs)
     {
@@ -81,6 +83,49 @@ namespace hasty {
         }
     }
 
+    template<index_type Idx>
+    std::string torchidxstr(Idx idx) {
+        if constexpr(std::is_same_v<Idx, None>) {
+            return "None";
+        } 
+        else if constexpr(std::is_same_v<Idx, Ellipsis>) {
+            return "...";
+        }
+        else if constexpr(std::is_same_v<Idx, Slice>) {
+            // If the Slice has start, end, and step values, format them as "start:end:step"
+            if (idx.start.has_value() && idx.end.has_value() && idx.step.has_value()) {
+                return fmt::format("{}:{}:{}", idx.start.value(), idx.end.value(), idx.step.value());
+            } 
+            // If the Slice has only start and end values, format them as "start:end"
+            else if (idx.start.has_value() && idx.end.has_value()) {
+                return fmt::format("{}:{}", idx.start.value(), idx.end.value());
+            } 
+            // If the Slice has only start and step values, format them as "start::step"
+            else if (idx.start.has_value() && idx.step.has_value()) {
+                return fmt::format("{}::{}", idx.start.value(), idx.step.value());
+            } 
+            // If the Slice has only end and step values, format them as ":end:step"
+            else if (idx.end.has_value() && idx.step.has_value()) {
+                return fmt::format(":{}:{}", idx.end.value(), idx.step.value());
+            } 
+            // If the Slice has only a start value, format it as "start:"
+            else if (idx.start.has_value()) {
+                return fmt::format("{}:", idx.start.value());
+            } 
+            // If the Slice has only an end value, format it as ":end"
+            else if (idx.end.has_value()) {
+                return fmt::format(":{}", idx.end.value());
+            } 
+            // If the Slice has only a step value, format it as "::step"
+            else if (idx.step.has_value()) {
+                return fmt::format("::{}", idx.step.value());
+            }
+        } 
+        else if constexpr(std::is_integral_v<Idx>) {
+            return std::to_string(idx);
+        }
+    }
+
 
     export template<device_fp FPT, size_t RANK>
     struct tensor_impl {
@@ -94,16 +139,8 @@ namespace hasty {
 
         std::array<int64_t, RANK> shape;
         at::Tensor underlying_tensor;
-        std::shared_ptr<trace>  tracectx = nullptr;
+        //std::vector<TensorIndex> indices;
     };
-
-    export template<device_fp FPT, size_t RANK>
-    struct tensor_view {
-        
-
-    private:
-        
-    }
 
     export template<device_fp FPT, size_t RANK>
     struct tensor {
@@ -116,7 +153,22 @@ namespace hasty {
 
         template<size_t R>
         requires less_than<R, RANK>
-        int64_t shape() const { return _pimpl->shape[R]; }
+        int64_t shape() const { 
+            assert(_pimpl->shape[R] == _pimpl->underlying_tensor.size(R));    
+            return _pimpl->shape[R]; 
+        }
+
+        constexpr int64_t ndim() const { 
+            assert(RANK == _pimpl->underlying_tensor.ndimension()); 
+            return RANK; 
+        }
+
+        int64_t nelem() const { 
+            int64_t nelem = 0; 
+            for_sequence<RANK>([&](auto i) { nelem *= _pimpl->shape[i]; });
+            assert(nelem == _pimpl->underlying_tensor.numel());
+            return nelem;
+        }
 
         underlying_type<FPT>* mutable_data_ptr() { return _pimpl->mutable_data_ptr(); }
         const underlying_type<FPT>* const_data_ptr() { return _pimpl->const_data_ptr();}
@@ -124,15 +176,60 @@ namespace hasty {
         template<cpu_fp F>
         void fill(F val) { _pimpl->underlying_tensor.fill_(val); }
 
+        tensor<FPT, RANK> clone() const {
+            return tensor<FPT, RANK>(_pimpl->shape, _pimpl->underlying_tensor.clone());
+        }
+
         template<index_type ...Idx>
         auto operator[](Idx... indices) {
             constexpr auto RETRANK = get_slice_rank(indices...);
 
             at::Tensor tensorview = _pimpl->underlying_tensor.index(tensoridx(indices)...);
 
-            
+            if (!tensorview.is_view())
+                throw std::runtime_error("tensor::operator[]: tensorview is not a view");
 
+            if (tensorview.ndimension() != RETRANK)
+                throw std::runtime_error("tensor::operator[]: tensorview.ndimension() did not match RETRANK");
+
+            std::array<int64_t, RETRANK> new_shape;
+            for_sequence<RETRANK>([&](auto i) {
+                new_shape[i] = tensorview.size(i);
+            });
+
+            return tensor<FPT, RETRANK>(new_shape, std::move(tensorview));
         }
+
+        template<size_t R>
+        requires less_than<R, RANK>
+        void operator=(const tensor<FPT, R>& other) {
+            _pimpl->underlying_tensor.copy_(other._pimpl->underlying_tensor);
+        }
+
+        template<size_t R>
+        requires less_than<R, RANK>
+        void operator+=(const tensor<FPT, R>& other) const {
+            _pimpl->underlying_tensor.add_(other._pimpl->underlying_tensor);
+        }
+
+        template<size_t R>
+        requires less_than<R, RANK>
+        void operator-=(const tensor<FPT, R>& other) const {
+            _pimpl->underlying_tensor.sub_(other._pimpl->underlying_tensor);
+        }
+
+        template<size_t R>
+        requires less_than<R, RANK>
+        void operator*=(const tensor<FPT, R>& other) const {
+            _pimpl->underlying_tensor.mul_(other._pimpl->underlying_tensor);
+        }
+
+        template<size_t R>
+        requires less_than<R, RANK>
+        void operator/=(const tensor<FPT, R>& other) const {
+            _pimpl->underlying_tensor.div_(other._pimpl->underlying_tensor);
+        }
+
 
     private:
         std::shared_ptr<tensor_impl<FPT,RANK>> _pimpl;

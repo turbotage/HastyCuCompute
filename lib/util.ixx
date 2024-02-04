@@ -77,7 +77,6 @@ namespace hasty {
         template<typename T>
         concept device_fp = requires { cuda_fp<T> || cpu_fp<T>; };
 
-
         template<device_fp F>
         constexpr auto swap_device_type_func() {
             if constexpr (std::is_same_v<F, cpu_f32>) {
@@ -206,6 +205,7 @@ namespace hasty {
         static_assert(sizeof(cuda_c64) == sizeof(cuFloatComplex));
         static_assert(alignof(cuda_c128) == alignof(cuDoubleComplex));
         static_assert(sizeof(cuda_c128) == sizeof(cuDoubleComplex));
+
 
         template<typename T>
         using optrefw = std::optional<std::reference_wrapper<T>>;
