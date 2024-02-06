@@ -306,6 +306,15 @@ namespace hasty {
             for_sequence(std::make_integer_sequence<decltype(n), n>{}, f);
         }
 
+        template<auto n, typename F, typename T>
+        constexpr T for_sequence(F f, const T& t) {
+            T tcopy = t;
+            for_sequence<n>([&tcopy, &f](auto i) {
+                f(i, tcopy);
+            });
+            return tcopy;
+        }
+
     }
 
 }

@@ -237,7 +237,9 @@ int main() {
     std::cout << "type1\n";
     //type_1_tests(ntransf, nx, ny, nz, nupts);
     
+    
 
+    auto filter = trace_function("fft_filter", )
 
     return 0;
 }
