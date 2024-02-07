@@ -173,7 +173,7 @@ namespace hasty {
         const underlying_type<FPT>* const_data_ptr() { return _pimpl->const_data_ptr();}
 
         template<cpu_fp F>
-        void fill(F val) { _pimpl->underlying_tensor.fill_(val); }
+        void fill_(F val) { _pimpl->underlying_tensor.fill_(val); }
 
         tensor<FPT, RANK> clone() const {
             return tensor<FPT, RANK>(_pimpl->shape, _pimpl->underlying_tensor.clone());

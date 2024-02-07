@@ -237,9 +237,18 @@ int main() {
     std::cout << "type1\n";
     //type_1_tests(ntransf, nx, ny, nz, nupts);
     
-    
+    using namespace hasty;
 
-    auto filter = trace_function("fft_filter", )
+    trace_tensor<cuda_f32, 3> a("a");
+    trace_tensor<cuda_f32, 3> b("b");
+
+    auto filter = trace_function("fft_filter", a, b);
+
+    auto tt = fftn(a, {256,128,128}, {0,1,2}, fft_norm::ORTHO);    
+    tt = b * tt;
+    tt = ifftn(tt, {256,128,128}, {0,1,2}, fft_norm::BACKWARD);
+
+    std::cout << tt.name() << "\n";
 
     return 0;
 }
