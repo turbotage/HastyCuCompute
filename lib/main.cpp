@@ -244,9 +244,8 @@ int main() {
 
     auto filter = trace_function("fft_filter", a, b);
 
-    auto tt = fftn(a, {256,128,128}, {0,1,2}, fft_norm::ORTHO);    
-    tt = b * tt;
-    tt = ifftn(tt, {256,128,128}, {0,1,2}, fft_norm::BACKWARD);
+    auto tt = fftn(a, {128,128,128});
+
 
     std::cout << tt.name() << "\n";
 

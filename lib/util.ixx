@@ -6,7 +6,6 @@ export module util;
 
 namespace hasty {
 
-
     template <typename T, typename = void>
     struct has_strong_value : std::false_type{};
 
@@ -18,10 +17,115 @@ namespace hasty {
     template<typename T>
     concept is_strong_type = std::is_base_of_v<strong_typedef_base, T> && has_strong_value<T>::value;
 
+    // export from here
     export {
-        // export from here
+
+        using i16 = int16_t;
+        using i32 = int32_t;
+        using i64 = int64_t;
+        using u16 = uint16_t;
+        using u32 = uint32_t;
+        using u64 = uint64_t;
+        using f32 = float;
+        using f64 = double;
+        using c64 = std::complex<float>;
+        using c128 = std::complex<double>;
+
+
         template<size_t T1, size_t T2>
         concept less_than = T1 < T2;
+
+        template<size_t T1, size_t T2>
+        concept less_than_or_equal = T1 <= T2;
+
+
+        template<std::integral T, size_t N>
+        struct span {
+
+            span() : _data(nullptr) {};
+
+            span(T const (&list)[N]) 
+                : _data(list) {}
+
+            /*
+            span(std::span<const T, N> span) 
+                : _data(span.data()) {}
+            */
+
+            
+
+            span(std::nullopt_t) 
+                : _data(nullptr) {}
+
+            const T& operator[](size_t index) const {
+                if (index >= N) {
+                    throw std::out_of_range("Index out of range");
+                }
+                return _data[index];
+            }
+
+            template<size_t I>
+            requires less_than<I,N>
+            T& get() {
+                return _data[I];
+            }
+
+            constexpr size_t size() const { return N; }
+
+        private:
+            const T* _data;
+        };
+        
+        /*
+        template<std::integral T>
+        auto make_span()
+        */
+
+        template<std::integral T, size_t N>
+        struct ospan {
+
+            ospan() : _data(nullptr) {};
+
+            ospan(T const (&list)[N]) 
+                : _data(list) {}
+
+            /*
+            ospan(std::span<const T, N> span) 
+                : _data(span.data()) {}
+            */
+
+            ospan(span<T,N> span) 
+                : _data(span._data) {}
+
+            ospan(std::nullopt_t) 
+                : _data(nullptr) {}
+
+            const T& operator[](size_t index) const {
+                if (index >= N) {
+                    throw std::out_of_range("Index out of range");
+                }
+                return _data[index];
+            }
+
+            template<size_t I>
+            requires less_than<I,N>
+            T& get() {
+                return _data[I];
+            }
+
+            constexpr size_t size() const { return N; }
+
+            bool has_value() const {
+                return _data != nullptr;
+            }
+
+            span<T,N> operator*() {
+                return span<T,N>(_data);
+            }
+
+        private:
+            const T* _data;
+        };
         
         enum struct device_type {
             CPU,
@@ -37,6 +141,8 @@ namespace hasty {
             REAL,
             COMPLEX
         };
+
+        
 
         template<typename T, typename U>
         struct strong_typedef : public strong_typedef_base {

@@ -10,11 +10,11 @@ import util;
 namespace hasty {
 
     template<std::integral I, size_t R>
-    constexpr std::string to_trace_str(std::array<I, R> arr, bool as_tuple = true) {
+    constexpr std::string to_trace_str(span<I,R> arr, bool as_tuple = true) {
         std::string retstr = as_tuple ? "(" : "[";
         
         for_sequence<R>([&](auto i) {
-            retstr += std::to_string(arr[i]);
+            retstr += std::to_string(arr.template get<i>());
             if constexpr(i < R - 1) {
                 retstr += ",";
             }
@@ -134,11 +134,12 @@ namespace hasty {
         ORTHO
     };
 
-    export template<device_fp FPT, size_t RANK, size_t R, std::integral I = int64_t>
+/*
+    export template<device_fp FPT, size_t RANK, size_t R, std::integral I>
     requires less_than<R, RANK>
     trace_tensor<FPT, RANK> fftn(const trace_tensor<FPT, RANK>& t, 
-        std::optional<std::array<I, R_OK>> s, std::optional<std::array<I, R>> dim, 
-        std::optional<fft_norm> norm) {
+        ospan<int32_t, R> s = std::nullopt, ospan<I, R> dim = std::nullopt, 
+        std::optional<fft_norm> norm = std::nullopt) {
 
         auto normstr = [&norm]() {
             if (norm.has_value()) {
@@ -159,10 +160,53 @@ namespace hasty {
             dim.has_value() ? ",dim=" + to_trace_str(*dim) : "",
             norm.has_value() ? ",norm=" + normstr() : ""));
     }
+*/
 
+    export template<device_fp FPT, size_t RANK, size_t R1, size_t R2, std::integral I>
+    requires {
+        less_than_or_equal<R, RANK> && less_than_or_equal<R2, RANK>
+    }
+    trace_tensor<FPT, RANK> fftn(const trace_tensor<FPT, RANK>& t, 
+        ospan<I,R> s, 
+        ospan<I,R> dim, 
+        std::optional<fft_norm> norm = std::nullopt) {
+
+        auto normstr = [&norm]() {
+            if (norm.has_value()) {
+                switch (norm.value()) {
+                case fft_norm::FORWARD:
+                    return "forward";
+                case fft_norm::BACKWARD:
+                    return "backward";
+                case fft_norm::ORTHO:
+                    return "ortho";
+                default:
+                    throw std::runtime_error("Invalid fft_norm value");
+                }
+            }
+        };
+
+        return trace_tensor<FPT, RANK>(std::format("torch.fft.fftn({}{}{}{})", 
+            t.name(),
+            s.has_value() ? ",s=" + to_trace_str(*s) : "",
+            dim.has_value() ? ",dim=" + to_trace_str(*dim) : "",
+            norm.has_value() ? ",norm=" + normstr() : ""));
+    }
+
+
+    /*
     export template<device_fp FPT, size_t RANK>
+    trace_tensor<FPT, RANK> fftn(const trace_tensor<FPT, RANK>& t)
+    {
+        return trace_tensor<FPT, RANK>(std::format("torch.fft.fftn({})", t.name()));
+    }
+    */
+
+
+
+    export template<device_fp FPT, size_t RANK, size_t R, std::integral I = int64_t>
     trace_tensor<FPT, RANK> ifftn(const trace_tensor<FPT, RANK>& t, 
-        std::optional<std::array<int64_t, RANK>> s, std::optional<std::array<int64_t, RANK>> dim, 
+        ospan<I,R> s, ospan<I,R> dim, 
         std::optional<fft_norm> norm) {
 
         auto normstr = [&norm]() {
