@@ -30,7 +30,19 @@ namespace hasty {
         trace_tensor(std::string name)
             : _tracestr(name)
         {
+            std::cout << "constructor was run" << std::endl;
         };
+
+        template<device_fp F, size_t R>
+        requires less_than_or_equal<R, RANK>
+        auto operator=(const trace_tensor<F, R>& other) {
+            std::cout << "op= was run" << std::endl;
+            std::string newtracestr = _tracestr;
+            newtracestr += ".copy_(" + other._tracestr + ");";
+            return newtracestr;
+        }
+
+        trace_tensor& operator=(const trace_tensor&) = delete;
 
         std::string name() const { return _tracestr; }
 
@@ -77,14 +89,6 @@ namespace hasty {
             newtracestr += "]";
 
             return trace_tensor<FPT, RETRANK>(newtracestr);
-        }
-
-        template<size_t R>
-        requires less_than<R, RANK>
-        std::string operator=(const trace_tensor<FPT, R>& other) {
-            std::string newtracestr = _tracestr;
-            newtracestr += ".copy_(" + other._tracestr + ");";
-            return newtracestr;
         }
 
         template<size_t R>
@@ -162,24 +166,22 @@ namespace hasty {
     }
 */
 
-    export template<device_fp FPT, size_t RANK, size_t R1, size_t R2, std::integral I>
-    requires {
-        less_than_or_equal<R, RANK> && less_than_or_equal<R2, RANK>
-    }
+    export template<device_fp FPT, size_t RANK, size_t R1, size_t R2, std::integral I1, std::integral I2>
+    requires less_than_or_equal<R1, RANK> && less_than_or_equal<R2, RANK>
     trace_tensor<FPT, RANK> fftn(const trace_tensor<FPT, RANK>& t, 
-        ospan<I,R> s, 
-        ospan<I,R> dim, 
+        ospan<I1,R1> s, 
+        ospan<I2,R2> dim, 
         std::optional<fft_norm> norm = std::nullopt) {
 
         auto normstr = [&norm]() {
             if (norm.has_value()) {
                 switch (norm.value()) {
                 case fft_norm::FORWARD:
-                    return "forward";
+                    return std::string("forward");
                 case fft_norm::BACKWARD:
-                    return "backward";
+                    return std::string("backward");
                 case fft_norm::ORTHO:
-                    return "ortho";
+                    return std::string("ortho");
                 default:
                     throw std::runtime_error("Invalid fft_norm value");
                 }
@@ -204,20 +206,24 @@ namespace hasty {
 
 
 
-    export template<device_fp FPT, size_t RANK, size_t R, std::integral I = int64_t>
+    export template<device_fp FPT, size_t RANK, size_t R1, size_t R2, std::integral I1, std::integral I2>
+    requires less_than_or_equal<R1, RANK> && less_than_or_equal<R2, RANK>
     trace_tensor<FPT, RANK> ifftn(const trace_tensor<FPT, RANK>& t, 
-        ospan<I,R> s, ospan<I,R> dim, 
+        ospan<I1,R1> s, 
+        ospan<I2,R2> dim, 
         std::optional<fft_norm> norm) {
 
         auto normstr = [&norm]() {
             if (norm.has_value()) {
                 switch (norm.value()) {
                 case fft_norm::FORWARD:
-                    return "forward";
+                    return std::string("forward");
                 case fft_norm::BACKWARD:
-                    return "backward";
+                    return std::string("backward");
                 case fft_norm::ORTHO:
-                    return "ortho";
+                    return std::string("ortho");
+                default:
+                    throw std::runtime_error("Invalid fft_norm value");
                 }
             }
         };

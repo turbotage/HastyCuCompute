@@ -244,10 +244,15 @@ int main() {
 
     auto filter = trace_function("fft_filter", a, b);
 
-    auto tt = fftn(a, {128,128,128});
+    std::cout << b.name() << "\n";
 
+    std::cout << typeid(fftn(a, ospan<i64,3>({128,128,128}), ospan<i64, 0>{})).name() << std::endl;
+    std::cout << typeid(b).name() << std::endl;
 
-    std::cout << tt.name() << "\n";
+    std::cout << (b = fftn(a, ospan<i64,3>({128,128,128}), ospan<i64, 0>{}));
+
+    std::cout << b.name() << "\n\n\n";
+    //std::cout << tt.name() << "\n";
 
     return 0;
 }

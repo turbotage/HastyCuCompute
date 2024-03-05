@@ -47,11 +47,13 @@ namespace hasty {
             span(T const (&list)[N]) 
                 : _data(list) {}
 
+            span(const T* listptr)
+                : _data(listptr) {}
+
             /*
             span(std::span<const T, N> span) 
                 : _data(span.data()) {}
             */
-
             
 
             span(std::nullopt_t) 
@@ -66,7 +68,7 @@ namespace hasty {
 
             template<size_t I>
             requires less_than<I,N>
-            T& get() {
+            const T& get() {
                 return _data[I];
             }
 
@@ -88,6 +90,9 @@ namespace hasty {
 
             ospan(T const (&list)[N]) 
                 : _data(list) {}
+
+            ospan(const T* listptr)
+                : _data(listptr) {}
 
             /*
             ospan(std::span<const T, N> span) 
@@ -119,7 +124,7 @@ namespace hasty {
                 return _data != nullptr;
             }
 
-            span<T,N> operator*() {
+            span<T,N> operator*() const {
                 return span<T,N>(_data);
             }
 
