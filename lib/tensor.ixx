@@ -133,6 +133,11 @@ namespace hasty {
             : shape(input_shape), underlying_tensor(std::move(input))
         {}
 
+        template<std::integral I>
+        tensor_impl(span<I, RANK> input_shape, at::Tensor input)
+            : shape(input_shape.to_arr()), underlying_tensor(std::move(input))
+        {}
+
         underlying_type<FPT>* mutable_data_ptr() { return underlying_tensor.mutable_data_ptr<underlying_type<FPT>>(); }
         const underlying_type<FPT>* const_data_ptr() { return underlying_tensor.const_data_ptr<underlying_type<FPT>>(); }
 
@@ -143,10 +148,18 @@ namespace hasty {
 
     export template<device_fp FPT, size_t RANK>
     struct tensor {
-        
+    private:
+        std::shared_ptr<tensor_impl<FPT,RANK>> _pimpl;
+    public:
+
         tensor() = default;
 
         tensor(const std::array<int64_t, RANK>& input_shape, at::Tensor input) 
+            : _pimpl(std::make_shared<tensor_impl<FPT, RANK>>(input_shape, std::move(input)))
+        {}
+
+        template<std::integral I>
+        tensor(span<I, RANK> input_shape, at::Tensor input)
             : _pimpl(std::make_shared<tensor_impl<FPT, RANK>>(input_shape, std::move(input)))
         {}
 
@@ -169,14 +182,34 @@ namespace hasty {
             return nelem;
         }
 
+        std::string devicestr() const {
+            return _pimpl->underlying_tensor.device().str();
+        
+        }
+
         underlying_type<FPT>* mutable_data_ptr() { return _pimpl->mutable_data_ptr(); }
         const underlying_type<FPT>* const_data_ptr() { return _pimpl->const_data_ptr();}
 
         template<cpu_fp F>
         void fill_(F val) { _pimpl->underlying_tensor.fill_(val); }
 
-        tensor<FPT, RANK> clone() const {
-            return tensor<FPT, RANK>(_pimpl->shape, _pimpl->underlying_tensor.clone());
+
+
+        template<std::integral I, size_t R>
+        tensor<FPT, R> view(span<I,R> shape) {
+            at::Tensor tensorview = _pimpl->underlying_tensor.view(shape.to_torch_arr());
+            return tensor<FPT, R>(shape, std::move(tensorview));
+        }
+
+        tensor<FPT, 1> flatview() {
+            at::Tensor tensorview = _pimpl->underlying_tensor.view(-1);
+            return tensor<FPT, 1>({tensorview.size(0)}, std::move(tensorview));
+        }
+
+        tensor<FPT, 1> flatslice(index_type auto& idx) {
+            at::Tensor tensorview = _pimpl->underlying_tensor.view(-1);
+            tensorview = tensorview.index(torchidx(idx));
+            return tensor<FPT, 1>({tensorview.size(0)}, std::move(tensorview));
         }
 
         template<index_type ...Idx>
@@ -297,8 +330,35 @@ namespace hasty {
             return tensor<nonloss_type_t<F1,F2>, RETRANK>(new_shape, std::move(newtensor));
         }
 
-    private:
-        std::shared_ptr<tensor_impl<FPT,RANK>> _pimpl;
+        export template<device_fp F, size_t R, size_t R1, size_t R2, std::integral I1, std::integral I2>
+        friend tensor<F, size_t R> fftn(tensor<F, size_t R> t,
+            ospan<I1,R1> s,
+            ospan<I2,R2> dim,
+            std::optional<fft_norm> norm = std::nullopt)
+        {
+            auto normstr = [&norm]() {
+                if (norm.has_value()) {
+                    switch (norm.value()) {
+                    case fft_norm::FORWARD:
+                        return std::string("forward");
+                    case fft_norm::BACKWARD:
+                        return std::string("backward");
+                    case fft_norm::ORTHO:
+                        return std::string("ortho");
+                    default:
+                        throw std::runtime_error("Invalid fft_norm value");
+                    }
+                }
+            };
+
+            at::Tensor newtensor = at::fft::fftn(t._pimpl->underlying_tensor,
+                s.to_torch_arr(),
+                dim.to_torch_arr(),
+                norm.has_value() ? normstr() : at::nullopt
+            );
+            return tensor<F, R>(span<R>(newtensor.sizes()), std::move(newtensor));
+        }   
+
     };
 
 
@@ -348,5 +408,6 @@ namespace hasty {
 
         return std::make_unique<creator>(tensorin.sizes(), std::move(tensorin));
     }
+ 
 
 }

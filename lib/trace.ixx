@@ -33,16 +33,16 @@ namespace hasty {
             std::cout << "constructor was run" << std::endl;
         };
 
+        trace_tensor& operator=(const trace_tensor& other) = delete;
+
         template<device_fp F, size_t R>
         requires less_than_or_equal<R, RANK>
-        auto operator=(const trace_tensor<F, R>& other) {
+        std::string operator=(const trace_tensor<F, R>& other) const {
             std::cout << "op= was run" << std::endl;
             std::string newtracestr = _tracestr;
-            newtracestr += ".copy_(" + other._tracestr + ");";
+            newtracestr += ".copy_(" + other._tracestr + ")";
             return newtracestr;
         }
-
-        trace_tensor& operator=(const trace_tensor&) = delete;
 
         std::string name() const { return _tracestr; }
 
@@ -206,12 +206,12 @@ namespace hasty {
 
 
 
-    export template<device_fp FPT, size_t RANK, size_t R1, size_t R2, std::integral I1, std::integral I2>
+    export template<device_fp FPT, size_t RANK, size_t R1, size_t R2, std::integral I1 = i32, std::integral I2 = i32>
     requires less_than_or_equal<R1, RANK> && less_than_or_equal<R2, RANK>
     trace_tensor<FPT, RANK> ifftn(const trace_tensor<FPT, RANK>& t, 
         ospan<I1,R1> s, 
         ospan<I2,R2> dim, 
-        std::optional<fft_norm> norm) {
+        std::optional<fft_norm> norm = std::nullopt) {
 
         auto normstr = [&norm]() {
             if (norm.has_value()) {
@@ -284,6 +284,10 @@ namespace hasty {
         void add_line(const std::string& line)
         {
             _tracestr += "\n\t" + line;
+        }
+
+        const std::string& str() const {
+            return _tracestr;
         }
 
     private:

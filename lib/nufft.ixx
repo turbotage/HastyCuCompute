@@ -299,9 +299,11 @@ namespace hasty {
     
     template<cuda_real_fp FPT, size_t DIM>
     requires is_dim3<DIM>
-    void toeplitz_kernel(const std::array<tensor<FPT, 1>,DIM>& coords, tensor<swap_complex_real_t<FPT>, DIM>& kernel,
-        tensor<swap_complex_real_t<FPT>, 2>& nudata)
+    void toeplitz_kernel(const std::array<tensor<FPT, 1>,DIM>& coords, tensor<complex_t<FPT>, DIM>& kernel,
+        tensor<complex_t<FPT>, 2>& nudata)
     {
+
+
         int M = coords[0].template shape<0>();
         verify_coords(coords);
 
@@ -312,17 +314,32 @@ namespace hasty {
 
         std::array<int64_t, DIM> nmodes;
         for_sequence<DIM>([&nmodes, &kernel](auto i) {
-            nmodes[i] = kernel.template shape<i>();
+            nmodes[i] = kernel.template shape<i>() - 1;
         });
 
-        auto plan = nufft_plan<FPT,DIM,nufft_type::TYPE_1>::make(nufft_opts<FPT,DIM>{
-            .nmodes = nmodes,
-            .sign = nufft_sign::DEFAULT_TYPE_1,
-            .ntransf = 1,
-            .tol = std::is_same_v<FPT,cuda_f32> ? 1e-5 : 1e-12,
-            .upsamp = nufft_upsamp_cuda::DEFAULT,
-            .method = nufft_method_cuda::DEFAULT
+        auto reduced_kernel = make_tensor<complex_t<FPT>, DIM>(nmodes, kernel.devicestr());
+
+        auto subnelem = std::reduce(nmodes.begin(), nmodes.end(), 1, std::multiplies<int64_t>());
+        {
+            auto plan = nufft_plan<FPT,DIM,nufft_type::TYPE_1>::make(nufft_opts<FPT,DIM>{
+                .nmodes = nmodes,
+                .sign = nufft_sign::DEFAULT_TYPE_1,
+                .ntransf = 1,
+                .tol = std::is_same_v<FPT,cuda_f32> ? 1e-5 : 1e-12,
+                .upsamp = nufft_upsamp_cuda::DEFAULT,
+                .method = nufft_method_cuda::DEFAULT
+            });
+
+            plan->setpts(coords);
+            plan->execute(nudata, reduced_kernel);
+        }
+
+        std::array<Slice, DIM> slices;
+        for_sequence<DIM>([&slices, &nmodes](auto i) {
+            slices[i] = Slice{0, nmodes[i]};
         });
+
+        kernel[std::forward<Slice>(slices)] = reduced_kernel;
 
     }
 

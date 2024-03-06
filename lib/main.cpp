@@ -227,10 +227,10 @@ void type_1_tests(int ntransf, int nx, int ny, int nz, int nupts)
 int main() {
 
     int ntransf = 32;
-    int nx = 256;
-    int ny = 256;
-    int nz = 256;
-    int nupts = 10000000;
+    int nx = 128;
+    int ny = 128;
+    int nz = 128;
+    int nupts = 100000;
 
     std::cout << "type2\n";
     //type_2_tests(ntransf, nx, ny, nz, nupts);
@@ -243,15 +243,30 @@ int main() {
     trace_tensor<cuda_f32, 3> b("b");
 
     auto filter = trace_function("fft_filter", a, b);
-
     std::cout << b.name() << "\n";
+    std::cout << filter.str() << "\n\n\n";
 
-    std::cout << typeid(fftn(a, ospan<i64,3>({128,128,128}), ospan<i64, 0>{})).name() << std::endl;
-    std::cout << typeid(b).name() << std::endl;
+    filter.add_line(b.operator=<cuda_f32,3>(
+        fftn(a, ospan<i64,3>({128,128,128}), ospan<i64,0>{})));
 
-    std::cout << (b = fftn(a, ospan<i64,3>({128,128,128}), ospan<i64, 0>{}));
+    filter.add_line(b.operator=<cuda_f32,3>(
+        ifftn(b, ospan<i64,3>({128,128,128}), ospan<i64,0>{})));
 
-    std::cout << b.name() << "\n\n\n";
+    auto kernel = make_tensor<cuda_c64, 3>({2*nx,2*ny,2*nz}, 
+        "cuda:0", tensor_make_opts::ZEROS);
+
+    auto coords = std::array<tensor<cuda_f32, 1>, 3>{
+        make_tensor<cuda_f32, 1>({nupts}, "cuda:0"),
+        make_tensor<cuda_f32, 1>({nupts}, "cuda:0"),
+        make_tensor<cuda_f32, 1>({nupts}, "cuda:0")
+    };
+
+    auto nudata = make_tensor<cuda_c64, 2>({1, nupts}, "cuda:0");
+
+    toeplitz_nufft(coords, kernel, nudata);
+
+    
+
     //std::cout << tt.name() << "\n";
 
     return 0;

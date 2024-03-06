@@ -50,11 +50,25 @@ namespace hasty {
             span(const T* listptr)
                 : _data(listptr) {}
 
+            span(at::ArrayRef<T> arr) 
+                : _data(arr.data())
+            {}
+
             /*
             span(std::span<const T, N> span) 
                 : _data(span.data()) {}
             */
-            
+            at::ArrayRef<T> to_torch_arr() {
+                return at::ArrayRef<T>(_data, N);
+            }
+
+            std::array<T, N> to_arr() {
+                std::array<T, N> arr;
+                for (size_t i = 0; i < N; i++) {
+                    arr[i] = _data[i];
+                }
+                return arr;
+            }
 
             span(std::nullopt_t) 
                 : _data(nullptr) {}
@@ -98,6 +112,12 @@ namespace hasty {
             ospan(std::span<const T, N> span) 
                 : _data(span.data()) {}
             */
+
+            at::OptionalArrayRef<T> to_torch_arr() {
+                if (_data != nullptr)
+                    return at::OptionalArrayRef<T>(at::ArrayRef<T>(_data, N));
+                return at::nullopt;
+            }
 
             ospan(span<T,N> span) 
                 : _data(span._data) {}
@@ -249,9 +269,6 @@ namespace hasty {
                 return cpu_f64();
             }
         }
-
-        template<device_fp F>
-        using swap_complex_real_t = decltype(swap_complex_real_type_func<F>());
 
         template<device_real_fp F>
         using complex_t = decltype(smap_complex_real_type_func<F>());
