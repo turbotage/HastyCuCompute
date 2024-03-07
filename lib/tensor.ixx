@@ -126,6 +126,10 @@ namespace hasty {
     }
 
 
+    // Forward declare the tensor class
+    export template<device_fp F, size_t R>
+    struct tensor;
+
     export template<device_fp FPT, size_t RANK>
     struct tensor_impl {
 
@@ -133,8 +137,7 @@ namespace hasty {
             : shape(input_shape), underlying_tensor(std::move(input))
         {}
 
-        template<std::integral I>
-        tensor_impl(span<I, RANK> input_shape, at::Tensor input)
+        tensor_impl(span<RANK> input_shape, at::Tensor input)
             : shape(input_shape.to_arr()), underlying_tensor(std::move(input))
         {}
 
@@ -145,6 +148,27 @@ namespace hasty {
         at::Tensor underlying_tensor;
         //std::vector<TensorIndex> indices;
     };
+
+
+
+
+
+
+    export enum struct fft_norm {
+        FORWARD,
+        BACKWARD,
+        ORTHO
+    };
+
+    template<device_fp F, size_t R, size_t R1, size_t R2>
+    requires less_than_or_equal<R1, R> && less_than_or_equal<R2, R>
+    tensor<F, R> fftn(tensor<F, R> t, 
+        span<R1> s = nullspan(), 
+        span<R2> dim = nullspan(),
+        std::optional<fft_norm> norm = std::nullopt);
+
+
+    
 
     export template<device_fp FPT, size_t RANK>
     struct tensor {
@@ -158,8 +182,7 @@ namespace hasty {
             : _pimpl(std::make_shared<tensor_impl<FPT, RANK>>(input_shape, std::move(input)))
         {}
 
-        template<std::integral I>
-        tensor(span<I, RANK> input_shape, at::Tensor input)
+        tensor(span<RANK> input_shape, at::Tensor input)
             : _pimpl(std::make_shared<tensor_impl<FPT, RANK>>(input_shape, std::move(input)))
         {}
 
@@ -195,8 +218,8 @@ namespace hasty {
 
 
 
-        template<std::integral I, size_t R>
-        tensor<FPT, R> view(span<I,R> shape) {
+        template<size_t R>
+        tensor<FPT, R> view(span<R> shape) {
             at::Tensor tensorview = _pimpl->underlying_tensor.view(shape.to_torch_arr());
             return tensor<FPT, R>(shape, std::move(tensorview));
         }
@@ -264,100 +287,15 @@ namespace hasty {
 
         template<device_fp F1, device_fp F2, size_t R1, size_t R2>
         requires std::same_as<device_type_t<F1>, device_type_t<F2>>
-        friend auto operator+(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs) {
-            constexpr size_t RETRANK = R1 > R2 ? R1 : R2;
-
-            at::Tensor newtensor = lhs._pimpl->underlying_tensor + rhs._pimpl->underlying_tensor;
-            std::array<int64_t, RETRANK> new_shape;
-
-            assert(newtensor.ndimension() == RETRANK);
-
-            for_sequence<RETRANK>([&](auto i) {
-                new_shape[i] = newtensor.size(i);
-            });
-
-            return tensor<nonloss_type_t<F1,F2>, RETRANK>(new_shape, std::move(newtensor));
-        }
+        friend auto operator+(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs);
 
         template<device_fp F1, device_fp F2, size_t R1, size_t R2>
         requires std::same_as<device_type_t<F1>, device_type_t<F2>>
-        friend auto operator-(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs) {
-            constexpr size_t RETRANK = R1 > R2 ? R1 : R2;
+        friend auto operator/(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs);
 
-            at::Tensor newtensor = lhs._pimpl->underlying_tensor - rhs._pimpl->underlying_tensor;
-            std::array<int64_t, RETRANK> new_shape;
-
-            assert(newtensor.ndimension() == RETRANK);
-
-            for_sequence<RETRANK>([&](auto i) {
-                new_shape[i] = newtensor.size(i);
-            });
-
-            return tensor<nonloss_type_t<F1,F2>, RETRANK>(new_shape, std::move(newtensor));
-        }
-
-        template<device_fp F1, device_fp F2, size_t R1, size_t R2>
-        requires std::same_as<device_type_t<F1>, device_type_t<F2>>
-        friend auto operator*(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs) {
-            constexpr size_t RETRANK = R1 > R2 ? R1 : R2;
-
-            at::Tensor newtensor = lhs._pimpl->underlying_tensor * rhs._pimpl->underlying_tensor;
-            std::array<int64_t, RETRANK> new_shape;
-
-            assert(newtensor.ndimension() == RETRANK);
-
-            for_sequence<RETRANK>([&](auto i) {
-                new_shape[i] = newtensor.size(i);
-            });
-
-            return tensor<nonloss_type_t<F1,F2>, RETRANK>(new_shape, std::move(newtensor));
-        }
-
-        template<device_fp F1, device_fp F2, size_t R1, size_t R2>
-        requires std::same_as<device_type_t<F1>, device_type_t<F2>>
-        friend auto operator/(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs) {
-            constexpr size_t RETRANK = R1 > R2 ? R1 : R2;
-
-            at::Tensor newtensor = lhs._pimpl->underlying_tensor / rhs._pimpl->underlying_tensor;
-            std::array<int64_t, RETRANK> new_shape;
-
-            assert(newtensor.ndimension() == RETRANK);
-
-            for_sequence<RETRANK>([&](auto i) {
-                new_shape[i] = newtensor.size(i);
-            });
-
-            return tensor<nonloss_type_t<F1,F2>, RETRANK>(new_shape, std::move(newtensor));
-        }
-
-        export template<device_fp F, size_t R, size_t R1, size_t R2, std::integral I1, std::integral I2>
-        friend tensor<F, size_t R> fftn(tensor<F, size_t R> t,
-            ospan<I1,R1> s,
-            ospan<I2,R2> dim,
-            std::optional<fft_norm> norm = std::nullopt)
-        {
-            auto normstr = [&norm]() {
-                if (norm.has_value()) {
-                    switch (norm.value()) {
-                    case fft_norm::FORWARD:
-                        return std::string("forward");
-                    case fft_norm::BACKWARD:
-                        return std::string("backward");
-                    case fft_norm::ORTHO:
-                        return std::string("ortho");
-                    default:
-                        throw std::runtime_error("Invalid fft_norm value");
-                    }
-                }
-            };
-
-            at::Tensor newtensor = at::fft::fftn(t._pimpl->underlying_tensor,
-                s.to_torch_arr(),
-                dim.to_torch_arr(),
-                norm.has_value() ? normstr() : at::nullopt
-            );
-            return tensor<F, R>(span<R>(newtensor.sizes()), std::move(newtensor));
-        }   
+        template<device_fp F, size_t R, size_t R1, size_t R2>
+        friend tensor<F, R> fftn(tensor<F, R> t, span<R1> s, span<R2> dim,
+            std::optional<fft_norm> norm);  
 
     };
 
@@ -366,27 +304,24 @@ namespace hasty {
         EMPTY,
         ONES,
         ZEROS,
-        RAND_NORMAL,
         RAND_UNIFORM
     };
 
     export template<device_fp FP, size_t RANK>
-    tensor<FP, RANK> make_tensor(const std::array<int64_t, RANK>& shape, 
+    tensor<FP, RANK> make_tensor(span<RANK> shape, 
         const std::string& device_str="cpu", tensor_make_opts make_opts=tensor_make_opts::EMPTY)
     {
         at::TensorOptions opts = at::TensorOptions(static_type_to_scalar_type<FP>()).device(device_str);
 
         switch (make_opts) {
             case tensor_make_opts::EMPTY:
-                return tensor<FP,RANK>(shape, std::move(at::empty(shape, opts)));
+                return tensor<FP,RANK>(shape, std::move(at::empty(shape.to_arr_ref(), opts)));
             case tensor_make_opts::ONES:
-                return tensor<FP,RANK>(shape, std::move(at::ones(shape, opts)));
+                return tensor<FP,RANK>(shape, std::move(at::ones(shape.to_arr_ref(), opts)));
             case tensor_make_opts::ZEROS:
-                return tensor<FP,RANK>(shape, std::move(at::zeros(shape, opts)));
-            case tensor_make_opts::RAND_NORMAL:
-                return tensor<FP,RANK>(shape, std::move(at::normal(shape, opts)));
+                return tensor<FP,RANK>(shape, std::move(at::zeros(shape.to_arr_ref(), opts)));
             case tensor_make_opts::RAND_UNIFORM:
-                return tensor<FP,RANK>(shape, std::move(at::rand(shape, opts)));
+                return tensor<FP,RANK>(shape, std::move(at::rand(shape.to_arr_ref(), opts)));
             default:
                 throw std::runtime_error("Unknown tensor_make_opts option");
         }

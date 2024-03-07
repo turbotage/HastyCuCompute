@@ -4,28 +4,13 @@ module;
 
 export module trace;
 
-import tensor;
-import util;
+export import tensor;
+export import util;
 
 namespace hasty {
 
-    template<std::integral I, size_t R>
-    constexpr std::string to_trace_str(span<I,R> arr, bool as_tuple = true) {
-        std::string retstr = as_tuple ? "(" : "[";
-        
-        for_sequence<R>([&](auto i) {
-            retstr += std::to_string(arr.template get<i>());
-            if constexpr(i < R - 1) {
-                retstr += ",";
-            }
-        });
-        retstr += as_tuple ? ")" : "]";
-        return retstr;
-    }
-
     export template<device_fp FPT, size_t RANK>
     struct trace_tensor {
-
 
         trace_tensor(std::string name)
             : _tracestr(name)
@@ -132,45 +117,13 @@ namespace hasty {
         std::string _tracestr;
     };
 
-    export enum struct fft_norm {
-        FORWARD,
-        BACKWARD,
-        ORTHO
-    };
 
-/*
-    export template<device_fp FPT, size_t RANK, size_t R, std::integral I>
-    requires less_than<R, RANK>
-    trace_tensor<FPT, RANK> fftn(const trace_tensor<FPT, RANK>& t, 
-        ospan<int32_t, R> s = std::nullopt, ospan<I, R> dim = std::nullopt, 
-        std::optional<fft_norm> norm = std::nullopt) {
 
-        auto normstr = [&norm]() {
-            if (norm.has_value()) {
-                switch (norm.value()) {
-                case fft_norm::FORWARD:
-                    return "forward";
-                case fft_norm::BACKWARD:
-                    return "backward";
-                case fft_norm::ORTHO:
-                    return "ortho";
-                }
-            }
-        };
-
-        return trace_tensor<FPT, RANK>(std::format("torch.fft.fftn({}{}{}{})", 
-            t.name(),
-            s.has_value() ? ",s=" + to_trace_str(*s) : "",
-            dim.has_value() ? ",dim=" + to_trace_str(*dim) : "",
-            norm.has_value() ? ",norm=" + normstr() : ""));
-    }
-*/
-
-    export template<device_fp FPT, size_t RANK, size_t R1, size_t R2, std::integral I1, std::integral I2>
+    export template<device_fp FPT, size_t RANK, size_t R1, size_t R2>
     requires less_than_or_equal<R1, RANK> && less_than_or_equal<R2, RANK>
     trace_tensor<FPT, RANK> fftn(const trace_tensor<FPT, RANK>& t, 
-        ospan<I1,R1> s, 
-        ospan<I2,R2> dim, 
+        span<R1> s = nullspan(), 
+        span<R2> dim = nullspan(), 
         std::optional<fft_norm> norm = std::nullopt) {
 
         auto normstr = [&norm]() {
@@ -190,27 +143,16 @@ namespace hasty {
 
         return trace_tensor<FPT, RANK>(std::format("torch.fft.fftn({}{}{}{})", 
             t.name(),
-            s.has_value() ? ",s=" + to_trace_str(*s) : "",
-            dim.has_value() ? ",dim=" + to_trace_str(*dim) : "",
+            s.has_value() ? ",s=" + span_to_str(s) : "",
+            dim.has_value() ? ",dim=" + span_to_str(dim) : "",
             norm.has_value() ? ",norm=" + normstr() : ""));
     }
 
-
-    /*
-    export template<device_fp FPT, size_t RANK>
-    trace_tensor<FPT, RANK> fftn(const trace_tensor<FPT, RANK>& t)
-    {
-        return trace_tensor<FPT, RANK>(std::format("torch.fft.fftn({})", t.name()));
-    }
-    */
-
-
-
-    export template<device_fp FPT, size_t RANK, size_t R1, size_t R2, std::integral I1 = i32, std::integral I2 = i32>
+    export template<device_fp FPT, size_t RANK, size_t R1, size_t R2>
     requires less_than_or_equal<R1, RANK> && less_than_or_equal<R2, RANK>
     trace_tensor<FPT, RANK> ifftn(const trace_tensor<FPT, RANK>& t, 
-        ospan<I1,R1> s, 
-        ospan<I2,R2> dim, 
+        span<R1> s = nullspan(), 
+        span<R2> dim = nullspan(), 
         std::optional<fft_norm> norm = std::nullopt) {
 
         auto normstr = [&norm]() {
@@ -230,8 +172,8 @@ namespace hasty {
 
         return trace_tensor<FPT, RANK>(std::format("torch.fft.ifftn({}{}{}{})", 
             t.name(),
-            s.has_value() ? ",s=" + to_trace_str(*s) : "",
-            dim.has_value() ? ",dim=" + to_trace_str(*dim) : "",
+            s.has_value() ? ",s=" + span_to_str(s) : "",
+            dim.has_value() ? ",dim=" + span_to_str(dim) : "",
             norm.has_value() ? ",norm=" + normstr() : "")
         );
     }

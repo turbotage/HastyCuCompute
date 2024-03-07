@@ -40,17 +40,18 @@ namespace hasty {
 
 
         template<std::integral T, size_t N>
-        struct span {
+        struct arbspan {
 
-            span() : _data(nullptr) {};
+            //nullspan
+            arbspan() : _data(nullptr) {};
 
-            span(T const (&list)[N]) 
+            arbspan(T const (&list)[N]) 
                 : _data(list) {}
 
-            span(const T* listptr)
+            arbspan(const T* listptr)
                 : _data(listptr) {}
 
-            span(at::ArrayRef<T> arr) 
+            arbspan(at::ArrayRef<T> arr)
                 : _data(arr.data())
             {}
 
@@ -58,7 +59,7 @@ namespace hasty {
             span(std::span<const T, N> span) 
                 : _data(span.data()) {}
             */
-            at::ArrayRef<T> to_torch_arr() {
+            at::ArrayRef<T> to_arr_ref() {
                 return at::ArrayRef<T>(_data, N);
             }
 
@@ -70,7 +71,7 @@ namespace hasty {
                 return arr;
             }
 
-            span(std::nullopt_t) 
+            arbspan(std::nullopt_t)
                 : _data(nullptr) {}
 
             const T& operator[](size_t index) const {
@@ -88,44 +89,60 @@ namespace hasty {
 
             constexpr size_t size() const { return N; }
 
+            bool has_value() const {
+                return _data != nullptr;
+            }
+
         private:
             const T* _data;
         };
         
-        /*
-        template<std::integral T>
-        auto make_span()
-        */
+        template<std::integral I, size_t R>
+        constexpr std::string span_to_str(arbspan<I,R> arr, bool as_tuple = true) {
+            std::string retstr = as_tuple ? "(" : "[";
+            
+            for_sequence<R>([&](auto i) {
+                retstr += std::to_string(arr.template get<i>());
+                if constexpr(i < R - 1) {
+                    retstr += ",";
+                }
+            });
+            retstr += as_tuple ? ")" : "]";
+            return retstr;
+        }
 
-        template<std::integral T, size_t N>
-        struct ospan {
+        template<size_t N>
+        struct span {
 
-            ospan() : _data(nullptr) {};
+            //nullspan
+            span() : _data(nullptr) {};
 
-            ospan(T const (&list)[N]) 
+            span(i64 const (&list)[N]) 
                 : _data(list) {}
 
-            ospan(const T* listptr)
+            span(const i64* listptr)
                 : _data(listptr) {}
 
-            /*
-            ospan(std::span<const T, N> span) 
-                : _data(span.data()) {}
-            */
+            span(at::ArrayRef<i64> arr)
+                : _data(arr.data())
+            {}
 
-            at::OptionalArrayRef<T> to_torch_arr() {
-                if (_data != nullptr)
-                    return at::OptionalArrayRef<T>(at::ArrayRef<T>(_data, N));
-                return at::nullopt;
+            at::ArrayRef<i64> to_arr_ref() {
+                return at::ArrayRef<i64>(_data, N);
             }
 
-            ospan(span<T,N> span) 
-                : _data(span._data) {}
+            std::array<i64, N> to_arr() {
+                std::array<i64, N> arr;
+                for (size_t i = 0; i < N; i++) {
+                    arr[i] = _data[i];
+                }
+                return arr;
+            }
 
-            ospan(std::nullopt_t) 
+            span(std::nullopt_t)
                 : _data(nullptr) {}
 
-            const T& operator[](size_t index) const {
+            const i64& operator[](size_t index) const {
                 if (index >= N) {
                     throw std::out_of_range("Index out of range");
                 }
@@ -134,7 +151,7 @@ namespace hasty {
 
             template<size_t I>
             requires less_than<I,N>
-            T& get() {
+            const i64& get() {
                 return _data[I];
             }
 
@@ -144,14 +161,27 @@ namespace hasty {
                 return _data != nullptr;
             }
 
-            span<T,N> operator*() const {
-                return span<T,N>(_data);
-            }
-
         private:
-            const T* _data;
+            const i64* _data;
         };
-        
+
+        using nullspan = span<0>;
+
+        template<size_t R>
+        constexpr std::string span_to_str(span<R> arr, bool as_tuple = true) {
+            std::string retstr = as_tuple ? "(" : "[";
+            
+            for_sequence<R>([&](auto i) {
+                retstr += std::to_string(arr.template get<i>());
+                if constexpr(i < R - 1) {
+                    retstr += ",";
+                }
+            });
+            retstr += as_tuple ? ")" : "]";
+            return retstr;
+        }
+
+
         enum struct device_type {
             CPU,
             CUDA

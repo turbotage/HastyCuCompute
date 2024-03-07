@@ -11,7 +11,9 @@ include(cmake/CPM.cmake)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-add_executable(HastyCuCompute "lib/main.cpp")
+add_executable(HastyCuCompute 
+                    "lib/main.cpp"
+                    "lib/tensor.cpp")
 
 set_property(TARGET HastyCuCompute PROPERTY CXX_STANDARD 23)
 set_property(TARGET HastyCuCompute PROPERTY CMAKE_CXX_STANDARD_REQUIRED ON)

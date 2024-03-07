@@ -7,8 +7,8 @@ module;
 
 export module nufft;
 
-import util;
-import tensor;
+export import util;
+export import tensor;
 
 namespace hasty {
 
@@ -341,6 +341,7 @@ namespace hasty {
 
         kernel[std::forward<Slice>(slices)] = reduced_kernel;
 
+        kernel = fftn(kernel);
     }
 
 
