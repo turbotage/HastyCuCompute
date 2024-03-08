@@ -55,6 +55,10 @@ namespace hasty {
                 : _data(arr.data())
             {}
 
+            arbspan(const std::array<T, N>& arr)
+                : _data(arr.data())
+            {}
+
             /*
             span(std::span<const T, N> span) 
                 : _data(span.data()) {}
@@ -124,6 +128,10 @@ namespace hasty {
                 : _data(listptr) {}
 
             span(at::ArrayRef<i64> arr)
+                : _data(arr.data())
+            {}
+
+            span(const std::array<i64, N>& arr)
                 : _data(arr.data())
             {}
 
@@ -301,10 +309,10 @@ namespace hasty {
         }
 
         template<device_real_fp F>
-        using complex_t = decltype(smap_complex_real_type_func<F>());
+        using complex_t = decltype(swap_complex_real_type_func<F>());
 
         template<device_complex_fp F>
-        using real_t = decltype(smap_complex_real_type_func<F>());
+        using real_t = decltype(swap_complex_real_type_func<F>());
 
         template<device_fp F>
         constexpr bool is_cuda() 

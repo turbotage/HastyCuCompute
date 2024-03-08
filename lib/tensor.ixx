@@ -28,21 +28,18 @@ namespace hasty {
 
     using TensorIndex = std::variant<None, Ellipsis, Slice, int64_t>;
 
-    export template<index_type... Itx, size_t R>
-    constexpr int64_t get_slice_rank(Itx... idxs)
+    export template<index_type... Idx, size_t R>
+    constexpr int64_t get_slice_rank(std::tuple<Idx...> idxs)
     {
         int none;
         int ints;
         int ellipsis;
 
-        //auto idxss = std::make_tuple<Itx...>(std::forward<Itx...>(idxs...));
-        auto idxss = std::make_tuple(idxs...);
-
-        for_sequence<sizeof...(Itx)>([&](auto i) constexpr {
-            if constexpr(std::is_same_v<decltype(idxss.template get<i>()), None>) {
+        for_sequence<std::tuple_size_v<decltype(idxs)>>([&](auto i) constexpr {
+            if constexpr(std::is_same_v<decltype(idxs.template get<i>()), None>) {
                 ++none;
             } 
-            else if constexpr(std::is_integral_v<decltype(idxss.template get<i>())>) {
+            else if constexpr(std::is_integral_v<decltype(idxs.template get<i>())>) {
                 ++ints;
             }
             /*
@@ -53,6 +50,12 @@ namespace hasty {
         });
 
         return R - ints + none;
+    }
+
+    export template<index_type... Itx, size_t R>
+    constexpr int64_t get_slice_rank(Itx... idxs)
+    {
+        return get_slice_rank(std::make_tuple(idxs...));
     }
 
     template<typename T>
@@ -233,6 +236,26 @@ namespace hasty {
             at::Tensor tensorview = _pimpl->underlying_tensor.view(-1);
             tensorview = tensorview.index(torchidx(idx));
             return tensor<FPT, 1>({tensorview.size(0)}, std::move(tensorview));
+        }
+
+        template<index_type ...Idx>
+        auto operator[](std::tuple<Idx...> indices) {
+            constexpr auto RETRANK = get_slice_rank(indices);
+
+            at::Tensor tensorview = _pimpl->underlying_tensor.index(std::forward<Idx...>(indices));
+
+            if (!tensorview.is_view())
+                throw std::runtime_error("tensor::operator[]: tensorview is not a view");
+
+            if (tensorview.ndimension() != RETRANK)
+                throw std::runtime_error("tensor::operator[]: tensorview.ndimension() did not match RETRANK");
+
+            std::array<int64_t, RETRANK> new_shape;
+            for_sequence<RETRANK>([&](auto i) {
+                new_shape[i] = tensorview.size(i);
+            });
+
+            return tensor<FPT, RETRANK>(new_shape, std::move(tensorview));
         }
 
         template<index_type ...Idx>

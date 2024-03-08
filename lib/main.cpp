@@ -47,7 +47,7 @@ int main() {
     
     auto nudata = make_tensor<cuda_c64, 2>(span<2>({1, nupts}), "cuda:0");
 
-    toeplitz_nufft(coords, kernel, nudata);
+    toeplitz_kernel(coords, kernel, nudata);
     
 
     

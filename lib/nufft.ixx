@@ -297,7 +297,7 @@ namespace hasty {
 
     // TOEPLITZ KERNEL
     
-    template<cuda_real_fp FPT, size_t DIM>
+    export template<cuda_real_fp FPT, size_t DIM>
     requires is_dim3<DIM>
     void toeplitz_kernel(const std::array<tensor<FPT, 1>,DIM>& coords, tensor<complex_t<FPT>, DIM>& kernel,
         tensor<complex_t<FPT>, 2>& nudata)
@@ -310,22 +310,25 @@ namespace hasty {
         if (nudata.template shape<1>() != M)
             throw std::runtime_error("shape<1>() of nudata didn't match length of coord vectors");
 
-        nudata.fill(1.0f);
+        //nudata.fill_(1.0f);
 
+        std::array<int64_t, DIM+1> one_nmodes;
+        one_nmodes[0] = 1;
         std::array<int64_t, DIM> nmodes;
-        for_sequence<DIM>([&nmodes, &kernel](auto i) {
+        for_sequence<DIM>([&nmodes, &one_nmodes, &kernel](auto i) {
             nmodes[i] = kernel.template shape<i>() - 1;
+            one_nmodes[i+1] = nmodes[i];
         });
 
-        auto reduced_kernel = make_tensor<complex_t<FPT>, DIM>(nmodes, kernel.devicestr());
+        auto reduced_kernel = make_tensor<complex_t<FPT>, 1+DIM>(span(one_nmodes), kernel.devicestr());
 
         auto subnelem = std::reduce(nmodes.begin(), nmodes.end(), 1, std::multiplies<int64_t>());
         {
             auto plan = nufft_plan<FPT,DIM,nufft_type::TYPE_1>::make(nufft_opts<FPT,DIM>{
                 .nmodes = nmodes,
-                .sign = nufft_sign::DEFAULT_TYPE_1,
                 .ntransf = 1,
                 .tol = std::is_same_v<FPT,cuda_f32> ? 1e-5 : 1e-12,
+                .sign = nufft_sign::DEFAULT_TYPE_1,
                 .upsamp = nufft_upsamp_cuda::DEFAULT,
                 .method = nufft_method_cuda::DEFAULT
             });
@@ -334,9 +337,10 @@ namespace hasty {
             plan->execute(nudata, reduced_kernel);
         }
 
-        std::array<Slice, DIM> slices;
+        std::array<Slice, DIM+1> slices;
+        slices[0] = Slice();
         for_sequence<DIM>([&slices, &nmodes](auto i) {
-            slices[i] = Slice{0, nmodes[i]};
+            slices[i+1] = Slice{0, nmodes[i]};
         });
 
         kernel[std::forward<Slice>(slices)] = reduced_kernel;
