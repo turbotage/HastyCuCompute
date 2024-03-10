@@ -186,19 +186,18 @@ namespace hasty {
 
             int result;
             if constexpr(DIM == 1) {
-                result = setptsfunc(_finufft_plan, M, coords[0].const_cast_data(), nullptr, nullptr);
+                result = setptsfunc(_finufft_plan, M, coords[0].unconsted_data_ptr(), nullptr, nullptr);
             }
             else if constexpr(DIM == 2) {
-                result = setptsfunc(_finufft_plan, M, coords[0].const_cast_data(), coords[1].const_cast_data(), nullptr);
+                result = setptsfunc(_finufft_plan, M, coords[0].unconsted_data_ptr(), coords[1].unconsted_data_ptr(), nullptr);
             }
             else if constexpr(DIM == 3) {
-                result = setptsfunc(_finufft_plan, M, coords[0].const_cast_data(), coords[1].const_cast_data(), coords[2].const_cast_data());
+                result = setptsfunc(_finufft_plan, M, coords[0].unconsted_data_ptr(), coords[1].unconsted_data_ptr(), coords[2].unconsted_data_ptr());
             }
 
             if (result)
                 throw std::runtime_error("cufinufft: setpts function failed with code: " + std::to_string(result));
         }
-
         
         template<nufft_type U = NT>
         requires (U == nufft_type::TYPE_1)
@@ -210,9 +209,9 @@ namespace hasty {
                 throw std::runtime_error("input first dimension must match ntransf");
 
             if constexpr(std::is_same_v<FPT, cuda_f32>) {
-                result = cufinufftf_execute(_finufft_plan, input.const_cast_data(), output.mutable_data());
+                result = cufinufftf_execute(_finufft_plan, input.unconsted_data_ptr(), output.mutable_data_ptr());
             } else {
-                result = cufinufft_execute(_finufft_plan, input.const_cast_data(), output.mutable_data());
+                result = cufinufft_execute(_finufft_plan, input.unconsted_data_ptr(), output.mutable_data_ptr());
             }
 
             if (result)
@@ -226,9 +225,9 @@ namespace hasty {
             int result;
 
             if constexpr(std::is_same_v<FPT, cuda_f32>) {
-                result = cufinufftf_execute(_finufft_plan, output.mutable_data(), input.const_cast_data());
+                result = cufinufftf_execute(_finufft_plan, output.mutable_data_ptr(), input.unconsted_data_ptr());
             } else {
-                result = cufinufft_execute(_finufft_plan, output.mutable_data(), input.const_cast_data());
+                result = cufinufft_execute(_finufft_plan, output.mutable_data_ptr(), input.unconsted_data_ptr());
             }
 
             if (result)
@@ -343,9 +342,9 @@ namespace hasty {
             slices[i+1] = Slice{0, nmodes[i]};
         });
 
-        kernel[std::forward<Slice>(slices)] = reduced_kernel;
+        kernel[slices] = reduced_kernel[0];
 
-        kernel = fftn(kernel);
+        kernel = fftn(kernel, nullspan(), nullspan(), std::nullopt);
     }
 
 

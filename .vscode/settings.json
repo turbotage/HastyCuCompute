@@ -91,6 +91,8 @@
         "format": "cpp",
         "__nullptr": "cpp",
         "__verbose_abort": "cpp",
-        "__config": "cpp"
+        "__config": "cpp",
+        "__locale": "cpp",
+        "locale": "cpp"
     }
 }

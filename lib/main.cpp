@@ -19,18 +19,18 @@ int main() {
     
     using namespace hasty;
 
-    trace_tensor<cuda_f32, 3> a("a");
-    trace_tensor<cuda_f32, 3> b("b");
+    trace::trace_tensor<cuda_f32, 3> a("a");
+    trace::trace_tensor<cuda_f32, 3> b("b");
 
-    auto filter = trace_function("fft_filter", a, b);
+    auto filter = trace::trace_function("fft_filter", a, b);
     std::cout << b.name() << "\n";
     std::cout << filter.str() << "\n\n\n";
 
     filter.add_line(b.operator=<cuda_f32,3>(
-        fftn(a, span({128,128,128}), nullspan())));
+        trace::fftn(a, span({128,128,128}), nullspan())));
 
     filter.add_line(b.operator=<cuda_f32,3>(
-        ifftn(b, span({128,128,128}), nullspan())));
+        trace::ifftn(b, span({128,128,128}), nullspan())));
 
 
     

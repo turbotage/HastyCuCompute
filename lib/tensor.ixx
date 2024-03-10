@@ -28,18 +28,34 @@ namespace hasty {
 
     using TensorIndex = std::variant<None, Ellipsis, Slice, int64_t>;
 
-    export template<index_type... Idx, size_t R>
-    constexpr int64_t get_slice_rank(std::tuple<Idx...> idxs)
+    template<size_t R, index_type... Idx>
+    constexpr size_t get_slice_rank()
+    {
+        int none = 0;
+        int ints = 0;
+        int ellipsis = 0;
+
+        ((std::is_same_v<Idx, None> ? ++none : 
+        std::is_integral_v<Idx> ? ++ints : 
+        std::is_same_v<Idx, Ellipsis> ? ++ellipsis : 0), ...);
+
+        return R - ints + none;
+    }
+
+    export template<size_t R, index_type... Idx>
+    constexpr size_t get_slice_rank(std::tuple<Idx...> idxs)
     {
         int none;
         int ints;
         int ellipsis;
 
         for_sequence<std::tuple_size_v<decltype(idxs)>>([&](auto i) constexpr {
-            if constexpr(std::is_same_v<decltype(idxs.template get<i>()), None>) {
+            //if constexpr(std::is_same_v<decltype(idxs.template get<i>()), None>) {
+            if constexpr(std::is_same_v<decltype(std::get<i>(idxs)), None>) {
                 ++none;
             } 
-            else if constexpr(std::is_integral_v<decltype(idxs.template get<i>())>) {
+            //else if constexpr(std::is_integral_v<decltype(idxs.template get<i>())>) {
+            else if constexpr(std::is_integral_v<decltype(std::get<i>(idxs))>) {
                 ++ints;
             }
             /*
@@ -52,10 +68,10 @@ namespace hasty {
         return R - ints + none;
     }
 
-    export template<index_type... Itx, size_t R>
-    constexpr int64_t get_slice_rank(Itx... idxs)
+    export template<size_t R, index_type... Itx>
+    constexpr size_t get_slice_rank(Itx... idxs)
     {
-        return get_slice_rank(std::make_tuple(idxs...));
+        return get_slice_rank<R>(std::make_tuple(idxs...));
     }
 
     template<typename T>
@@ -63,6 +79,15 @@ namespace hasty {
     {
         if (opt.has_value()) {
             return c10::optional(opt.value());
+        }
+        return c10::nullopt;
+    }
+
+    template<typename R, typename T>
+    c10::optional<R> torch_optional(const std::optional<T>& opt)
+    {
+        if (opt.has_value()) {
+            return c10::optional<R>(opt.value());
         }
         return c10::nullopt;
     }
@@ -77,12 +102,22 @@ namespace hasty {
         }
         else if constexpr(std::is_same_v<Idx, Slice>) {
             return at::indexing::Slice(
-                torch_optional(idx.start),
-                torch_optional(idx.end),
-                torch_optional(idx.step));
+                torch_optional<c10::SymInt>(idx.start),
+                torch_optional<c10::SymInt>(idx.end),
+                torch_optional<c10::SymInt>(idx.step));
         } else if constexpr(std::is_integral_v<Idx>) {
             return idx;
         }
+    }
+
+    template<index_type... Idx, size_t... Is>
+    auto torchidx_impl(std::tuple<Idx...> idxs, std::index_sequence<Is...>) {
+        return std::array<at::indexing::TensorIndex, sizeof...(Idx)>{torchidx(std::get<Is>(idxs))...};
+    }
+
+    template<index_type... Idx>
+    auto torchidx(std::tuple<Idx...> idxs) {
+        return torchidx_impl(idxs, std::make_index_sequence<sizeof...(Idx)>{});
     }
 
     template<index_type Idx>
@@ -144,8 +179,8 @@ namespace hasty {
             : shape(input_shape.to_arr()), underlying_tensor(std::move(input))
         {}
 
-        underlying_type<FPT>* mutable_data_ptr() { return underlying_tensor.mutable_data_ptr<underlying_type<FPT>>(); }
-        const underlying_type<FPT>* const_data_ptr() { return underlying_tensor.const_data_ptr<underlying_type<FPT>>(); }
+        underlying_type<FPT>* mutable_data_ptr() { return static_cast<underlying_type<FPT>*>(underlying_tensor.data_ptr()); }
+        const underlying_type<FPT>* const_data_ptr() const { return static_cast<underlying_type<FPT>*>(underlying_tensor.data_ptr()); }
 
         std::array<int64_t, RANK> shape;
         at::Tensor underlying_tensor;
@@ -153,15 +188,27 @@ namespace hasty {
     };
 
 
-
-
-
-
     export enum struct fft_norm {
         FORWARD,
         BACKWARD,
         ORTHO
     };
+
+    template<device_fp F1, device_fp F2, size_t R1, size_t R2>
+    requires std::same_as<device_type_t<F1>, device_type_t<F2>>
+    auto operator+(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs);
+
+    template<device_fp F1, device_fp F2, size_t R1, size_t R2>
+    requires std::same_as<device_type_t<F1>, device_type_t<F2>>
+    auto operator-(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs);
+
+    template<device_fp F1, device_fp F2, size_t R1, size_t R2>
+    requires std::same_as<device_type_t<F1>, device_type_t<F2>>
+    auto operator*(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs);
+
+    template<device_fp F1, device_fp F2, size_t R1, size_t R2>
+    requires std::same_as<device_type_t<F1>, device_type_t<F2>>
+    auto operator/(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs);
 
     template<device_fp F, size_t R, size_t R1, size_t R2>
     requires less_than_or_equal<R1, R> && less_than_or_equal<R2, R>
@@ -214,7 +261,10 @@ namespace hasty {
         }
 
         underlying_type<FPT>* mutable_data_ptr() { return _pimpl->mutable_data_ptr(); }
-        const underlying_type<FPT>* const_data_ptr() { return _pimpl->const_data_ptr();}
+        const underlying_type<FPT>* const_data_ptr() const { return _pimpl->const_data_ptr();}
+
+        // I know what I am doing...
+        underlying_type<FPT>* unconsted_data_ptr() const { return const_cast<underlying_type<FPT>*>(_pimpl->const_data_ptr()); }
 
         template<cpu_fp F>
         void fill_(F val) { _pimpl->underlying_tensor.fill_(val); }
@@ -238,11 +288,30 @@ namespace hasty {
             return tensor<FPT, 1>({tensorview.size(0)}, std::move(tensorview));
         }
 
+        template<size_t N>
+        auto operator[](const std::array<Slice, N>& slices) {
+            
+            at::Tensor tensorview = _pimpl->underlying_tensor.index(torchidx(std::tuple_cat(slices)));
+
+            if (!tensorview.is_view())
+                throw std::runtime_error("tensor::operator[]: tensorview is not a view");
+
+            if (tensorview.ndimension() != RANK)
+                throw std::runtime_error("tensor::operator[]: tensorview.ndimension() did not match RETRANK");
+
+            std::array<int64_t, RANK> new_shape;
+            for_sequence<RANK>([&](auto i) {
+                new_shape[i] = tensorview.size(i);
+            });
+
+            return tensor<FPT, RANK>(new_shape, std::move(tensorview));
+        }
+
         template<index_type ...Idx>
         auto operator[](std::tuple<Idx...> indices) {
-            constexpr auto RETRANK = get_slice_rank(indices);
+            constexpr auto RETRANK = get_slice_rank<RANK, Idx...>();
 
-            at::Tensor tensorview = _pimpl->underlying_tensor.index(std::forward<Idx...>(indices));
+            at::Tensor tensorview = _pimpl->underlying_tensor.index(torchidx(indices));
 
             if (!tensorview.is_view())
                 throw std::runtime_error("tensor::operator[]: tensorview is not a view");
@@ -260,9 +329,9 @@ namespace hasty {
 
         template<index_type ...Idx>
         auto operator[](Idx... indices) {
-            constexpr auto RETRANK = get_slice_rank(indices...);
+            constexpr auto RETRANK = get_slice_rank<RANK, Idx...>();
 
-            at::Tensor tensorview = _pimpl->underlying_tensor.index(tensoridx(indices)...);
+            at::Tensor tensorview = _pimpl->underlying_tensor.index(torchidx(indices)...);
 
             if (!tensorview.is_view())
                 throw std::runtime_error("tensor::operator[]: tensorview is not a view");
@@ -311,6 +380,14 @@ namespace hasty {
         template<device_fp F1, device_fp F2, size_t R1, size_t R2>
         requires std::same_as<device_type_t<F1>, device_type_t<F2>>
         friend auto operator+(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs);
+
+        template<device_fp F1, device_fp F2, size_t R1, size_t R2>
+        requires std::same_as<device_type_t<F1>, device_type_t<F2>>
+        friend auto operator-(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs);
+
+        template<device_fp F1, device_fp F2, size_t R1, size_t R2>
+        requires std::same_as<device_type_t<F1>, device_type_t<F2>>
+        friend auto operator*(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs);
 
         template<device_fp F1, device_fp F2, size_t R1, size_t R2>
         requires std::same_as<device_type_t<F1>, device_type_t<F2>>

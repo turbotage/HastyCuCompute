@@ -10,7 +10,7 @@ using namespace hasty;
 
 template<device_fp F1, device_fp F2, size_t R1, size_t R2>
 requires std::same_as<device_type_t<F1>, device_type_t<F2>>
-auto operator+(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs) {
+auto hasty::operator+(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs) {
     constexpr size_t RETRANK = R1 > R2 ? R1 : R2;
 
     at::Tensor newtensor = lhs._pimpl->underlying_tensor + rhs._pimpl->underlying_tensor;
@@ -28,7 +28,7 @@ auto operator+(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs) {
 
 template<device_fp F1, device_fp F2, size_t R1, size_t R2>
 requires std::same_as<device_type_t<F1>, device_type_t<F2>>
-auto operator-(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs)
+auto hasty::operator-(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs)
 {
     constexpr size_t RETRANK = R1 > R2 ? R1 : R2;
 
@@ -46,7 +46,7 @@ auto operator-(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs)
 
 template<device_fp F1, device_fp F2, size_t R1, size_t R2>
 requires std::same_as<device_type_t<F1>, device_type_t<F2>>
-auto operator*(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs) {
+auto hasty::operator*(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs) {
     constexpr size_t RETRANK = R1 > R2 ? R1 : R2;
 
     at::Tensor newtensor = lhs._pimpl->underlying_tensor * rhs._pimpl->underlying_tensor;
@@ -63,7 +63,7 @@ auto operator*(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs) {
 
 template<device_fp F1, device_fp F2, size_t R1, size_t R2>
 requires std::same_as<device_type_t<F1>, device_type_t<F2>>
-auto operator/(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs) {
+auto hasty::operator/(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs) {
     constexpr size_t RETRANK = R1 > R2 ? R1 : R2;
 
     at::Tensor newtensor = lhs._pimpl->underlying_tensor / rhs._pimpl->underlying_tensor;
@@ -81,7 +81,7 @@ auto operator/(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs) {
 
 template<device_fp F, size_t R, size_t R1, size_t R2>
 requires less_than_or_equal<R1, R> && less_than_or_equal<R2, R>
-tensor<F, R> fftn(tensor<F, R> t,
+tensor<F, R> hasty::fftn(tensor<F, R> t,
     span<R1> s,
     span<R2> dim,
     std::optional<fft_norm> norm)
