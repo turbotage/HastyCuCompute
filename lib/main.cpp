@@ -1,8 +1,9 @@
 
 #include "pch.hpp"
 
-import nufft;
+import util;
 import trace;
+import nufft;
 
 int main() {
 

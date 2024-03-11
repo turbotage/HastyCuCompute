@@ -8,7 +8,6 @@ import util;
 
 namespace hasty {
 
-    
     export struct None {};
 
     export struct Ellipsis {};
@@ -166,10 +165,11 @@ namespace hasty {
 
     // Forward declare the tensor class
     export template<device_fp F, size_t R>
-    struct tensor;
+    class tensor;
 
     export template<device_fp FPT, size_t RANK>
-    struct tensor_impl {
+    class tensor_impl {
+    public:
 
         tensor_impl(const std::array<int64_t, RANK>& input_shape, at::Tensor input)
             : shape(input_shape), underlying_tensor(std::move(input))
@@ -194,34 +194,39 @@ namespace hasty {
         ORTHO
     };
 
-    template<device_fp F1, device_fp F2, size_t R1, size_t R2>
+    /*
+    export template<device_fp F1, device_fp F2, size_t R1, size_t R2>
     requires std::same_as<device_type_t<F1>, device_type_t<F2>>
     auto operator+(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs);
 
-    template<device_fp F1, device_fp F2, size_t R1, size_t R2>
+    export template<device_fp F1, device_fp F2, size_t R1, size_t R2>
     requires std::same_as<device_type_t<F1>, device_type_t<F2>>
     auto operator-(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs);
 
-    template<device_fp F1, device_fp F2, size_t R1, size_t R2>
+    export template<device_fp F1, device_fp F2, size_t R1, size_t R2>
     requires std::same_as<device_type_t<F1>, device_type_t<F2>>
     auto operator*(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs);
 
-    template<device_fp F1, device_fp F2, size_t R1, size_t R2>
+    export template<device_fp F1, device_fp F2, size_t R1, size_t R2>
     requires std::same_as<device_type_t<F1>, device_type_t<F2>>
     auto operator/(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs);
 
-    template<device_fp F, size_t R, size_t R1, size_t R2>
+    export template<device_fp F, size_t R, size_t R1, size_t R2>
     requires less_than_or_equal<R1, R> && less_than_or_equal<R2, R>
     tensor<F, R> fftn(tensor<F, R> t, 
         span<R1> s = nullspan(), 
         span<R2> dim = nullspan(),
         std::optional<fft_norm> norm = std::nullopt);
+    */
 
+        
+    template<device_fp F, size_t R, size_t R1, size_t R2>
+    tensor<F, R> fftn(tensor<F, R> t, span<R1> s, span<R2> dim,
+        std::optional<fft_norm> norm);
 
-    
 
     export template<device_fp FPT, size_t RANK>
-    struct tensor {
+    class tensor {
     private:
         std::shared_ptr<tensor_impl<FPT,RANK>> _pimpl;
     public:
@@ -392,8 +397,9 @@ namespace hasty {
         template<device_fp F1, device_fp F2, size_t R1, size_t R2>
         requires std::same_as<device_type_t<F1>, device_type_t<F2>>
         friend auto operator/(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs);
-
+        
         template<device_fp F, size_t R, size_t R1, size_t R2>
+        requires less_than_or_equal<R1, R> && less_than_or_equal<R2, R>
         friend tensor<F, R> fftn(tensor<F, R> t, span<R1> s, span<R2> dim,
             std::optional<fft_norm> norm);  
 
@@ -444,5 +450,106 @@ namespace hasty {
         return std::make_unique<creator>(tensorin.sizes(), std::move(tensorin));
     }
  
+
+
+    export template<device_fp F1, device_fp F2, size_t R1, size_t R2>
+    requires std::same_as<device_type_t<F1>, device_type_t<F2>>
+    auto operator+(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs) {
+        constexpr size_t RETRANK = R1 > R2 ? R1 : R2;
+
+        at::Tensor newtensor = lhs._pimpl->underlying_tensor + rhs._pimpl->underlying_tensor;
+        std::array<int64_t, RETRANK> new_shape;
+
+        assert(newtensor.ndimension() == RETRANK);
+
+        for_sequence<RETRANK>([&](auto i) {
+            new_shape[i] = newtensor.size(i);
+        });
+
+        return tensor<nonloss_type_t<F1,F2>, RETRANK>(new_shape, std::move(newtensor));
+    }
+
+    export template<device_fp F1, device_fp F2, size_t R1, size_t R2>
+    requires std::same_as<device_type_t<F1>, device_type_t<F2>>
+    auto operator-(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs)
+    {
+        constexpr size_t RETRANK = R1 > R2 ? R1 : R2;
+
+        at::Tensor newtensor = lhs._pimpl->underlying_tensor - rhs._pimpl->underlying_tensor;
+        std::array<int64_t, RETRANK> new_shape;
+
+        assert(newtensor.ndimension() == RETRANK);
+
+        for_sequence<RETRANK>([&](auto i) {
+            new_shape[i] = newtensor.size(i);
+        });
+
+        return tensor<nonloss_type_t<F1,F2>, RETRANK>(new_shape, std::move(newtensor));
+    }
+
+    export template<device_fp F1, device_fp F2, size_t R1, size_t R2>
+    requires std::same_as<device_type_t<F1>, device_type_t<F2>>
+    auto operator*(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs) {
+        constexpr size_t RETRANK = R1 > R2 ? R1 : R2;
+
+        at::Tensor newtensor = lhs._pimpl->underlying_tensor * rhs._pimpl->underlying_tensor;
+        std::array<int64_t, RETRANK> new_shape;
+
+        assert(newtensor.ndimension() == RETRANK);
+
+        for_sequence<RETRANK>([&](auto i) {
+            new_shape[i] = newtensor.size(i);
+        });
+
+        return tensor<nonloss_type_t<F1,F2>, RETRANK>(new_shape, std::move(newtensor));
+    }
+
+    export template<device_fp F1, device_fp F2, size_t R1, size_t R2>
+    requires std::same_as<device_type_t<F1>, device_type_t<F2>>
+    auto operator/(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs) {
+        constexpr size_t RETRANK = R1 > R2 ? R1 : R2;
+
+        at::Tensor newtensor = lhs._pimpl->underlying_tensor / rhs._pimpl->underlying_tensor;
+        std::array<int64_t, RETRANK> new_shape;
+
+        assert(newtensor.ndimension() == RETRANK);
+
+        for_sequence<RETRANK>([&](auto i) {
+            new_shape[i] = newtensor.size(i);
+        });
+
+        return tensor<nonloss_type_t<F1,F2>, RETRANK>(new_shape, std::move(newtensor));
+    }
+
+    export template<device_fp F, size_t R, size_t R1, size_t R2>
+    requires less_than_or_equal<R1, R> && less_than_or_equal<R2, R>
+    tensor<F, R> fftn(tensor<F, R> t,
+        span<R1> s,
+        span<R2> dim,
+        std::optional<fft_norm> norm)
+    {
+        auto normstr = [&norm]() -> at::optional<c10::string_view> {
+            if (norm.has_value()) {
+                switch (norm.value()) {
+                case fft_norm::FORWARD:
+                    return at::optional<c10::string_view>("forward");
+                case fft_norm::BACKWARD:
+                    return at::optional<c10::string_view>("backward");
+                case fft_norm::ORTHO:
+                    return at::optional<c10::string_view>("ortho");
+                default:
+                    throw std::runtime_error("Invalid fft_norm value");
+                }
+            }
+            return at::nullopt;
+        };
+
+        at::Tensor newtensor = at::fft_fftn(t._pimpl->underlying_tensor,
+            s.to_arr_ref(),
+            dim.to_arr_ref(),
+            normstr()
+        );
+        return tensor<F, R>(span<R>(newtensor.sizes()), std::move(newtensor));
+    }
 
 }

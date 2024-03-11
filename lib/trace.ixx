@@ -141,6 +141,7 @@ namespace hasty {
                         throw std::runtime_error("Invalid fft_norm value");
                     }
                 }
+                throw std::runtime_error("This should not be possible");
             };
 
             return trace_tensor<FPT, RANK>(std::format("torch.fft.fftn({}{}{}{})", 
@@ -170,6 +171,7 @@ namespace hasty {
                         throw std::runtime_error("Invalid fft_norm value");
                     }
                 }
+                throw std::runtime_error("This should not be possible");
             };
 
             return trace_tensor<FPT, RANK>(std::format("torch.fft.ifftn({}{}{}{})", 

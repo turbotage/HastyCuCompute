@@ -11,9 +11,7 @@ include(cmake/CPM.cmake)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-add_executable(HastyCuCompute 
-                    "lib/main.cpp"
-                    "lib/tensor.cpp")
+add_executable(HastyCuCompute "lib/main.cpp")
 
 set_property(TARGET HastyCuCompute PROPERTY CXX_STANDARD 23)
 set_property(TARGET HastyCuCompute PROPERTY CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -21,11 +19,12 @@ set_property(TARGET HastyCuCompute PROPERTY CUDA_STANDARD 20)
 set_property(TARGET HastyCuCompute PROPERTY CUDA_STANDARD_REQUIRED ON)
 
 target_sources(HastyCuCompute 
-    PUBLIC FILE_SET CXX_MODULES FILES
-        "lib/util.ixx"
-        "lib/tensor.ixx"
-        "lib/nufft.ixx"
-        "lib/trace.ixx"
+    PUBLIC 
+        FILE_SET CXX_MODULES FILES
+            "lib/util.ixx"
+            "lib/tensor.ixx"
+            "lib/nufft.ixx"
+            "lib/trace.ixx"
 )
 
 set(CMAKE_VERBOSE_MAKEFILE ON)
@@ -74,8 +73,8 @@ endif (MSVC)
 #find_package(matx CONFIG REQUIRED)
 #target_link_libraries(HastyCuCompute PRIVATE matx::matx)
 
-find_package(mathdx REQUIRED COMPONENTS cufftdx)
-target_link_libraries(HastyCuCompute PRIVATE mathdx::cufftdx)
+#find_package(mathdx REQUIRED COMPONENTS cufftdx)
+#target_link_libraries(HastyCuCompute PRIVATE mathdx::cufftdx)
 
 
 

@@ -319,7 +319,7 @@ namespace hasty {
             one_nmodes[i+1] = nmodes[i];
         });
 
-        auto reduced_kernel = make_tensor<complex_t<FPT>, 1+DIM>(span(one_nmodes), kernel.devicestr());
+        auto reduced_kernel = make_tensor<complex_t<FPT>, DIM+1>(span(one_nmodes), kernel.devicestr());
 
         auto subnelem = std::reduce(nmodes.begin(), nmodes.end(), 1, std::multiplies<int64_t>());
         {
