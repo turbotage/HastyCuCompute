@@ -4,7 +4,6 @@ module;
 
 export module trace;
 
-export import tensor;
 export import util;
 
 namespace hasty {
@@ -12,7 +11,8 @@ namespace hasty {
 
 
         export template<device_fp FPT, size_t RANK>
-        struct trace_tensor {
+        class trace_tensor {
+        public:
 
             trace_tensor(std::string name)
                 : _tracestr(name)
@@ -120,6 +120,11 @@ namespace hasty {
         };
 
 
+        export enum struct fft_norm {
+            FORWARD,
+            BACKWARD,
+            ORTHO
+        };
 
         export template<device_fp FPT, size_t RANK, size_t R1, size_t R2>
         requires less_than_or_equal<R1, RANK> && less_than_or_equal<R2, RANK>

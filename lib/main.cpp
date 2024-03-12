@@ -2,10 +2,12 @@
 #include "pch.hpp"
 
 import util;
-import trace;
 import nufft;
+import trace;
 
 int main() {
+
+    using namespace hasty;
 
     int64_t ntransf = 32;
     int64_t nx = 128;
@@ -17,8 +19,6 @@ int main() {
     //type_2_tests(ntransf, nx, ny, nz, nupts);
     std::cout << "type1\n";
     //type_1_tests(ntransf, nx, ny, nz, nupts);
-    
-    using namespace hasty;
 
     trace::trace_tensor<cuda_f32, 3> a("a");
     trace::trace_tensor<cuda_f32, 3> b("b");
@@ -50,8 +50,10 @@ int main() {
 
     toeplitz_kernel(coords, kernel, nudata);
     
-
+    auto multiply_data = make_tensor<cuda_c64, 4>(span<4>({ntransf, nx, ny, nz}), "cuda:0",
+        tensor_make_opts::RAND_UNIFORM);
     
+    toeplitz_multiply(multiply_data, kernel);
 
     //std::cout << tt.name() << "\n";
 

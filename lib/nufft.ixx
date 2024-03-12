@@ -347,5 +347,38 @@ namespace hasty {
         kernel = fftn(kernel, nullspan(), nullspan(), std::nullopt);
     }
 
+    export template<cuda_fp FPT, size_t DIM>
+    requires is_dim3<DIM>
+    void toeplitz_multiply(tensor<FPT,DIM+1>& inout, const tensor<FPT,DIM>& kernel)
+    {
+        int64_t batchsize = inout.template shape<0>();
+
+        if constexpr(DIM == 1) {
+            int64_t xsize = inout.template shape<1>();
+            auto mid = fftn(inout, span<2>({batchsize, 2 * xsize}), 
+                nullspan(), fft_norm::ORTHO);
+            mid *= kernel;
+            mid = std::move(ifftn(mid, nullspan(), nullspan(), fft_norm::ORTHO));
+            inout = mid[Slice(), Slice(xsize - 1, -1)];
+        } else if constexpr(DIM == 2) {
+            int64_t xsize = inout.template shape<1>();
+            int64_t ysize = inout.template shape<2>();
+            auto mid = fftn(inout, span<3>({batchsize, 2 * xsize, 2 * ysize}), 
+                nullspan(), fft_norm::ORTHO);
+            mid *= kernel;
+            mid = std::move(ifftn(mid, nullspan(), nullspan(), fft_norm::ORTHO));
+            inout = mid[Slice(), Slice(xsize - 1, -1), Slice(ysize - 1, -1)];
+        } else if constexpr(DIM == 3) {
+            int64_t xsize = inout.template shape<1>();
+            int64_t ysize = inout.template shape<2>();
+            int64_t zsize = inout.template shape<3>();
+            auto mid = fftn(inout, span<4>({batchsize, 2 * xsize, 2 * ysize, 2 * zsize}), 
+                nullspan(), fft_norm::ORTHO);
+            mid *= kernel;
+            mid = std::move(ifftn(mid, nullspan(), nullspan(), fft_norm::ORTHO));
+            inout = mid[Slice(), Slice(xsize -1, -1), Slice(ysize -1, -1), Slice(zsize -1, -1)];
+        }
+    }
+
 
 }

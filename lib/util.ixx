@@ -483,4 +483,172 @@ namespace hasty {
 
     }
 
+
+    
+    export struct None {};
+
+    export struct Ellipsis {};
+
+    export struct Slice {
+
+        Slice() = default;
+
+        template<std::integral I>
+        Slice(I ival) : start(ival) {}
+
+        template<std::integral I1, std::integral I2>
+        Slice(I1 ival1, I2 ival2) : start(ival1), end(ival2) {}
+
+        std::optional<int64_t> start;
+        std::optional<int64_t> end;
+        std::optional<int64_t> step;
+    };
+
+    export template<typename T>
+    concept index_type =   std::is_same_v<T, None> 
+                        || std::is_same_v<T, Ellipsis> 
+                        || std::is_same_v<T, Slice>
+                        || std::is_integral_v<T>;
+
+    export using TensorIndex = std::variant<None, Ellipsis, Slice, int64_t>;
+
+    export template<size_t R, index_type... Idx>
+    constexpr size_t get_slice_rank()
+    {
+        int none = 0;
+        int ints = 0;
+        int ellipsis = 0;
+
+        ((std::is_same_v<Idx, None> ? ++none : 
+        std::is_integral_v<Idx> ? ++ints : 
+        std::is_same_v<Idx, Ellipsis> ? ++ellipsis : 0), ...);
+
+        return R - ints + none;
+    }
+
+    export template<size_t R, index_type... Idx>
+    constexpr size_t get_slice_rank(std::tuple<Idx...> idxs)
+    {
+        int none;
+        int ints;
+        int ellipsis;
+
+        for_sequence<std::tuple_size_v<decltype(idxs)>>([&](auto i) constexpr {
+            //if constexpr(std::is_same_v<decltype(idxs.template get<i>()), None>) {
+            if constexpr(std::is_same_v<decltype(std::get<i>(idxs)), None>) {
+                ++none;
+            } 
+            //else if constexpr(std::is_integral_v<decltype(idxs.template get<i>())>) {
+            else if constexpr(std::is_integral_v<decltype(std::get<i>(idxs))>) {
+                ++ints;
+            }
+            /*
+            else if constexpr(std::is_same_v<decltype(idxss.template get<i>()), Ellipsis>) {
+                ++ellipsis;
+            } 
+            */
+        });
+
+        return R - ints + none;
+    }
+
+    export template<size_t R, index_type... Itx>
+    constexpr size_t get_slice_rank(Itx... idxs)
+    {
+        return get_slice_rank<R>(std::make_tuple(idxs...));
+    }
+
+    export template<typename T>
+    c10::optional<T> torch_optional(const std::optional<T>& opt)
+    {
+        if (opt.has_value()) {
+            return c10::optional(opt.value());
+        }
+        return c10::nullopt;
+    }
+
+    export template<typename R, typename T>
+    c10::optional<R> torch_optional(const std::optional<T>& opt)
+    {
+        if (opt.has_value()) {
+            return c10::optional<R>(opt.value());
+        }
+        return c10::nullopt;
+    }
+
+    export template<index_type Idx>
+    at::indexing::TensorIndex torchidx(Idx idx) {
+        if constexpr(std::is_same_v<Idx, None>) {
+            return at::indexing::None;
+        } 
+        else if constexpr(std::is_same_v<Idx, Ellipsis>) {
+            return at::indexing::Ellipsis;
+        }
+        else if constexpr(std::is_same_v<Idx, Slice>) {
+            return at::indexing::Slice(
+                torch_optional<c10::SymInt>(idx.start),
+                torch_optional<c10::SymInt>(idx.end),
+                torch_optional<c10::SymInt>(idx.step));
+        } else if constexpr(std::is_integral_v<Idx>) {
+            return idx;
+        } else {
+            static_assert(false);
+        }
+    }
+
+    template<index_type... Idx, size_t... Is>
+    auto torchidx_impl(std::tuple<Idx...> idxs, std::index_sequence<Is...>) {
+        return std::array<at::indexing::TensorIndex, sizeof...(Idx)>{torchidx(std::get<Is>(idxs))...};
+    }
+
+    export template<index_type... Idx>
+    auto torchidx(std::tuple<Idx...> idxs) {
+        return torchidx_impl(idxs, std::make_index_sequence<sizeof...(Idx)>{});
+    }
+
+    export template<index_type Idx>
+    std::string torchidxstr(Idx idx) {
+        if constexpr(std::is_same_v<Idx, None>) {
+            return "None";
+        } 
+        else if constexpr(std::is_same_v<Idx, Ellipsis>) {
+            return "...";
+        }
+        else if constexpr(std::is_same_v<Idx, Slice>) {
+            // If the Slice has start, end, and step values, format them as "start:end:step"
+            if (idx.start.has_value() && idx.end.has_value() && idx.step.has_value()) {
+                return std::format("{}:{}:{}", idx.start.value(), idx.end.value(), idx.step.value());
+            } 
+            // If the Slice has only start and end values, format them as "start:end"
+            else if (idx.start.has_value() && idx.end.has_value()) {
+                return std::format("{}:{}", idx.start.value(), idx.end.value());
+            } 
+            // If the Slice has only start and step values, format them as "start::step"
+            else if (idx.start.has_value() && idx.step.has_value()) {
+                return std::format("{}::{}", idx.start.value(), idx.step.value());
+            } 
+            // If the Slice has only end and step values, format them as ":end:step"
+            else if (idx.end.has_value() && idx.step.has_value()) {
+                return std::format(":{}:{}", idx.end.value(), idx.step.value());
+            } 
+            // If the Slice has only a start value, format it as "start:"
+            else if (idx.start.has_value()) {
+                return std::format("{}:", idx.start.value());
+            } 
+            // If the Slice has only an end value, format it as ":end"
+            else if (idx.end.has_value()) {
+                return std::format(":{}", idx.end.value());
+            } 
+            // If the Slice has only a step value, format it as "::step"
+            else if (idx.step.has_value()) {
+                return std::format("::{}", idx.step.value());
+            }
+        } 
+        else if constexpr(std::is_integral_v<Idx>) {
+            return std::to_string(idx);
+        }
+    }
+
+
+
 }
