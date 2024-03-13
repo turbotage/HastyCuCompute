@@ -93,11 +93,11 @@ namespace hasty {
 
     // NUFFT PLAN
 
-    template<typename FPT, size_t DIM, nufft_type NT, typename... Variadic>
+    export template<typename FPT, size_t DIM, nufft_type NT, typename... Variadic>
     requires device_real_fp<FPT> && is_dim3<DIM>
     struct nufft_plan {};
 
-    template<typename FPT, size_t DIM, nufft_type NT>
+    export template<typename FPT, size_t DIM, nufft_type NT>
     requires cuda_real_fp<FPT> && is_dim3<DIM>
     struct nufft_plan<FPT,DIM,NT> {
 
@@ -189,10 +189,10 @@ namespace hasty {
                 result = setptsfunc(_finufft_plan, M, coords[0].unconsted_data_ptr(), nullptr, nullptr);
             }
             else if constexpr(DIM == 2) {
-                result = setptsfunc(_finufft_plan, M, coords[0].unconsted_data_ptr(), coords[1].unconsted_data_ptr(), nullptr);
+                result = setptsfunc(_finufft_plan, M, coords[1].unconsted_data_ptr(), coords[0].unconsted_data_ptr(), nullptr);
             }
             else if constexpr(DIM == 3) {
-                result = setptsfunc(_finufft_plan, M, coords[0].unconsted_data_ptr(), coords[1].unconsted_data_ptr(), coords[2].unconsted_data_ptr());
+                result = setptsfunc(_finufft_plan, M, coords[2].unconsted_data_ptr(), coords[1].unconsted_data_ptr(), coords[0].unconsted_data_ptr());
             }
 
             if (result)
@@ -301,8 +301,6 @@ namespace hasty {
     void toeplitz_kernel(const std::array<tensor<FPT, 1>,DIM>& coords, tensor<complex_t<FPT>, DIM>& kernel,
         tensor<complex_t<FPT>, 2>& nudata)
     {
-
-
         int M = coords[0].template shape<0>();
         verify_coords(coords);
 
@@ -321,7 +319,6 @@ namespace hasty {
 
         auto reduced_kernel = make_tensor<complex_t<FPT>, DIM+1>(span(one_nmodes), kernel.devicestr());
 
-        auto subnelem = std::reduce(nmodes.begin(), nmodes.end(), 1, std::multiplies<int64_t>());
         {
             auto plan = nufft_plan<FPT,DIM,nufft_type::TYPE_1>::make(nufft_opts<FPT,DIM>{
                 .nmodes = nmodes,
@@ -336,10 +333,10 @@ namespace hasty {
             plan->execute(nudata, reduced_kernel);
         }
 
-        std::array<Slice, DIM+1> slices;
+        std::array<Slice, DIM> slices;
         slices[0] = Slice();
         for_sequence<DIM>([&slices, &nmodes](auto i) {
-            slices[i+1] = Slice{0, nmodes[i]};
+            slices[i] = Slice{0, nmodes[i]};
         });
 
         kernel[slices] = reduced_kernel[0];
@@ -355,16 +352,16 @@ namespace hasty {
 
         if constexpr(DIM == 1) {
             int64_t xsize = inout.template shape<1>();
-            auto mid = fftn(inout, span<2>({batchsize, 2 * xsize}), 
-                nullspan(), fft_norm::ORTHO);
+            auto mid = fftn(inout, span<1>({2 * xsize}), 
+                span<1>({1}), fft_norm::ORTHO);
             mid *= kernel;
             mid = std::move(ifftn(mid, nullspan(), nullspan(), fft_norm::ORTHO));
             inout = mid[Slice(), Slice(xsize - 1, -1)];
         } else if constexpr(DIM == 2) {
             int64_t xsize = inout.template shape<1>();
             int64_t ysize = inout.template shape<2>();
-            auto mid = fftn(inout, span<3>({batchsize, 2 * xsize, 2 * ysize}), 
-                nullspan(), fft_norm::ORTHO);
+            auto mid = fftn(inout, span<2>({2 * xsize, 2 * ysize}), 
+                span<2>({1,2}), fft_norm::ORTHO);
             mid *= kernel;
             mid = std::move(ifftn(mid, nullspan(), nullspan(), fft_norm::ORTHO));
             inout = mid[Slice(), Slice(xsize - 1, -1), Slice(ysize - 1, -1)];
@@ -372,8 +369,8 @@ namespace hasty {
             int64_t xsize = inout.template shape<1>();
             int64_t ysize = inout.template shape<2>();
             int64_t zsize = inout.template shape<3>();
-            auto mid = fftn(inout, span<4>({batchsize, 2 * xsize, 2 * ysize, 2 * zsize}), 
-                nullspan(), fft_norm::ORTHO);
+            auto mid = fftn(inout, span<3>({2 * xsize, 2 * ysize, 2 * zsize}), 
+                span<3>({1,2,3}), fft_norm::ORTHO);
             mid *= kernel;
             mid = std::move(ifftn(mid, nullspan(), nullspan(), fft_norm::ORTHO));
             inout = mid[Slice(), Slice(xsize -1, -1), Slice(ysize -1, -1), Slice(zsize -1, -1)];

@@ -38,6 +38,14 @@ namespace hasty {
         template<size_t T1, size_t T2>
         concept less_than_or_equal = T1 <= T2;
 
+        template<size_t T1, size_t T2>
+        concept equal_or_one_zero = !((T1 != 0) && (T2 != 0) && (T1 != T2));
+
+        template<size_t T1, size_t T2>
+        concept equal_or_right_zero = (T1 == T2) || (T2 == 0);
+
+        template<size_t T1, size_t T2>
+        concept equal_or_left_zero = (T1 == T2) || (T1 == 0);
 
         template<std::integral T, size_t N>
         struct arbspan {
@@ -209,6 +217,9 @@ namespace hasty {
 
         template<typename T, typename U>
         struct strong_typedef : public strong_typedef_base {
+
+            strong_typedef() = default;
+
             T strong_value;
         };
 
@@ -399,24 +410,20 @@ namespace hasty {
             } else if constexpr(is_cpu<FP>()) {
                 return device_type::CPU;
             } else {
-                throw std::runtime_error("Invalid device type");
+                static_assert(false, "Invalid device type");
             }
         }
 
-        template<device_fp FP>
-        using device_type_t = decltype(device_type_func<FP>());
-
-
         template<device_fp F1, device_fp F2>
         constexpr auto nonloss_type_func() {
-            auto types = []<device_fp FP1, device_fp FP2>() {
+            auto types = []<device_fp FP1, device_fp FP2>() -> bool {
                 return std::is_same_v<FP1, F1> && std::is_same_v<FP2, F2> ||
                     std::is_same_v<FP1, F2> && std::is_same_v<FP2, F1>;
             };
 
-            if        constexpr(std::is_same_v<device_type_t<F1>,device_type_t<F2>>) {
-                throw std::runtime_error("Types must have same device in nonless_type_func");
-            } else if constexpr(std::is_same_v<F1,F2>) {
+            static_assert(device_type_func<F1>() == device_type_func<F2>(), "Types must have same device type");
+
+            if constexpr(std::is_same_v<F1,F2>) {
                 return F1();
             } else if constexpr(types.template operator()<cpu_f32, cpu_f64>()) {
                 return cpu_f64();
@@ -441,9 +448,8 @@ namespace hasty {
             } else if constexpr(types.template operator()<cuda_c64, cuda_c128>()) {
                 return cuda_c128();
             } else {
-                throw std::runtime_error("Invalid device type");
+                static_assert(false, "Invalid types");
             }
-
         }
 
         template<device_fp F1, device_fp F2>

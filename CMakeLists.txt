@@ -61,6 +61,9 @@ target_include_directories(HastyCuCompute PRIVATE "${finufft_ROOT}/include")
 find_package(Torch REQUIRED)
 target_link_libraries(HastyCuCompute PRIVATE ${TORCH_LIBRARIES})
 
+find_package(HighFive CONFIG REQUIRED)
+target_link_libraries(HastyCuCompute PRIVATE HighFive)
+
 if (MSVC)
   file(GLOB TORCH_DLLS "${TORCH_INSTALL_PREFIX}/lib/*.dll")
   add_custom_command(TARGET example-app

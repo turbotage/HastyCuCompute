@@ -90,7 +90,6 @@ namespace hasty {
 
         std::string devicestr() const {
             return _pimpl->underlying_tensor.device().str();
-        
         }
 
         underlying_type<FPT>* mutable_data_ptr() { return _pimpl->mutable_data_ptr(); }
@@ -102,7 +101,10 @@ namespace hasty {
         template<cpu_fp F>
         void fill_(F val) { _pimpl->underlying_tensor.fill_(val); }
 
-
+        tensor<FPT, RANK> clone() const {
+            at::Tensor newtensor = _pimpl->underlying_tensor.clone();
+            return tensor<FPT, RANK>(_pimpl->shape, std::move(newtensor));
+        }
 
         template<size_t R>
         tensor<FPT, R> view(span<R> shape) {
@@ -122,6 +124,7 @@ namespace hasty {
         }
 
         template<size_t N>
+        requires less_than_or_equal<N, RANK>
         auto operator[](const std::array<Slice, N>& slices) {
             
             at::Tensor tensorview = _pimpl->underlying_tensor.index(torchidx(std::tuple_cat(slices)));
@@ -204,10 +207,60 @@ namespace hasty {
             _pimpl->underlying_tensor = std::move(other._pimpl->underlying_tensor);
         }
 
+        auto norm() const {
+            if constexpr(is_32bit_precission<FPT>()) {
+                return _pimpl->underlying_tensor.norm().template item<float>();
+            }
+            else if constexpr(is_64bit_precission<FPT>()) {
+                return _pimpl->underlying_tensor.norm().template item<double>();
+            }
+            else {
+                throw std::runtime_error("tensor::norm: unknown precission");
+            }
+        }
+
+        auto abs() const {
+            if constexpr(is_32bit_precission<FPT>()) {
+                auto ret = _pimpl->underlying_tensor.abs().to(torch::kFloat);
+                return tensor<cuda_f32, RANK>(_pimpl->shape, std::move(ret));
+            }
+            else if constexpr(is_64bit_precission<FPT>()) {
+                auto ret = _pimpl->underlying_tensor.abs().to(torch::kDouble);
+                return tensor<cuda_f64, RANK>(_pimpl->shape, std::move(ret));
+            }
+            else {
+                throw std::runtime_error("tensor::abs: unknown precission");
+            }
+        }
+
+        auto max() const {
+            if constexpr(is_32bit_precission<FPT>())
+                return _pimpl->underlying_tensor.max().template item<float>();
+            else if constexpr(is_64bit_precission<FPT>())
+                return _pimpl->underlying_tensor.max().template item<double>();
+            else
+                throw std::runtime_error("tensor::max: unknown precission");
+        }
+
+        auto min() const {
+            if constexpr(is_32bit_precission<FPT>())
+                return _pimpl->underlying_tensor.min().template item<float>();
+            else if constexpr(is_64bit_precission<FPT>())
+                return _pimpl->underlying_tensor.min().template item<double>();
+            else
+                throw std::runtime_error("tensor::max: unknown precission");
+        }
+
         template<size_t R>
         requires less_than<R, RANK>
         void operator+=(const tensor<FPT, R>& other) const {
             _pimpl->underlying_tensor.add_(other.get_tensor());
+        }
+
+        template<typename T>
+        requires std::integral<T> || std::floating_point<T>
+        void operator+=(T val) const {
+            _pimpl->underlying_tensor.add_(val);
         }
 
         template<size_t R>
@@ -216,10 +269,22 @@ namespace hasty {
             _pimpl->underlying_tensor.sub_(other.get_tensor());
         }
 
+        template<typename T>
+        requires std::integral<T> || std::floating_point<T>
+        void operator-=(T val) const {
+            _pimpl->underlying_tensor.sub_(val);
+        }
+
         template<size_t R>
         requires less_than<R, RANK>
         void operator*=(const tensor<FPT, R>& other) const {
             _pimpl->underlying_tensor.mul_(other.get_tensor());
+        }
+
+        template<typename T>
+        requires std::integral<T> || std::floating_point<T>
+        void operator*=(T val) const {
+            _pimpl->underlying_tensor.mul_(val);
         }
 
         template<size_t R>
@@ -228,29 +293,35 @@ namespace hasty {
             _pimpl->underlying_tensor.div_(other.get_tensor());
         }
 
+        template<typename T>
+        requires std::integral<T> || std::floating_point<T>
+        void operator/=(T val) const {
+            _pimpl->underlying_tensor.div_(val);
+        }
+
         template<device_fp F1, device_fp F2, size_t R1, size_t R2>
-        requires std::same_as<device_type_t<F1>, device_type_t<F2>>
+        requires (device_type_func<F1>() == device_type_func<F2>())
         friend auto operator+(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs);
 
         template<device_fp F1, device_fp F2, size_t R1, size_t R2>
-        requires std::same_as<device_type_t<F1>, device_type_t<F2>>
+        requires (device_type_func<F1>() == device_type_func<F2>())
         friend auto operator-(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs);
 
         template<device_fp F1, device_fp F2, size_t R1, size_t R2>
-        requires std::same_as<device_type_t<F1>, device_type_t<F2>>
+        requires (device_type_func<F1>() == device_type_func<F2>())
         friend auto operator*(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs);
 
         template<device_fp F1, device_fp F2, size_t R1, size_t R2>
-        requires std::same_as<device_type_t<F1>, device_type_t<F2>>
+        requires (device_type_func<F1>() == device_type_func<F2>())
         friend auto operator/(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs);
         
         template<device_fp F, size_t R, size_t R1, size_t R2>
-        requires less_than_or_equal<R1, R> && less_than_or_equal<R2, R>
+        requires less_than_or_equal<R1, R> && less_than_or_equal<R2, R> && equal_or_left_zero<R1, R2>
         friend tensor<F, R> fftn(const tensor<F, R>& t, span<R1> s, span<R2> dim,
             std::optional<fft_norm> norm);
 
         template<device_fp F, size_t R, size_t R1, size_t R2>
-        requires less_than_or_equal<R1, R> && less_than_or_equal<R2, R>
+        requires less_than_or_equal<R1, R> && less_than_or_equal<R2, R> && equal_or_left_zero<R1, R2>
         friend tensor<F, R> ifftn(const tensor<F, R>& t, span<R1> s, span<R2> dim,
             std::optional<fft_norm> norm);  
 
@@ -304,11 +375,11 @@ namespace hasty {
 
 
     export template<device_fp F1, device_fp F2, size_t R1, size_t R2>
-    requires std::same_as<device_type_t<F1>, device_type_t<F2>>
+    requires (device_type_func<F1>() == device_type_func<F2>())
     auto operator+(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs) {
         constexpr size_t RETRANK = R1 > R2 ? R1 : R2;
 
-        at::Tensor newtensor = lhs._pimpl->underlying_tensor + rhs._pimpl->underlying_tensor;
+        at::Tensor newtensor = lhs._pimpl->underlying_tensor.add(rhs._pimpl->underlying_tensor);
         std::array<int64_t, RETRANK> new_shape;
 
         assert(newtensor.ndimension() == RETRANK);
@@ -321,12 +392,12 @@ namespace hasty {
     }
 
     export template<device_fp F1, device_fp F2, size_t R1, size_t R2>
-    requires std::same_as<device_type_t<F1>, device_type_t<F2>>
+    requires (device_type_func<F1>() == device_type_func<F2>())
     auto operator-(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs)
     {
         constexpr size_t RETRANK = R1 > R2 ? R1 : R2;
 
-        at::Tensor newtensor = lhs._pimpl->underlying_tensor - rhs._pimpl->underlying_tensor;
+        at::Tensor newtensor = lhs._pimpl->underlying_tensor.sub(rhs._pimpl->underlying_tensor);
         std::array<int64_t, RETRANK> new_shape;
 
         assert(newtensor.ndimension() == RETRANK);
@@ -339,11 +410,11 @@ namespace hasty {
     }
 
     export template<device_fp F1, device_fp F2, size_t R1, size_t R2>
-    requires std::same_as<device_type_t<F1>, device_type_t<F2>>
+    requires (device_type_func<F1>() == device_type_func<F2>())
     auto operator*(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs) {
         constexpr size_t RETRANK = R1 > R2 ? R1 : R2;
 
-        at::Tensor newtensor = lhs._pimpl->underlying_tensor * rhs._pimpl->underlying_tensor;
+        at::Tensor newtensor = lhs._pimpl->underlying_tensor.mul(rhs._pimpl->underlying_tensor);
         std::array<int64_t, RETRANK> new_shape;
 
         assert(newtensor.ndimension() == RETRANK);
@@ -356,11 +427,11 @@ namespace hasty {
     }
 
     export template<device_fp F1, device_fp F2, size_t R1, size_t R2>
-    requires std::same_as<device_type_t<F1>, device_type_t<F2>>
+    requires (device_type_func<F1>() == device_type_func<F2>())
     auto operator/(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs) {
         constexpr size_t RETRANK = R1 > R2 ? R1 : R2;
 
-        at::Tensor newtensor = lhs._pimpl->underlying_tensor / rhs._pimpl->underlying_tensor;
+        at::Tensor newtensor = lhs._pimpl->underlying_tensor.div(rhs._pimpl->underlying_tensor);
         std::array<int64_t, RETRANK> new_shape;
 
         assert(newtensor.ndimension() == RETRANK);
@@ -373,7 +444,7 @@ namespace hasty {
     }
 
     export template<device_fp F, size_t R, size_t R1, size_t R2>
-    requires less_than_or_equal<R1, R> && less_than_or_equal<R2, R>
+    requires less_than_or_equal<R1, R> && less_than_or_equal<R2, R> && equal_or_left_zero<R1, R2>
     tensor<F, R> fftn(const tensor<F, R>& t,
         span<R1> s,
         span<R2> dim,
@@ -394,6 +465,7 @@ namespace hasty {
             }
             return at::nullopt;
         };
+        
 
         at::Tensor newtensor = at::fft_fftn(t._pimpl->underlying_tensor,
             s.to_arr_ref(),
@@ -404,7 +476,7 @@ namespace hasty {
     }
 
     export template<device_fp F, size_t R, size_t R1, size_t R2>
-    requires less_than_or_equal<R1, R> && less_than_or_equal<R2, R>
+    requires less_than_or_equal<R1, R> && less_than_or_equal<R2, R> && equal_or_left_zero<R1, R2>
     tensor<F, R> ifftn(const tensor<F, R>& t,
         span<R1> s,
         span<R2> dim,

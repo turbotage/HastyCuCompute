@@ -16,16 +16,13 @@ namespace hasty {
 
             trace_tensor(std::string name)
                 : _tracestr(name)
-            {
-                std::cout << "constructor was run" << std::endl;
-            };
+            {};
 
             trace_tensor& operator=(const trace_tensor& other) = delete;
 
             template<device_fp F, size_t R>
             requires less_than_or_equal<R, RANK>
             std::string operator=(const trace_tensor<F, R>& other) const {
-                std::cout << "op= was run" << std::endl;
                 std::string newtracestr = _tracestr;
                 newtracestr += ".copy_(" + other._tracestr + ")";
                 return newtracestr;
