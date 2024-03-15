@@ -74,24 +74,26 @@ namespace hasty {
 
     export void export_tensor(const at::Tensor& tensor, const std::string& filepath, const std::string& dataset)
     {
-        HighFive::File file(filepath, HighFive::File::Write | HighFive::File::Create);
+        HighFive::File file(filepath, HighFive::File::Overwrite);
 
 		if (!tensor.is_contiguous()) {
 			throw std::runtime_error("tensor must be contiguous");
 		}
 
-		auto dataspace = HighFive::DataSpace(tensor.sizes().vec());
+		std::vector<hsize_t> dims(tensor.sizes().begin(), tensor.sizes().end());
+		at::ScalarType dtype = tensor.scalar_type();
+		auto dataspace = HighFive::DataSpace(dims);
 
-		if (tensor.scalar_type() == at::ScalarType::Float) {
+		if (dtype == at::ScalarType::Float) {
         	HighFive::DataSet dset = file.createDataSet<float>(dataset, dataspace);
 			dset.write(static_cast<float*>(tensor.data_ptr()));
-		} else if (tensor.scalar_type() == at::ScalarType::Double) {
+		} else if (dtype == at::ScalarType::Double) {
 			HighFive::DataSet dset = file.createDataSet<double>(dataset, dataspace);
 			dset.write(static_cast<double*>(tensor.data_ptr()));
-		} else if (tensor.scalar_type() == at::ScalarType::ComplexFloat) {
+		} else if (dtype == at::ScalarType::ComplexFloat) {
 			HighFive::DataSet dset = file.createDataSet<std::complex<float>>(dataset, dataspace);
 			dset.write(static_cast<std::complex<float>*>(tensor.data_ptr()));
-		} else if (tensor.scalar_type() == at::ScalarType::ComplexDouble) {
+		} else if (dtype == at::ScalarType::ComplexDouble) {
 			HighFive::DataSet dset = file.createDataSet<std::complex<double>>(dataset, dataspace);
 			dset.write(static_cast<std::complex<double>*>(tensor.data_ptr()));
 		}

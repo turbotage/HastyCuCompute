@@ -1,11 +1,8 @@
 module;
 
-#include "pch.hpp"
+#include "../pch.hpp"
 
-export module util;
-
-export import :funcs;
-export import :torch;
+export module util:typing;
 
 namespace hasty {
 
@@ -35,172 +32,6 @@ namespace hasty {
         using c128 = std::complex<double>;
 
 
-        template<size_t T1, size_t T2>
-        concept less_than = T1 < T2;
-
-        template<size_t T1, size_t T2>
-        concept less_than_or_equal = T1 <= T2;
-
-        template<size_t T1, size_t T2>
-        concept equal_or_one_zero = !((T1 != 0) && (T2 != 0) && (T1 != T2));
-
-        template<size_t T1, size_t T2>
-        concept equal_or_right_zero = (T1 == T2) || (T2 == 0);
-
-        template<size_t T1, size_t T2>
-        concept equal_or_left_zero = (T1 == T2) || (T1 == 0);
-
-        template<std::integral T, size_t N>
-        struct arbspan {
-
-            //nullspan
-            arbspan() : _data(nullptr) {};
-
-            arbspan(T const (&list)[N]) 
-                : _data(list) {}
-
-            arbspan(const T* listptr)
-                : _data(listptr) {}
-
-            arbspan(at::ArrayRef<T> arr)
-                : _data(arr.data())
-            {}
-
-            arbspan(const std::array<T, N>& arr)
-                : _data(arr.data())
-            {}
-
-            /*
-            span(std::span<const T, N> span) 
-                : _data(span.data()) {}
-            */
-            at::ArrayRef<T> to_arr_ref() {
-                return at::ArrayRef<T>(_data, N);
-            }
-
-            std::array<T, N> to_arr() {
-                std::array<T, N> arr;
-                for (size_t i = 0; i < N; i++) {
-                    arr[i] = _data[i];
-                }
-                return arr;
-            }
-
-            arbspan(std::nullopt_t)
-                : _data(nullptr) {}
-
-            const T& operator[](size_t index) const {
-                if (index >= N) {
-                    throw std::out_of_range("Index out of range");
-                }
-                return _data[index];
-            }
-
-            template<size_t I>
-            requires less_than<I,N>
-            const T& get() {
-                return _data[I];
-            }
-
-            constexpr size_t size() const { return N; }
-
-            bool has_value() const {
-                return _data != nullptr;
-            }
-
-        private:
-            const T* _data;
-        };
-        
-        template<std::integral I, size_t R>
-        constexpr std::string span_to_str(arbspan<I,R> arr, bool as_tuple = true) {
-            std::string retstr = as_tuple ? "(" : "[";
-            
-            for_sequence<R>([&](auto i) {
-                retstr += std::to_string(arr.template get<i>());
-                if constexpr(i < R - 1) {
-                    retstr += ",";
-                }
-            });
-            retstr += as_tuple ? ")" : "]";
-            return retstr;
-        }
-
-        template<size_t N>
-        struct span {
-
-            //nullspan
-            span() : _data(nullptr) {};
-
-            span(i64 const (&list)[N]) 
-                : _data(list) {}
-
-            span(const i64* listptr)
-                : _data(listptr) {}
-
-            span(at::ArrayRef<i64> arr)
-                : _data(arr.data())
-            {}
-
-            span(const std::array<i64, N>& arr)
-                : _data(arr.data())
-            {}
-
-            at::ArrayRef<i64> to_arr_ref() {
-                return at::ArrayRef<i64>(_data, N);
-            }
-
-            std::array<i64, N> to_arr() {
-                std::array<i64, N> arr;
-                for (size_t i = 0; i < N; i++) {
-                    arr[i] = _data[i];
-                }
-                return arr;
-            }
-
-            span(std::nullopt_t)
-                : _data(nullptr) {}
-
-            const i64& operator[](size_t index) const {
-                if (index >= N) {
-                    throw std::out_of_range("Index out of range");
-                }
-                return _data[index];
-            }
-
-            template<size_t I>
-            requires less_than<I,N>
-            const i64& get() {
-                return _data[I];
-            }
-
-            constexpr size_t size() const { return N; }
-
-            bool has_value() const {
-                return _data != nullptr;
-            }
-
-        private:
-            const i64* _data;
-        };
-
-        using nullspan = span<0>;
-
-        template<size_t R>
-        constexpr std::string span_to_str(span<R> arr, bool as_tuple = true) {
-            std::string retstr = as_tuple ? "(" : "[";
-            
-            for_sequence<R>([&](auto i) {
-                retstr += std::to_string(arr.template get<i>());
-                if constexpr(i < R - 1) {
-                    retstr += ",";
-                }
-            });
-            retstr += as_tuple ? ")" : "]";
-            return retstr;
-        }
-
-
         enum struct device_type {
             CPU,
             CUDA
@@ -217,7 +48,6 @@ namespace hasty {
         };
 
         
-
         template<typename T, typename U>
         struct strong_typedef : public strong_typedef_base {
 
@@ -471,99 +301,60 @@ namespace hasty {
         template<typename T>
         using optrefw = std::optional<std::reference_wrapper<T>>;
 
-        template <typename T, T... S, typename F>
-        constexpr void for_sequence(std::integer_sequence<T, S...>, F f) {
-            (static_cast<void>(f(std::integral_constant<T, S>{})), ...);
-        }
-
-        template<auto n, typename F>
-        constexpr void for_sequence(F f) {
-            for_sequence(std::make_integer_sequence<decltype(n), n>{}, f);
-        }
-
-        template<auto n, typename F, typename V>
-        constexpr V for_sequence(F f, const V& t) {
-            V tcopy = t;
-            for_sequence<n>([&tcopy, &f](auto i) {
-                f(i, tcopy);
-            });
-            return tcopy;
-        }
-
     }
 
-    export struct None {};
+    export {
 
-    export struct Ellipsis {};
+		class multiple_inheritable_shared_from_this : public std::enable_shared_from_this<multiple_inheritable_shared_from_this> {
+		public:
+			virtual ~multiple_inheritable_shared_from_this(){}
+		};
 
-    export struct Slice {
+		template<class T>
+		class inheritable_enable_shared_from_this : virtual public multiple_inheritable_shared_from_this {
+		public:
+			std::shared_ptr<T> shared_from_this() {
+				return std::dynamic_pointer_cast<T>(multiple_inheritable_shared_from_this::shared_from_this());
+			}
 
-        Slice() = default;
+			std::shared_ptr<const T> shared_from_this() const {
+				return std::dynamic_pointer_cast<const T>(multiple_inheritable_shared_from_this::shared_from_this());
+			}
 
-        template<std::integral I>
-        Slice(I ival) : start(ival) {}
+			template<class U>
+			std::shared_ptr<U> downcast_shared_from_this() {
+				return std::dynamic_pointer_cast<U>(multiple_inheritable_shared_from_this::shared_from_this());
+			}
 
-        template<std::integral I1, std::integral I2>
-        Slice(I1 ival1, I2 ival2) : start(ival1), end(ival2) {}
+			template<class U>
+			std::shared_ptr<const U> downcast_shared_from_this() const {
+				return std::dynamic_pointer_cast<const U>(multiple_inheritable_shared_from_this::shared_from_this());
+			}
 
-        std::optional<int64_t> start;
-        std::optional<int64_t> end;
-        std::optional<int64_t> step;
-    };
+		};
 
-    export template<typename T>
-    concept index_type =   std::is_same_v<T, None> 
-                        || std::is_same_v<T, Ellipsis> 
-                        || std::is_same_v<T, Slice>
-                        || std::is_integral_v<T>;
+		template <typename T>
+		struct reversion_wrapper { T& iterable; };
 
-    export using TensorIndex = std::variant<None, Ellipsis, Slice, int64_t>;
+		template <typename T>
+		auto begin(reversion_wrapper<T> w) { return std::rbegin(w.iterable); }
 
-    export template<size_t R, index_type... Idx>
-    constexpr size_t get_slice_rank()
-    {
-        int none = 0;
-        int ints = 0;
-        int ellipsis = 0;
+		template <typename T>
+		auto end(reversion_wrapper<T> w) { return std::rend(w.iterable); }
 
-        ((std::is_same_v<Idx, None> ? ++none : 
-        std::is_integral_v<Idx> ? ++ints : 
-        std::is_same_v<Idx, Ellipsis> ? ++ellipsis : 0), ...);
+		template <typename T>
+		reversion_wrapper<T> reverse(T&& iterable) { return { iterable }; }
 
-        return R - ints + none;
-    }
+	}
 
-    export template<size_t R, index_type... Idx>
-    constexpr size_t get_slice_rank(std::tuple<Idx...> idxs)
-    {
-        int none;
-        int ints;
-        int ellipsis;
+    export class NotImplementedError : public std::runtime_error {
+	public:
 
-        for_sequence<std::tuple_size_v<decltype(idxs)>>([&](auto i) constexpr {
-            //if constexpr(std::is_same_v<decltype(idxs.template get<i>()), None>) {
-            if constexpr(std::is_same_v<decltype(std::get<i>(idxs)), None>) {
-                ++none;
-            } 
-            //else if constexpr(std::is_integral_v<decltype(idxs.template get<i>())>) {
-            else if constexpr(std::is_integral_v<decltype(std::get<i>(idxs))>) {
-                ++ints;
-            }
-            /*
-            else if constexpr(std::is_same_v<decltype(idxss.template get<i>()), Ellipsis>) {
-                ++ellipsis;
-            } 
-            */
-        });
+		NotImplementedError()
+			: std::runtime_error("Not Implemented Yet")
+		{}
 
-        return R - ints + none;
-    }
-
-    export template<size_t R, index_type... Itx>
-    constexpr size_t get_slice_rank(Itx... idxs)
-    {
-        return get_slice_rank<R>(std::make_tuple(idxs...));
-    }
+	};
 
 
 }

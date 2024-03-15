@@ -221,11 +221,11 @@ namespace hasty {
 
         auto abs() const {
             if constexpr(is_32bit_precission<FPT>()) {
-                auto ret = _pimpl->underlying_tensor.abs().to(torch::kFloat);
+                auto ret = _pimpl->underlying_tensor.abs().to(::torch::kFloat);
                 return tensor<cuda_f32, RANK>(_pimpl->shape, std::move(ret));
             }
             else if constexpr(is_64bit_precission<FPT>()) {
-                auto ret = _pimpl->underlying_tensor.abs().to(torch::kDouble);
+                auto ret = _pimpl->underlying_tensor.abs().to(::torch::kDouble);
                 return tensor<cuda_f64, RANK>(_pimpl->shape, std::move(ret));
             }
             else {

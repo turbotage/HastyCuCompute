@@ -8,22 +8,28 @@ include(cmake/CPM.cmake)
 
 #set(CMAKE_CXX_STANDARD 23)
 #set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
+set(CMAKE_CXX_SCAN_FOR_MODULES ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-add_executable(HastyCuCompute "lib/main.cpp")
+add_executable(HastyCuCompute 
+    "lib/main.cpp"
+)
 
 set_property(TARGET HastyCuCompute PROPERTY CXX_STANDARD 23)
 set_property(TARGET HastyCuCompute PROPERTY CMAKE_CXX_STANDARD_REQUIRED ON)
 set_property(TARGET HastyCuCompute PROPERTY CUDA_STANDARD 20)
 set_property(TARGET HastyCuCompute PROPERTY CUDA_STANDARD_REQUIRED ON)
 
-target_sources(HastyCuCompute 
+target_sources(HastyCuCompute
     PUBLIC 
         FILE_SET CXX_MODULES FILES
-            "lib/util.ixx"
-            "lib/util_torch.ixx"
-            "lib/util_funcs.ixx"
+            "lib/util/util_funcs.ixx"
+            "lib/util/util_idx.ixx"
+            "lib/util/util_meta.ixx"
+            "lib/util/util_span.ixx"   
+            "lib/util/util_torch.ixx"
+            "lib/util/util_typing.ixx"
+            "lib/util/util.ixx"
             "lib/hdf5.ixx"
             "lib/tensor.ixx"
             "lib/nufft.ixx"

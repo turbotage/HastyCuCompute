@@ -1,64 +1,11 @@
 module;
 
-#include "pch.hpp"
+#include "../pch.hpp"
 
 export module util:funcs;
 
 
 namespace hasty {
-
-    export {
-
-		class multiple_inheritable_shared_from_this : public std::enable_shared_from_this<multiple_inheritable_shared_from_this> {
-		public:
-			virtual ~multiple_inheritable_shared_from_this(){}
-		};
-
-		template<class T>
-		class inheritable_enable_shared_from_this : virtual public multiple_inheritable_shared_from_this {
-		public:
-			std::shared_ptr<T> shared_from_this() {
-				return std::dynamic_pointer_cast<T>(multiple_inheritable_shared_from_this::shared_from_this());
-			}
-
-			std::shared_ptr<const T> shared_from_this() const {
-				return std::dynamic_pointer_cast<const T>(multiple_inheritable_shared_from_this::shared_from_this());
-			}
-
-			template<class U>
-			std::shared_ptr<U> downcast_shared_from_this() {
-				return std::dynamic_pointer_cast<U>(multiple_inheritable_shared_from_this::shared_from_this());
-			}
-
-			template<class U>
-			std::shared_ptr<const U> downcast_shared_from_this() const {
-				return std::dynamic_pointer_cast<const U>(multiple_inheritable_shared_from_this::shared_from_this());
-			}
-
-		};
-
-		template <typename T>
-		struct reversion_wrapper { T& iterable; };
-
-		template <typename T>
-		auto begin(reversion_wrapper<T> w) { return std::rbegin(w.iterable); }
-
-		template <typename T>
-		auto end(reversion_wrapper<T> w) { return std::rend(w.iterable); }
-
-		template <typename T>
-		reversion_wrapper<T> reverse(T&& iterable) { return { iterable }; }
-
-	}
-
-    export class NotImplementedError : public std::runtime_error {
-	public:
-
-		NotImplementedError()
-			: std::runtime_error("Not Implemented Yet")
-		{}
-
-	};
 
 	namespace util {
 
@@ -78,8 +25,8 @@ namespace hasty {
 		}
 
 		export template<typename KeyType, typename HashFunc = std::hash<KeyType>>
-			concept Hashable = std::regular_invocable<HashFunc, KeyType>
-			&& std::convertible_to<std::invoke_result_t<HashFunc, KeyType>, std::size_t>;
+		concept Hashable = std::regular_invocable<HashFunc, KeyType>
+		&& std::convertible_to<std::invoke_result_t<HashFunc, KeyType>, std::size_t>;
 
 		export template <typename KeyType, typename HashFunc = std::hash<KeyType>> requires Hashable<KeyType, HashFunc>
 			inline std::size_t hash_combine(const std::size_t& seed, const KeyType& v)
@@ -283,3 +230,4 @@ namespace hasty {
 	}
 
 }
+

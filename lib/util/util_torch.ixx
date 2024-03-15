@@ -1,12 +1,17 @@
 module;
-
-#include "pch.hpp"
+ 
+#include <ostream>
+#include <sstream>
+#include "c10/cuda/CUDAStream.h"
+#include "../pch.hpp"
 
 export module util:torch;
 
+import :idx;
+
 namespace hasty {
 
-    namespace torch {
+    namespace tch {
         
         export template<typename T>
         c10::optional<T> torch_optional(const std::optional<T>& opt)
@@ -26,15 +31,15 @@ namespace hasty {
             return c10::nullopt;
         }
 
-        export template<hasty::index_type Idx>
+        export template<index_type Idx>
         at::indexing::TensorIndex torchidx(Idx idx) {
-            if constexpr(std::is_same_v<Idx, hasty::None>) {
+            if constexpr(std::is_same_v<Idx, None>) {
                 return at::indexing::None;
             } 
-            else if constexpr(std::is_same_v<Idx, hasty::Ellipsis>) {
+            else if constexpr(std::is_same_v<Idx, Ellipsis>) {
                 return at::indexing::Ellipsis;
             }
-            else if constexpr(std::is_same_v<Idx, hasty::Slice>) {
+            else if constexpr(std::is_same_v<Idx, Slice>) {
                 return at::indexing::Slice(
                     torch_optional<c10::SymInt>(idx.start),
                     torch_optional<c10::SymInt>(idx.end),
@@ -46,25 +51,25 @@ namespace hasty {
             }
         }
 
-        template<hasty::index_type... Idx, size_t... Is>
+        template<index_type... Idx, size_t... Is>
         auto torchidx_impl(std::tuple<Idx...> idxs, std::index_sequence<Is...>) {
             return std::array<at::indexing::TensorIndex, sizeof...(Idx)>{torchidx(std::get<Is>(idxs))...};
         }
 
-        export template<hasty::index_type... Idx>
+        export template<index_type... Idx>
         auto torchidx(std::tuple<Idx...> idxs) {
             return torchidx_impl(idxs, std::make_index_sequence<sizeof...(Idx)>{});
         }
 
-        export template<hasty::index_type Idx>
+        export template<index_type Idx>
         std::string torchidxstr(Idx idx) {
-            if constexpr(std::is_same_v<Idx, hasty::None>) {
+            if constexpr(std::is_same_v<Idx, None>) {
                 return "None";
             } 
-            else if constexpr(std::is_same_v<Idx, hasty::Ellipsis>) {
+            else if constexpr(std::is_same_v<Idx, Ellipsis>) {
                 return "...";
             }
-            else if constexpr(std::is_same_v<Idx, hasty::Slice>) {
+            else if constexpr(std::is_same_v<Idx, Slice>) {
                 // If the Slice has start, end, and step values, format them as "start:end:step"
                 if (idx.start.has_value() && idx.end.has_value() && idx.step.has_value()) {
                     return std::format("{}:{}:{}", idx.start.value(), idx.end.value(), idx.step.value());
@@ -183,7 +188,7 @@ namespace hasty {
                             }
                             break;
                             default:
-                                printer << toprint.index({ t,z,y,x });
+                                printer << toprint.index({ t,z,y,x }).toString();
                             }
 
                             closer(x, xlen, false, 0);
@@ -361,15 +366,14 @@ namespace hasty {
 
 		export at::Tensor upscale_with_zeropad(const at::Tensor& input, const std::vector<int64_t>& newsize)
         {
-            using namespace at::indexing;
 
-            std::vector<TensorIndex> slices;
+            std::vector<at::indexing::TensorIndex> slices;
             for (int i = 0; i < input.ndimension(); ++i) {
                 auto inpsize = input.size(i);
                 if (inpsize > newsize[i]) {
                     throw std::runtime_error("Cannot upscale to smaller image in dim " + std::to_string(i));
                 }
-                slices.push_back(Slice(None, inpsize));
+                slices.push_back(at::indexing::Slice(at::indexing::None, inpsize));
             }
 
             at::Tensor output = at::zeros(at::makeArrayRef(newsize), input.options());
@@ -380,15 +384,14 @@ namespace hasty {
 
 		export at::Tensor upscale_with_zeropad(const at::Tensor& input, const at::ArrayRef<int64_t>& newsize)
         {
-            using namespace at::indexing;
 
-            std::vector<TensorIndex> slices;
+            std::vector<at::indexing::TensorIndex> slices;
             for (int i = 0; i < input.ndimension(); ++i) {
                 auto inpsize = input.size(i);
                 if (inpsize > newsize[i]) {
                     throw std::runtime_error("Cannot upscale to smaller image in dim " + std::to_string(i));
                 }
-                slices.push_back(Slice(None, inpsize));
+                slices.push_back(at::indexing::Slice(at::indexing::None, inpsize));
             }
 
             at::Tensor output = at::zeros(at::makeArrayRef(newsize), input.options());
@@ -399,11 +402,10 @@ namespace hasty {
 
 		export at::Tensor resize(const at::Tensor& input, const std::vector<int64_t>& newsize)
         {
-            using namespace at::indexing;
 
-            std::vector<TensorIndex> slices;
+            std::vector<at::indexing::TensorIndex> slices;
             for (int i = 0; i < input.ndimension(); ++i) {
-                slices.push_back(Slice(None, std::min(newsize[i], input.size(i))));
+                slices.push_back(at::indexing::Slice(at::indexing::None, std::min(newsize[i], input.size(i))));
             }
 
             at::Tensor output = at::zeros(at::makeArrayRef(newsize), input.options());
@@ -414,11 +416,10 @@ namespace hasty {
 
 		export at::Tensor resize(const at::Tensor& input, const at::ArrayRef<int64_t>& newsize)
         {
-            using namespace at::indexing;
 
-            std::vector<TensorIndex> slices;
+            std::vector<at::indexing::TensorIndex> slices;
             for (int i = 0; i < input.ndimension(); ++i) {
-                slices.push_back(Slice(None, std::min(newsize[i], input.size(i))));
+                slices.push_back(at::indexing::Slice(at::indexing::None, std::min(newsize[i], input.size(i))));
             }
 
             at::Tensor output = at::zeros(at::makeArrayRef(newsize), input.options());
@@ -430,3 +431,4 @@ namespace hasty {
 
     }
 }
+
