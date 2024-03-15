@@ -6,7 +6,7 @@ import util;
 import nufft;
 import trace;
 
-
+import hdf5;
 
 int main() {
 
@@ -17,6 +17,10 @@ int main() {
     int64_t ny = 32;
     int64_t nz = 32;
     int64_t nupts = 10000;
+
+    auto randvec = at::rand({4,15,72}, at::kCPU);
+
+    export_tensor(randvec, "/home/turbotage/Documents/SmallTests/randvec.h5", "randvec");
 
     //std::cout << "type2\n";
     //type_2_tests(ntransf, nx, ny, nz, nupts);
@@ -37,7 +41,7 @@ int main() {
         trace::ifftn(b, span({128,128,128}), nullspan())));
     */
 
-    
+    /*
     auto kernel = make_tensor<cuda_c64, 3>(
         span({2*nx,2*ny,2*nz}), 
         "cuda:0", tensor_make_opts::ZEROS);
@@ -102,6 +106,7 @@ int main() {
 
     std::cout << diff.norm() / multiply_data.norm() << "\n";
     std::cout << diff.abs().max() << "\n";
+    */
 
     return 0;
 }

@@ -22,6 +22,9 @@ target_sources(HastyCuCompute
     PUBLIC 
         FILE_SET CXX_MODULES FILES
             "lib/util.ixx"
+            "lib/util_torch.ixx"
+            "lib/util_funcs.ixx"
+            "lib/hdf5.ixx"
             "lib/tensor.ixx"
             "lib/nufft.ixx"
             "lib/trace.ixx"

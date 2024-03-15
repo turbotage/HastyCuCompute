@@ -4,6 +4,9 @@ module;
 
 export module util;
 
+export import :funcs;
+export import :torch;
+
 namespace hasty {
 
     template <typename T, typename = void>
@@ -489,8 +492,6 @@ namespace hasty {
 
     }
 
-
-    
     export struct None {};
 
     export struct Ellipsis {};
@@ -563,98 +564,6 @@ namespace hasty {
     {
         return get_slice_rank<R>(std::make_tuple(idxs...));
     }
-
-    export template<typename T>
-    c10::optional<T> torch_optional(const std::optional<T>& opt)
-    {
-        if (opt.has_value()) {
-            return c10::optional(opt.value());
-        }
-        return c10::nullopt;
-    }
-
-    export template<typename R, typename T>
-    c10::optional<R> torch_optional(const std::optional<T>& opt)
-    {
-        if (opt.has_value()) {
-            return c10::optional<R>(opt.value());
-        }
-        return c10::nullopt;
-    }
-
-    export template<index_type Idx>
-    at::indexing::TensorIndex torchidx(Idx idx) {
-        if constexpr(std::is_same_v<Idx, None>) {
-            return at::indexing::None;
-        } 
-        else if constexpr(std::is_same_v<Idx, Ellipsis>) {
-            return at::indexing::Ellipsis;
-        }
-        else if constexpr(std::is_same_v<Idx, Slice>) {
-            return at::indexing::Slice(
-                torch_optional<c10::SymInt>(idx.start),
-                torch_optional<c10::SymInt>(idx.end),
-                torch_optional<c10::SymInt>(idx.step));
-        } else if constexpr(std::is_integral_v<Idx>) {
-            return idx;
-        } else {
-            static_assert(false);
-        }
-    }
-
-    template<index_type... Idx, size_t... Is>
-    auto torchidx_impl(std::tuple<Idx...> idxs, std::index_sequence<Is...>) {
-        return std::array<at::indexing::TensorIndex, sizeof...(Idx)>{torchidx(std::get<Is>(idxs))...};
-    }
-
-    export template<index_type... Idx>
-    auto torchidx(std::tuple<Idx...> idxs) {
-        return torchidx_impl(idxs, std::make_index_sequence<sizeof...(Idx)>{});
-    }
-
-    export template<index_type Idx>
-    std::string torchidxstr(Idx idx) {
-        if constexpr(std::is_same_v<Idx, None>) {
-            return "None";
-        } 
-        else if constexpr(std::is_same_v<Idx, Ellipsis>) {
-            return "...";
-        }
-        else if constexpr(std::is_same_v<Idx, Slice>) {
-            // If the Slice has start, end, and step values, format them as "start:end:step"
-            if (idx.start.has_value() && idx.end.has_value() && idx.step.has_value()) {
-                return std::format("{}:{}:{}", idx.start.value(), idx.end.value(), idx.step.value());
-            } 
-            // If the Slice has only start and end values, format them as "start:end"
-            else if (idx.start.has_value() && idx.end.has_value()) {
-                return std::format("{}:{}", idx.start.value(), idx.end.value());
-            } 
-            // If the Slice has only start and step values, format them as "start::step"
-            else if (idx.start.has_value() && idx.step.has_value()) {
-                return std::format("{}::{}", idx.start.value(), idx.step.value());
-            } 
-            // If the Slice has only end and step values, format them as ":end:step"
-            else if (idx.end.has_value() && idx.step.has_value()) {
-                return std::format(":{}:{}", idx.end.value(), idx.step.value());
-            } 
-            // If the Slice has only a start value, format it as "start:"
-            else if (idx.start.has_value()) {
-                return std::format("{}:", idx.start.value());
-            } 
-            // If the Slice has only an end value, format it as ":end"
-            else if (idx.end.has_value()) {
-                return std::format(":{}", idx.end.value());
-            } 
-            // If the Slice has only a step value, format it as "::step"
-            else if (idx.step.has_value()) {
-                return std::format("::{}", idx.step.value());
-            }
-        } 
-        else if constexpr(std::is_integral_v<Idx>) {
-            return std::to_string(idx);
-        }
-    }
-
 
 
 }

@@ -5,6 +5,8 @@ module;
 
 export module hdf5;
 
+import util;
+
 HighFive::CompoundType make_complex_float() {
 	return {
 		{"r", HighFive::AtomicType<float>{}},
@@ -73,8 +75,26 @@ namespace hasty {
     export void export_tensor(const at::Tensor& tensor, const std::string& filepath, const std::string& dataset)
     {
         HighFive::File file(filepath, HighFive::File::Write | HighFive::File::Create);
-        HighFive::DataSet dset = file.createDataSet<float>(dataset, HighFive::DataSpace(tensor.sizes()));
 
+		if (!tensor.is_contiguous()) {
+			throw std::runtime_error("tensor must be contiguous");
+		}
+
+		auto dataspace = HighFive::DataSpace(tensor.sizes().vec());
+
+		if (tensor.scalar_type() == at::ScalarType::Float) {
+        	HighFive::DataSet dset = file.createDataSet<float>(dataset, dataspace);
+			dset.write(static_cast<float*>(tensor.data_ptr()));
+		} else if (tensor.scalar_type() == at::ScalarType::Double) {
+			HighFive::DataSet dset = file.createDataSet<double>(dataset, dataspace);
+			dset.write(static_cast<double*>(tensor.data_ptr()));
+		} else if (tensor.scalar_type() == at::ScalarType::ComplexFloat) {
+			HighFive::DataSet dset = file.createDataSet<std::complex<float>>(dataset, dataspace);
+			dset.write(static_cast<std::complex<float>*>(tensor.data_ptr()));
+		} else if (tensor.scalar_type() == at::ScalarType::ComplexDouble) {
+			HighFive::DataSet dset = file.createDataSet<std::complex<double>>(dataset, dataspace);
+			dset.write(static_cast<std::complex<double>*>(tensor.data_ptr()));
+		}
 
     }
 
