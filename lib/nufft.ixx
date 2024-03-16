@@ -312,10 +312,16 @@ namespace hasty {
         std::array<int64_t, DIM+1> one_nmodes;
         one_nmodes[0] = 1;
         std::array<int64_t, DIM> nmodes;
-        for_sequence<DIM>([&nmodes, &one_nmodes, &kernel](auto i) {
-            nmodes[i] = kernel.template shape<i>() - 1;
+        int64_t nvox = 1;
+        for_sequence<DIM>([&nmodes, &one_nmodes, &kernel, &nvox](auto i) {
+            int64_t dimsize = kernel.template shape<i>();
+            nmodes[i] = dimsize - 1;
             one_nmodes[i+1] = nmodes[i];
+            nvox *= (dimsize / 2);
         });
+
+        using FLTYPE = std::conditional_t<is_32bit_precission<FPT>(), float, double>;
+        FLTYPE normfactor = double(1.0) / double(nvox);
 
         auto reduced_kernel = make_tensor<complex_t<FPT>, DIM+1>(span(one_nmodes), kernel.devicestr());
 
@@ -338,10 +344,13 @@ namespace hasty {
         for_sequence<DIM>([&slices, &nmodes](auto i) {
             slices[i] = Slice{0, nmodes[i]};
         });
+ 
+        //reduced_kernel.fill_(1.0);
 
         kernel[slices] = reduced_kernel[0];
 
         kernel = fftn(kernel, nullspan(), nullspan(), std::nullopt);
+        kernel *= normfactor;
     }
 
     export template<cuda_fp FPT, size_t DIM>
@@ -353,27 +362,27 @@ namespace hasty {
         if constexpr(DIM == 1) {
             int64_t xsize = inout.template shape<1>();
             auto mid = fftn(inout, span<1>({2 * xsize}), 
-                span<1>({1}), fft_norm::ORTHO);
+                span<1>({1}), std::nullopt);
             mid *= kernel;
-            mid = std::move(ifftn(mid, nullspan(), nullspan(), fft_norm::ORTHO));
-            inout = mid[Slice(), Slice(xsize - 1, -1)];
+            mid = ifftn(mid, nullspan(), span<1>({1}), std::nullopt);
+            inout = mid[Slice(), Slice(xsize-1, -1)];
         } else if constexpr(DIM == 2) {
             int64_t xsize = inout.template shape<1>();
             int64_t ysize = inout.template shape<2>();
             auto mid = fftn(inout, span<2>({2 * xsize, 2 * ysize}), 
-                span<2>({1,2}), fft_norm::ORTHO);
+                span<2>({1,2}), std::nullopt);
             mid *= kernel;
-            mid = std::move(ifftn(mid, nullspan(), nullspan(), fft_norm::ORTHO));
-            inout = mid[Slice(), Slice(xsize - 1, -1), Slice(ysize - 1, -1)];
+            mid = ifftn(mid, nullspan(), span<2>({1,2}), std::nullopt);
+            inout = mid[Slice(), Slice(xsize-1, -1), Slice(ysize-1, -1)];
         } else if constexpr(DIM == 3) {
             int64_t xsize = inout.template shape<1>();
             int64_t ysize = inout.template shape<2>();
             int64_t zsize = inout.template shape<3>();
             auto mid = fftn(inout, span<3>({2 * xsize, 2 * ysize, 2 * zsize}), 
-                span<3>({1,2,3}), fft_norm::ORTHO);
+                span<3>({1,2,3}), std::nullopt);
             mid *= kernel;
-            mid = std::move(ifftn(mid, nullspan(), nullspan(), fft_norm::ORTHO));
-            inout = mid[Slice(), Slice(xsize -1, -1), Slice(ysize -1, -1), Slice(zsize -1, -1)];
+            mid = ifftn(mid, nullspan(), span<3>({1,2,3}), std::nullopt);
+            inout = mid[Slice(), Slice(xsize-1, -1), Slice(ysize-1, -1), Slice(zsize-1, -1)];
         }
     }
 

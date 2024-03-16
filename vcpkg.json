@@ -2,7 +2,10 @@
   "name": "hasty-cu-compute",
   "version": "0.1.0",
   "dependencies": [
-    "highfive"
+    {
+      "name": "highfive",
+      "version>=": "2.9.0"
+    }
   ],
   "builtin-baseline": "64e15f6669480b2d2bff1e5e815c571a8213421e"
 }

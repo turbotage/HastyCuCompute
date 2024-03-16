@@ -6,3 +6,4 @@
 #include <cuComplex.h>
 #include <span>
 #include <future>
+#include <memory>

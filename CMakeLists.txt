@@ -13,6 +13,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_executable(HastyCuCompute 
     "lib/main.cpp"
+    "lib/hdf5.cpp"
 )
 
 set_property(TARGET HastyCuCompute PROPERTY CXX_STANDARD 23)

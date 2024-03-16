@@ -119,15 +119,23 @@ namespace hasty {
 
         tensor<FPT, 1> flatslice(index_type auto& idx) {
             at::Tensor tensorview = _pimpl->underlying_tensor.view(-1);
-            tensorview = tensorview.index(torchidx(idx));
+            tensorview = tensorview.index(tch::torchidx(idx));
             return tensor<FPT, 1>({tensorview.size(0)}, std::move(tensorview));
+        }
+
+        tensor<FPT, RANK> contiguous() {
+            return tensor<FPT, RANK>(_pimpl->shape, _pimpl->underlying_tensor.contiguous());
+        }
+
+        void contiguous_() {
+            _pimpl->underlying_tensor.contiguous_();
         }
 
         template<size_t N>
         requires less_than_or_equal<N, RANK>
         auto operator[](const std::array<Slice, N>& slices) {
             
-            at::Tensor tensorview = _pimpl->underlying_tensor.index(torchidx(std::tuple_cat(slices)));
+            at::Tensor tensorview = _pimpl->underlying_tensor.index(tch::torchidx(std::tuple_cat(slices)));
 
             if (!tensorview.is_view())
                 throw std::runtime_error("tensor::operator[]: tensorview is not a view");
@@ -147,7 +155,7 @@ namespace hasty {
         auto operator[](std::tuple<Idx...> indices) {
             constexpr auto RETRANK = get_slice_rank<RANK, Idx...>();
 
-            at::Tensor tensorview = _pimpl->underlying_tensor.index(torchidx(indices));
+            at::Tensor tensorview = _pimpl->underlying_tensor.index(tch::torchidx(indices));
 
             if (!tensorview.is_view())
                 throw std::runtime_error("tensor::operator[]: tensorview is not a view");
@@ -167,7 +175,7 @@ namespace hasty {
         auto operator[](Idx... indices) {
             constexpr auto RETRANK = get_slice_rank<RANK, Idx...>();
 
-            at::Tensor tensorview = _pimpl->underlying_tensor.index({torchidx(indices)...});
+            at::Tensor tensorview = _pimpl->underlying_tensor.index({tch::torchidx(indices)...});
 
             if (!tensorview.is_view())
                 throw std::runtime_error("tensor::operator[]: tensorview is not a view");
@@ -184,15 +192,13 @@ namespace hasty {
         }
 
         template<size_t R>
-        requires less_than<R, RANK>
+        requires less_than_or_equal<R, RANK>
         void operator=(const tensor<FPT, R>& other) {
             _pimpl->underlying_tensor.copy_(other.get_tensor());
         }
 
-        void operator=(tensor<FPT, RANK>&& other) {
-            if (other._pimpl->underlying_tensor.sizes() != _pimpl->underlying_tensor.sizes())
-                throw std::runtime_error("tensor::operator= with assign: other tensor shape did not match this tensor shape");
-            _pimpl->underlying_tensor = std::move(other._pimpl->underlying_tensor);
+        void operator=(const tensor<FPT, RANK>& other) {
+            _pimpl->underlying_tensor.copy_(other.get_tensor());
         }
 
         void set_(const tensor<FPT, RANK>& other) {
@@ -253,50 +259,106 @@ namespace hasty {
 
         template<size_t R>
         requires less_than<R, RANK>
-        void operator+=(const tensor<FPT, R>& other) const {
+        void operator+=(const tensor<FPT, R>& other) {
             _pimpl->underlying_tensor.add_(other.get_tensor());
         }
 
+        template<size_t R>
+        requires less_than<R, RANK>
+        tensor<FPT,RANK>& add_(const tensor<FPT, R>& other) {
+            _pimpl->underlying_tensor.add_(other.get_tensor());
+            return *this;
+        }
+
         template<typename T>
         requires std::integral<T> || std::floating_point<T>
-        void operator+=(T val) const {
+        void operator+=(T val) {
             _pimpl->underlying_tensor.add_(val);
         }
 
+        template<typename T>
+        requires std::integral<T> || std::floating_point<T>
+        tensor<FPT,RANK>& add_(T val) {
+            _pimpl->underlying_tensor.add_(val);
+            return *this;
+        }
+
         template<size_t R>
         requires less_than<R, RANK>
-        void operator-=(const tensor<FPT, R>& other) const {
+        void operator-=(const tensor<FPT, R>& other) {
             _pimpl->underlying_tensor.sub_(other.get_tensor());
         }
 
+        template<size_t R>
+        requires less_than<R, RANK>
+        tensor<FPT,RANK>& sub_(const tensor<FPT, R>& other) {
+            _pimpl->underlying_tensor.sub_(other.get_tensor());
+            return *this;
+        }
+
         template<typename T>
         requires std::integral<T> || std::floating_point<T>
-        void operator-=(T val) const {
+        void operator-=(T val) {
             _pimpl->underlying_tensor.sub_(val);
         }
 
+        template<typename T>
+        requires std::integral<T> || std::floating_point<T>
+        tensor<FPT,RANK>& sub_(T val) {
+            _pimpl->underlying_tensor.sub_(val);
+            return *this;
+        }
+
         template<size_t R>
         requires less_than<R, RANK>
-        void operator*=(const tensor<FPT, R>& other) const {
+        void operator*=(const tensor<FPT, R>& other) {
             _pimpl->underlying_tensor.mul_(other.get_tensor());
         }
 
+        template<size_t R>
+        requires less_than<R, RANK>
+        tensor<FPT,RANK>& mul_(const tensor<FPT, R>& other) {
+            _pimpl->underlying_tensor.mul_(other.get_tensor());
+            return *this;
+        }
+
         template<typename T>
         requires std::integral<T> || std::floating_point<T>
-        void operator*=(T val) const {
+        void operator*=(T val) {
             _pimpl->underlying_tensor.mul_(val);
+        }
+
+        template<typename T>
+        requires std::integral<T> || std::floating_point<T>
+        tensor<FPT,RANK>& mul_(T val) {
+            _pimpl->underlying_tensor.mul_(val);
+            return *this;
         }
 
         template<size_t R>
         requires less_than<R, RANK>
-        void operator/=(const tensor<FPT, R>& other) const {
+        void operator/=(const tensor<FPT, R>& other) {
             _pimpl->underlying_tensor.div_(other.get_tensor());
+        }
+
+        template<size_t R>
+        requires less_than<R, RANK>
+        tensor<FPT,RANK>& div_(const tensor<FPT, R>& other) {
+            _pimpl->underlying_tensor.div_(other.get_tensor());
+            return *this;
         }
 
         template<typename T>
         requires std::integral<T> || std::floating_point<T>
-        void operator/=(T val) const {
+        void operator/=(T val) {
             _pimpl->underlying_tensor.div_(val);
+        }
+
+        template<typename T>
+        requires std::integral<T> || std::floating_point<T>
+        tensor<FPT,RANK>& div_(T val) {
+            _pimpl->underlying_tensor.div_(val);
+            return *this;
         }
 
         template<device_fp F1, device_fp F2, size_t R1, size_t R2>
@@ -467,9 +529,9 @@ namespace hasty {
         };
         
 
-        at::Tensor newtensor = at::fft_fftn(t._pimpl->underlying_tensor,
-            s.to_arr_ref(),
-            dim.to_arr_ref(),
+        at::Tensor newtensor = torch::fft::fftn(t._pimpl->underlying_tensor,
+            s.to_opt_arr_ref(),
+            dim.to_opt_arr_ref(),
             normstr()
         );
         return tensor<F, R>(span<R>(newtensor.sizes()), std::move(newtensor));
@@ -498,9 +560,9 @@ namespace hasty {
             return at::nullopt;
         };
 
-        at::Tensor newtensor = at::fft_ifftn(t._pimpl->underlying_tensor,
-            s.to_arr_ref(),
-            dim.to_arr_ref(),
+        at::Tensor newtensor = torch::fft::ifftn(t._pimpl->underlying_tensor,
+            s.to_opt_arr_ref(),
+            dim.to_opt_arr_ref(),
             normstr()
         );
         return tensor<F, R>(span<R>(newtensor.sizes()), std::move(newtensor));

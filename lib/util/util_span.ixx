@@ -108,6 +108,13 @@ namespace hasty {
         at::ArrayRef<i64> to_arr_ref() {
             return at::ArrayRef<i64>(_data, N);
         }
+        
+        at::OptionalArrayRef<i64> to_opt_arr_ref() {
+            if (N == 0) {
+                return at::nullopt;
+            }
+            return at::ArrayRef<i64>(_data, N);
+        }
 
         std::array<i64, N> to_arr() {
             std::array<i64, N> arr;
