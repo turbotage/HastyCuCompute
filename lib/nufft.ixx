@@ -387,4 +387,12 @@ namespace hasty {
     }
 
 
+    
+    export template<cuda_fp FPT, size_t DIM>
+    requires is_dim3<DIM>
+    void cuda_toeplitz_multiply(tensor<FPT,DIM+1>& inout, const tensor<FPT,DIM>& kernel);
+
+
+    
+
 }

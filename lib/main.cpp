@@ -8,21 +8,10 @@ import trace;
 
 import hdf5;
 
-int main() {
-
+void trace_test() {
     using namespace hasty;
 
-    int64_t ntransf = 4;
-    int64_t nx = 32;
-    int64_t ny = 32;
-    int64_t nz = 32;
-    int64_t nupts = 100000;
-
-    //std::cout << "type2\n";
-    //type_2_tests(ntransf, nx, ny, nz, nupts);
-    //std::cout << "type1\n";
-    //type_1_tests(ntransf, nx, ny, nz, nupts);
-    /*
+    
     trace::trace_tensor<cuda_f32, 3> a("a");
     trace::trace_tensor<cuda_f32, 3> b("b");
 
@@ -35,13 +24,22 @@ int main() {
 
     filter.add_line(b.operator=<cuda_f32,3>(
         trace::ifftn(b, span({128,128,128}), nullspan())));
-    */
+    
+}
+
+void toeplitz_test() {
+    using namespace hasty;
+
+    int64_t ntransf = 4;
+    int64_t nx = 256;
+    int64_t ny = 256;
+    int64_t nz = 256;
+    int64_t nupts = 400000;
 
     auto kernel = make_tensor<cuda_c64, 3>(
         span({2*nx,2*ny,2*nz}), 
         "cuda:0", tensor_make_opts::ZEROS);
 
-    
     auto coords = std::array<tensor<cuda_f32, 1>, 3>{
         make_tensor<cuda_f32, 1>({nupts}, "cuda:0", tensor_make_opts::RAND_UNIFORM),
         make_tensor<cuda_f32, 1>({nupts}, "cuda:0", tensor_make_opts::RAND_UNIFORM),
@@ -52,64 +50,88 @@ int main() {
     coords[1].mul_(2*3.141592f).add_(-3.141592f);
     coords[2].mul_(2*3.141592f).add_(-3.141592f);
 
-
     {
         auto nudata = make_tensor<cuda_c64, 2>(span<2>({1, nupts}), "cuda:0");
         nudata.fill_(1.0f);
 
+        auto start = std::chrono::high_resolution_clock::now();
         toeplitz_kernel(coords, kernel, nudata);
+        auto end = std::chrono::high_resolution_clock::now();
+        std::cout << "Time Toep Multiply: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms\n";
     }
     
     auto multiply_data = make_tensor<cuda_c64, 4>(span<4>({ntransf, nx, ny, nz}), "cuda:0",
         tensor_make_opts::ONES);
     
-    auto multiply_data2 = multiply_data.clone();
+    int runs = 50;
 
-    export_tensor(kernel.get_tensor().cpu(), "/home/turbotage/Documents/SmallTests/kernel.h5", "data");
+    auto start = std::chrono::high_resolution_clock::now();
 
-    toeplitz_multiply(multiply_data, kernel);
+    for (int i = 0; i < runs; ++i) {
+        toeplitz_multiply(multiply_data, kernel);
+        torch::cuda::synchronize();
+    }
+
+    auto end = std::chrono::high_resolution_clock::now();
+
+    std::cout << "Time Toep Multiply: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms\n";
 
     auto nudata = make_tensor<cuda_c64, 2>(span<2>({ntransf, nupts}), "cuda:0");
-
     float subnelem = (1.0 / std::sqrt((double)nx*ny*nz));
-    {
-        auto plan = nufft_plan<cuda_f32, 3, nufft_type::TYPE_2>::make(
-            nufft_opts<cuda_f32, 3>{
-                .nmodes = {nx, ny, nz},
-                .ntransf = static_cast<i32>(ntransf),
-                .tol = 1e-5,
-                .sign = nufft_sign::DEFAULT_TYPE_2,
-                .upsamp = nufft_upsamp_cuda::DEFAULT,
-                .method = nufft_method_cuda::DEFAULT
-            }
-        );
-        plan->setpts(coords);
-        plan->execute(multiply_data2, nudata);
-        nudata *= subnelem;
-    }
-    {
-        auto plan = nufft_plan<cuda_f32, 3, nufft_type::TYPE_1>::make(
-            nufft_opts<cuda_f32, 3>{
-                .nmodes = {nx, ny, nz},
-                .ntransf = static_cast<i32>(ntransf),
-                .tol = 1e-5,
-                .sign = nufft_sign::DEFAULT_TYPE_1,
-                .upsamp = nufft_upsamp_cuda::DEFAULT,
-                .method = nufft_method_cuda::DEFAULT
-            }
-        );
-        plan->setpts(coords);
-        plan->execute(nudata, multiply_data2);
-        multiply_data2 *= subnelem;
-    }
-    
 
-    export_tensor(multiply_data.get_tensor().cpu(), "/home/turbotage/Documents/SmallTests/multdata.h5", "data");
-    export_tensor(multiply_data2.get_tensor().cpu(), "/home/turbotage/Documents/SmallTests/multdata2.h5", "data");
+    start = std::chrono::high_resolution_clock::now();
 
+    for (int i = 0; i < runs; ++i) {
+        {
+            auto plan = nufft_plan<cuda_f32, 3, nufft_type::TYPE_2>::make(
+                nufft_opts<cuda_f32, 3>{
+                    .nmodes = {nx, ny, nz},
+                    .ntransf = static_cast<i32>(ntransf),
+                    .tol = 1e-5,
+                    .sign = nufft_sign::DEFAULT_TYPE_2,
+                    .upsamp = nufft_upsamp_cuda::DEFAULT,
+                    .method = nufft_method_cuda::DEFAULT
+                }
+            );
+            plan->setpts(coords);
+            plan->execute(multiply_data, nudata);
+            nudata *= subnelem;
+        }
+        {
+            auto plan = nufft_plan<cuda_f32, 3, nufft_type::TYPE_1>::make(
+                nufft_opts<cuda_f32, 3>{
+                    .nmodes = {nx, ny, nz},
+                    .ntransf = static_cast<i32>(ntransf),
+                    .tol = 1e-5,
+                    .sign = nufft_sign::DEFAULT_TYPE_1,
+                    .upsamp = nufft_upsamp_cuda::DEFAULT,
+                    .method = nufft_method_cuda::DEFAULT
+                }
+            );
+            plan->setpts(coords);
+            plan->execute(nudata, multiply_data);
+            multiply_data *= subnelem;
+        }
+    }
+
+    end = std::chrono::high_resolution_clock::now();
+
+    std::cout << "Time NUFFT: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms\n";
+
+    //export_tensor(multiply_data.get_tensor().cpu(), "/home/turbotage/Documents/SmallTests/multdata.h5", "data");
+    //export_tensor(multiply_data2.get_tensor().cpu(), "/home/turbotage/Documents/SmallTests/multdata2.h5", "data");
+
+    /*
     auto diff = multiply_data - multiply_data2;
     std::cout << diff.norm() / multiply_data.norm() << "\n";
     std::cout << diff.abs().max() << "\n";
+    */
+}
+
+int main() {
+
+    toeplitz_test();
+    
     
 
     return 0;
