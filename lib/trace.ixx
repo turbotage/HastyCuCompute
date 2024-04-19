@@ -24,7 +24,7 @@ namespace hasty {
             requires less_than_or_equal<R, RANK>
             std::string operator=(const trace_tensor<F, R>& other) const {
                 std::string newtracestr = _tracestr;
-                newtracestr += ".copy_(" + other._tracestr + ")";
+                newtracestr += "[:] = " + other._tracestr;
                 return newtracestr;
             }
 
@@ -32,6 +32,30 @@ namespace hasty {
 
             trace_tensor<FPT, RANK> shape() {
                 return std::format("{}.shape", _tracestr);
+            }
+
+            template<std::integral I>
+            trace_tensor<FPT, RANK> shape(std::optional<I> start = std::nullopt,
+                std::optional<I> end = std::nullopt,
+                std::optional<I> step = std::nullopt) 
+            {
+                if (start.has_value() && end.has_value() && step.has_value()) {
+                    return std::format("{}.shape[{}:{}:{}]", _tracestr, start.value(), end.value(), step.value());
+                } else if (start.has_value() && end.has_value()) {
+                    return std::format("{}.shape[{}:{}]", _tracestr, start.value(), end.value());
+                } else if (start.has_value() && step.has_value()) {
+                    return std::format("{}.shape[{}::{}]", _tracestr, start.value(), step.value());
+                } else if (end.has_value() && step.has_value()) {
+                    return std::format("{}.shape[:{}:{}]", _tracestr, end.value(), step.value());
+                } else if (start.has_value()) {
+                    return std::format("{}.shape[{}]", _tracestr, start.value());
+                } else if (end.has_value()) {
+                    return std::format("{}.shape[:{}]", _tracestr, end.value());
+                } else if (step.has_value()) {
+                    return std::format("{}.shape[::{}]", _tracestr, step.value());
+                } else {
+                    return std::format("{}.shape", _tracestr);
+                }
             }
 
             template<size_t R>
@@ -50,7 +74,7 @@ namespace hasty {
 
             template<cpu_fp F>
             std::string fill_(F val) {
-                return std::format("{}.fill_({})", _tracestr, val);
+                return std::format("{}[:] = {}", _tracestr, val);
             }
 
             trace_tensor<FPT, RANK> clone() const
@@ -79,7 +103,7 @@ namespace hasty {
             requires less_than<R, RANK>
             std::string operator+=(const trace_tensor<FPT, R>& other) {
                 std::string newtracestr = _tracestr;
-                newtracestr += ".add_(" + other._tracestr + ");";
+                newtracestr += "[:] += " + other._tracestr;
                 return newtracestr;
             }
 
@@ -87,7 +111,7 @@ namespace hasty {
             requires less_than<R, RANK>
             std::string operator-=(const trace_tensor<FPT, R>& other) {
                 std::string newtracestr = _tracestr;
-                newtracestr += ".sub_(" + other._tracestr + ");";
+                newtracestr += "[:] -= " + other._tracestr;
                 return newtracestr;
             }
 
@@ -95,7 +119,7 @@ namespace hasty {
             requires less_than<R, RANK>
             std::string operator*=(const trace_tensor<FPT, R>& other) {
                 std::string newtracestr = _tracestr;
-                newtracestr += ".mul_(" + other._tracestr + ");";
+                newtracestr += "[:] *= " + other._tracestr;
                 return newtracestr;
             }
 
@@ -103,7 +127,7 @@ namespace hasty {
             requires less_than<R, RANK>
             std::string operator/=(const trace_tensor<FPT, R>& other) {
                 std::string newtracestr = _tracestr;
-                newtracestr += ".div_(" + other._tracestr + ");";
+                newtracestr += "[:] /= " + other._tracestr + ");";
                 return newtracestr;
             }
 
@@ -146,12 +170,104 @@ namespace hasty {
                 throw std::runtime_error("This should not be possible");
             };
 
-            return trace_tensor<FPT, RANK>(std::format("torch.fft.fftn({}{}{}{})", 
+            return trace_tensor<FPT, RANK>(std::format("torch.fft_fftn({},{},{},{})", 
                 t.name(),
-                s.has_value() ? ",s=" + span_to_str(s) : "",
-                dim.has_value() ? ",dim=" + span_to_str(dim) : "",
-                norm.has_value() ? ",norm=" + normstr() : ""));
+                s.has_value() ? span_to_str(s, false) : "None",
+                dim.has_value() ? span_to_str(dim, false) : "None",
+                norm.has_value() ? normstr() : ""));
         }
+
+        export template<device_fp FPT, size_t RANK, size_t R1, size_t R2>
+        requires less_than_or_equal<R1, RANK> && less_than_or_equal<R2, RANK>
+        trace_tensor<FPT, RANK> fftn(const trace_tensor<FPT, RANK>& t, 
+            std::optional<std::string> s = std::nullopt, 
+            span<R2> dim = nullspan(), 
+            std::optional<fft_norm> norm = std::nullopt) {
+
+            auto normstr = [&norm]() {
+                if (norm.has_value()) {
+                    switch (norm.value()) {
+                    case fft_norm::FORWARD:
+                        return std::string("forward");
+                    case fft_norm::BACKWARD:
+                        return std::string("backward");
+                    case fft_norm::ORTHO:
+                        return std::string("ortho");
+                    default:
+                        throw std::runtime_error("Invalid fft_norm value");
+                    }
+                }
+                throw std::runtime_error("This should not be possible");
+            };
+
+            return trace_tensor<FPT, RANK>(std::format("torch.fft_fftn({},{},{},{})", 
+                t.name(),
+                s.has_value() ? s.value() : "None",
+                dim.has_value() ? span_to_str(dim, false) : "None",
+                norm.has_value() ? normstr() : ""));
+        }
+
+        export template<device_fp FPT, size_t RANK, size_t R1, size_t R2>
+        requires less_than_or_equal<R1, RANK> && less_than_or_equal<R2, RANK>
+        trace_tensor<FPT, RANK> fftn(const trace_tensor<FPT, RANK>& t, 
+            span<R1> s = nullspan(), 
+            std::optional<std::string> dim = std::nullopt, 
+            std::optional<fft_norm> norm = std::nullopt) {
+
+            auto normstr = [&norm]() {
+                if (norm.has_value()) {
+                    switch (norm.value()) {
+                    case fft_norm::FORWARD:
+                        return std::string("forward");
+                    case fft_norm::BACKWARD:
+                        return std::string("backward");
+                    case fft_norm::ORTHO:
+                        return std::string("ortho");
+                    default:
+                        throw std::runtime_error("Invalid fft_norm value");
+                    }
+                }
+                throw std::runtime_error("This should not be possible");
+            };
+
+            return trace_tensor<FPT, RANK>(std::format("torch.fft_fftn({},{},{},{})", 
+                t.name(),
+                s.has_value() ? span_to_str(s, false) : "None",
+                dim.has_value() ? dim.value() : "None",
+                norm.has_value() ? normstr() : ""));
+        }
+
+        export template<device_fp FPT, size_t RANK, size_t R1, size_t R2>
+        requires less_than_or_equal<R1, RANK> && less_than_or_equal<R2, RANK>
+        trace_tensor<FPT, RANK> fftn(const trace_tensor<FPT, RANK>& t, 
+            std::optional<std::string> s = std::nullopt, 
+            std::optional<std::string> dim = std::nullopt, 
+            std::optional<fft_norm> norm = std::nullopt) {
+
+            auto normstr = [&norm]() {
+                if (norm.has_value()) {
+                    switch (norm.value()) {
+                    case fft_norm::FORWARD:
+                        return std::string("forward");
+                    case fft_norm::BACKWARD:
+                        return std::string("backward");
+                    case fft_norm::ORTHO:
+                        return std::string("ortho");
+                    default:
+                        throw std::runtime_error("Invalid fft_norm value");
+                    }
+                }
+                throw std::runtime_error("This should not be possible");
+            };
+
+            return trace_tensor<FPT, RANK>(std::format("torch.fft_fftn({},{},{},{})", 
+                t.name(),
+                s.has_value() ? s.value() : "None",
+                dim.has_value() ? dim.value() : "None",
+                norm.has_value() ? normstr() : ""));
+        }
+
+
 
         export template<device_fp FPT, size_t RANK, size_t R1, size_t R2>
         requires less_than_or_equal<R1, RANK> && less_than_or_equal<R2, RANK>
@@ -176,13 +292,112 @@ namespace hasty {
                 throw std::runtime_error("This should not be possible");
             };
 
-            return trace_tensor<FPT, RANK>(std::format("torch.fft.ifftn({}{}{}{})", 
+            return trace_tensor<FPT, RANK>(std::format("torch.fft_ifftn({}{}{}{})", 
                 t.name(),
-                s.has_value() ? ",s=" + span_to_str(s) : "",
-                dim.has_value() ? ",dim=" + span_to_str(dim) : "",
-                norm.has_value() ? ",norm=" + normstr() : "")
+                s.has_value() ? span_to_str(s, false) : "None",
+                dim.has_value() ? span_to_str(dim, false) : "None",
+                norm.has_value() ? normstr() : "")
             );
         }
+
+        export template<device_fp FPT, size_t RANK, size_t R1, size_t R2>
+        requires less_than_or_equal<R1, RANK> && less_than_or_equal<R2, RANK>
+        trace_tensor<FPT, RANK> ifftn(const trace_tensor<FPT, RANK>& t, 
+            std::optional<std::string> s = std::nullopt, 
+            span<R2> dim = nullspan(), 
+            std::optional<fft_norm> norm = std::nullopt) {
+
+            auto normstr = [&norm]() {
+                if (norm.has_value()) {
+                    switch (norm.value()) {
+                    case fft_norm::FORWARD:
+                        return std::string("forward");
+                    case fft_norm::BACKWARD:
+                        return std::string("backward");
+                    case fft_norm::ORTHO:
+                        return std::string("ortho");
+                    default:
+                        throw std::runtime_error("Invalid fft_norm value");
+                    }
+                }
+                throw std::runtime_error("This should not be possible");
+            };
+
+            return trace_tensor<FPT, RANK>(std::format("torch.fft_ifftn({}{}{}{})", 
+                t.name(),
+                s.has_value() ? s.value() : "None",
+                dim.has_value() ? span_to_str(dim, false) : "None",
+                norm.has_value() ? normstr() : "")
+            );
+        }
+
+        export template<device_fp FPT, size_t RANK, size_t R1, size_t R2>
+        requires less_than_or_equal<R1, RANK> && less_than_or_equal<R2, RANK>
+        trace_tensor<FPT, RANK> ifftn(const trace_tensor<FPT, RANK>& t, 
+            span<R1> s = nullspan(), 
+            std::optional<std::string> dim = std::nullopt, 
+            std::optional<fft_norm> norm = std::nullopt) {
+
+            auto normstr = [&norm]() {
+                if (norm.has_value()) {
+                    switch (norm.value()) {
+                    case fft_norm::FORWARD:
+                        return std::string("forward");
+                    case fft_norm::BACKWARD:
+                        return std::string("backward");
+                    case fft_norm::ORTHO:
+                        return std::string("ortho");
+                    default:
+                        throw std::runtime_error("Invalid fft_norm value");
+                    }
+                }
+                throw std::runtime_error("This should not be possible");
+            };
+
+            return trace_tensor<FPT, RANK>(std::format("torch.fft_ifftn({}{}{}{})", 
+                t.name(),
+                s.has_value() ? span_to_str(s, false) : "None",
+                dim.has_value() ? dim.value() : "None",
+                norm.has_value() ? normstr() : "")
+            );
+        }
+
+        export template<device_fp FPT, size_t RANK, size_t R1, size_t R2>
+        requires less_than_or_equal<R1, RANK> && less_than_or_equal<R2, RANK>
+        trace_tensor<FPT, RANK> ifftn(const trace_tensor<FPT, RANK>& t, 
+            std::optional<std::string> s = std::nullopt,
+            std::optional<std::string> dim = std::nullopt, 
+            std::optional<fft_norm> norm = std::nullopt) {
+
+            auto normstr = [&norm]() {
+                if (norm.has_value()) {
+                    switch (norm.value()) {
+                    case fft_norm::FORWARD:
+                        return std::string("forward");
+                    case fft_norm::BACKWARD:
+                        return std::string("backward");
+                    case fft_norm::ORTHO:
+                        return std::string("ortho");
+                    default:
+                        throw std::runtime_error("Invalid fft_norm value");
+                    }
+                }
+                throw std::runtime_error("This should not be possible");
+            };
+
+            return trace_tensor<FPT, RANK>(std::format("torch.fft_ifftn({}{}{}{})", 
+                t.name(),
+                s.has_value() ? s.value() : "None",
+                dim.has_value() ? dim.value() : "None",
+                norm.has_value() ? normstr() : "")
+            );
+        }
+
+
+
+
+
+
 
 
         export template<typename T>

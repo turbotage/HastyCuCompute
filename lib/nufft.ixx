@@ -385,14 +385,7 @@ namespace hasty {
             inout = mid[Slice(), Slice(xsize-1, -1), Slice(ysize-1, -1), Slice(zsize-1, -1)];
         }
     }
-
-
     
-    export template<cuda_fp FPT, size_t DIM>
-    requires is_dim3<DIM>
-    void cuda_toeplitz_multiply(tensor<FPT,DIM+1>& inout, const tensor<FPT,DIM>& kernel);
-
-
     
 
 }

@@ -2,6 +2,7 @@
 #include <iostream>
 #include "pch.hpp"
 
+
 import util;
 import nufft;
 import trace;
@@ -128,11 +129,92 @@ void toeplitz_test() {
     */
 }
 
+void compile_test() {
+
+    /*
+    auto module = torch::jit::compile(R"JIT(
+        def run(a: Tensor, b: Tensor) -> Tensor:
+            shp = torch.size(a)
+            _0 = [torch.mul(shp[1], 2), torch.mul(shp[2], 2), torch.mul(shp[3], 2)]
+            c = torch.fft_fftn(a, _0, [1, 2, 3])
+            c0 = torch.mul_(c, b)
+            _1 = torch.slice(torch.fft_ifftn(c0, None, [1, 2, 3]))
+            _2 = torch.slice(_1, 1, torch.sub(shp[1], 1), -1)
+            _3 = torch.slice(_2, 2, torch.sub(shp[2], 1), -1)
+            _4 = torch.slice(_3, 3, torch.sub(shp[3], 1), -1)
+            _5 = torch.mul(torch.mul(shp[1], shp[2]), shp[3])
+            return torch.div(_4, _5)
+    )JIT");
+    */
+
+    trace::trace_tensor<cuda_c64, 4> a("a");
+    trace::trace_tensor<cuda_c64, 3> b("b");
+    trace::trace_tensor<cuda_c64, 4> temp("temp");
+
+    auto toeplitz = trace::trace_function("toeplitz", a, b);
+    
+    toeplitz.add_line(temp.operator=<cuda_c64,4>(
+        trace::fftn(a, span({256,256,256,2}), span({1,2,3})));
+    );
+
+
+    auto module = torch::jit::compile(R"JIT(
+        def run(a: Tensor, b: Tensor) -> Tensor:
+            shp = a.shape
+            c = torch.fft_fftn(a, [shp[1]*2, shp[2]*2, shp[3]*2], [1,2,3])
+            c *= b
+            c = torch.fft_ifftn(c, None, [1,2,3])
+            return c[:, shp[1]-1:-1, shp[2]-1:-1, shp[3]-1:-1] / (shp[1]*shp[2]*shp[3])
+    )JIT");
+
+    auto a = torch::rand({2, 256, 256, 256}, at::TensorOptions("cuda:0").dtype(at::kComplexFloat));
+    auto kernel = torch::rand({512,512,512}, at::TensorOptions("cuda:0").dtype(at::kComplexFloat));
+
+    auto start = std::chrono::high_resolution_clock::now();
+    at::Tensor c1 = module->run_method("run", a, kernel).toTensor();
+    c1 = c1.to(c10::Device("cpu"));
+    auto end = std::chrono::high_resolution_clock::now();
+    std::cout << "Time: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms\n";
+
+
+    start = std::chrono::high_resolution_clock::now();
+    for (int i = 0; i < 10; ++i) {
+        c1 = module->run_method("run", a, kernel).toTensor();
+    }
+    c1 = c1.to(c10::Device("cpu"));
+    end = std::chrono::high_resolution_clock::now();
+    std::cout << "Time: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms\n";
+
+    auto shp = a.sizes();
+
+    start = std::chrono::high_resolution_clock::now();
+    at::Tensor c2 = torch::fft::fftn(a, {shp[1]*2, shp[2]*2, shp[3]*2}, {1, 2, 3});
+    c2 *= kernel;
+    c2 = torch::fft::ifftn(c2, {shp[1]*2, shp[2]*2, shp[3]*2}, {1, 2, 3});
+    c2 = c2.slice(1, shp[1]-1, -1).slice(2, shp[2]-1, -1).slice(3, shp[3]-1, -1);
+    c2 = c2.to(c10::Device("cpu"));
+    end = std::chrono::high_resolution_clock::now();
+
+    std::cout << "Time: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms\n";
+
+    start = std::chrono::high_resolution_clock::now();
+    for (int i = 0; i < 10; ++i) {
+        c2 = torch::fft::fftn(a, {shp[1]*2, shp[2]*2, shp[3]*2}, {1, 2, 3});
+        c2 *= kernel;
+        c2 = torch::fft::ifftn(c2, {shp[1]*2, shp[2]*2, shp[3]*2}, {1, 2, 3});
+        c2 = c2.slice(1, shp[1]-1, -1).slice(2, shp[2]-1, -1).slice(3, shp[3]-1, -1);
+        c2 = c2.to(c10::Device("cpu"));
+    }
+    end = std::chrono::high_resolution_clock::now();
+
+    std::cout << "Time: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms\n";
+}
+
 int main() {
 
-    toeplitz_test();
-    
-    
+    compile_test();
+
+    //toeplitz_test();
 
     return 0;
 }
