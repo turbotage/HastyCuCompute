@@ -389,6 +389,11 @@ namespace hasty {
 
     };
 
+    export template<typename T>
+    concept is_tensor = requires(T t) {
+        []<device_fp FPT, size_t RANK>(tensor<FPT,RANK>&){}(t);
+    };
+
 
     export enum struct tensor_make_opts {
         EMPTY,
