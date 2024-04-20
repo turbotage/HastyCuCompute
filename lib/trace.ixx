@@ -9,7 +9,6 @@ export import util;
 namespace hasty {
     namespace trace {
 
-
         export template<device_fp FPT, size_t RANK>
         class trace_tensor {
         public:
@@ -28,10 +27,17 @@ namespace hasty {
                 return newtracestr;
             }
 
-            std::string name() const { return _tracestr; }
+            std::string str() const { return _tracestr; }
 
             trace_tensor<FPT, RANK> shape() {
                 return std::format("{}.shape", _tracestr);
+            }
+
+            /*
+            */
+            template<std::integral I>
+            trace_tensor<FPT, RANK> shape(I start) {
+                return std::format("{}.shape[{}]", _tracestr, start);
             }
 
             template<std::integral I>
@@ -99,8 +105,21 @@ namespace hasty {
                 return trace_tensor<FPT, RETRANK>(newtracestr);
             }
 
+            template<size_t RETRANK>
+            auto operator[](std::string... indices) {
+                std::string newtracestr = _tracestr;
+
+                newtracestr += "[";
+                for_sequence<sizeof...(indices)>([&](auto i) {
+                    newtracestr += indices[i] + ",";
+                });
+                newtracestr += "]";
+
+                return trace_tensor<FPT, RETRANK>(newtracestr);
+            }
+
             template<size_t R>
-            requires less_than<R, RANK>
+            requires less_than_or_equal<R, RANK>
             std::string operator+=(const trace_tensor<FPT, R>& other) {
                 std::string newtracestr = _tracestr;
                 newtracestr += "[:] += " + other._tracestr;
@@ -108,7 +127,7 @@ namespace hasty {
             }
 
             template<size_t R>
-            requires less_than<R, RANK>
+            requires less_than_or_equal<R, RANK>
             std::string operator-=(const trace_tensor<FPT, R>& other) {
                 std::string newtracestr = _tracestr;
                 newtracestr += "[:] -= " + other._tracestr;
@@ -116,7 +135,7 @@ namespace hasty {
             }
 
             template<size_t R>
-            requires less_than<R, RANK>
+            requires less_than_or_equal<R, RANK>
             std::string operator*=(const trace_tensor<FPT, R>& other) {
                 std::string newtracestr = _tracestr;
                 newtracestr += "[:] *= " + other._tracestr;
@@ -124,7 +143,7 @@ namespace hasty {
             }
 
             template<size_t R>
-            requires less_than<R, RANK>
+            requires less_than_or_equal<R, RANK>
             std::string operator/=(const trace_tensor<FPT, R>& other) {
                 std::string newtracestr = _tracestr;
                 newtracestr += "[:] /= " + other._tracestr + ");";
@@ -134,6 +153,22 @@ namespace hasty {
             trace_tensor conj() {
                 return trace_tensor<FPT, RANK>(_tracestr + ".conj()");
             }
+
+            template<device_fp F1, device_fp F2, size_t R1, size_t R2>
+            requires (device_type_func<F1>() == device_type_func<F2>())
+            friend auto operator+(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs);
+
+            template<device_fp F1, device_fp F2, size_t R1, size_t R2>
+            requires (device_type_func<F1>() == device_type_func<F2>())
+            friend auto operator-(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs);
+
+            template<device_fp F1, device_fp F2, size_t R1, size_t R2>
+            requires (device_type_func<F1>() == device_type_func<F2>())
+            friend auto operator*(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs);
+
+            template<device_fp F1, device_fp F2, size_t R1, size_t R2>
+            requires (device_type_func<F1>() == device_type_func<F2>())
+            friend auto operator/(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs);
 
             
         private:
@@ -177,8 +212,8 @@ namespace hasty {
                 norm.has_value() ? normstr() : ""));
         }
 
-        export template<device_fp FPT, size_t RANK, size_t R1, size_t R2>
-        requires less_than_or_equal<R1, RANK> && less_than_or_equal<R2, RANK>
+        export template<device_fp FPT, size_t RANK, size_t R2>
+        requires less_than_or_equal<R2, RANK>
         trace_tensor<FPT, RANK> fftn(const trace_tensor<FPT, RANK>& t, 
             std::optional<std::string> s = std::nullopt, 
             span<R2> dim = nullspan(), 
@@ -207,8 +242,8 @@ namespace hasty {
                 norm.has_value() ? normstr() : ""));
         }
 
-        export template<device_fp FPT, size_t RANK, size_t R1, size_t R2>
-        requires less_than_or_equal<R1, RANK> && less_than_or_equal<R2, RANK>
+        export template<device_fp FPT, size_t RANK, size_t R1>
+        requires less_than_or_equal<R1, RANK>
         trace_tensor<FPT, RANK> fftn(const trace_tensor<FPT, RANK>& t, 
             span<R1> s = nullspan(), 
             std::optional<std::string> dim = std::nullopt, 
@@ -237,8 +272,7 @@ namespace hasty {
                 norm.has_value() ? normstr() : ""));
         }
 
-        export template<device_fp FPT, size_t RANK, size_t R1, size_t R2>
-        requires less_than_or_equal<R1, RANK> && less_than_or_equal<R2, RANK>
+        export template<device_fp FPT, size_t RANK>
         trace_tensor<FPT, RANK> fftn(const trace_tensor<FPT, RANK>& t, 
             std::optional<std::string> s = std::nullopt, 
             std::optional<std::string> dim = std::nullopt, 
@@ -300,8 +334,8 @@ namespace hasty {
             );
         }
 
-        export template<device_fp FPT, size_t RANK, size_t R1, size_t R2>
-        requires less_than_or_equal<R1, RANK> && less_than_or_equal<R2, RANK>
+        export template<device_fp FPT, size_t RANK, size_t R2>
+        requires less_than_or_equal<R2, RANK>
         trace_tensor<FPT, RANK> ifftn(const trace_tensor<FPT, RANK>& t, 
             std::optional<std::string> s = std::nullopt, 
             span<R2> dim = nullspan(), 
@@ -331,8 +365,8 @@ namespace hasty {
             );
         }
 
-        export template<device_fp FPT, size_t RANK, size_t R1, size_t R2>
-        requires less_than_or_equal<R1, RANK> && less_than_or_equal<R2, RANK>
+        export template<device_fp FPT, size_t RANK, size_t R1>
+        requires less_than_or_equal<R1, RANK>
         trace_tensor<FPT, RANK> ifftn(const trace_tensor<FPT, RANK>& t, 
             span<R1> s = nullspan(), 
             std::optional<std::string> dim = std::nullopt, 
@@ -362,8 +396,7 @@ namespace hasty {
             );
         }
 
-        export template<device_fp FPT, size_t RANK, size_t R1, size_t R2>
-        requires less_than_or_equal<R1, RANK> && less_than_or_equal<R2, RANK>
+        export template<device_fp FPT, size_t RANK>
         trace_tensor<FPT, RANK> ifftn(const trace_tensor<FPT, RANK>& t, 
             std::optional<std::string> s = std::nullopt,
             std::optional<std::string> dim = std::nullopt, 

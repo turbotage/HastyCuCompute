@@ -12,7 +12,7 @@ import hdf5;
 void trace_test() {
     using namespace hasty;
 
-    
+    /*
     trace::trace_tensor<cuda_f32, 3> a("a");
     trace::trace_tensor<cuda_f32, 3> b("b");
 
@@ -25,6 +25,31 @@ void trace_test() {
 
     filter.add_line(b.operator=<cuda_f32,3>(
         trace::ifftn(b, span({128,128,128}), nullspan())));
+    */
+
+    trace::trace_tensor<cuda_c64, 4> a("a");
+    trace::trace_tensor<cuda_c64, 3> b("b");
+    trace::trace_tensor<cuda_c64, 4> temp("temp");
+
+    auto toeplitz = trace::trace_function("toeplitz", a, b);
+    
+    toeplitz.add_line(temp.operator=<cuda_c64,4>(
+        trace::fftn(a, "[2*s for s in a.shape[1:]]", span({1,2,3}))
+    ));
+
+    toeplitz.add_line(temp *= b);
+
+    toeplitz.add_line(temp.operator=<cuda_c64,4>(
+        trace::ifftn(temp, nullspan(), span({1,2,3}))
+    ));
+
+    toeplitz.add_line(temp.operator[]<4>[
+        std::string(":"), std::format("{}-1:-1", a.shape<int>(1).str()), 
+        std::format("{}-1:-1", a.shape<int>(2).str()), std::format("{}-1:-1", a.shape<int>(3).str())
+    ] / "a.shape[1]*a.shape[2]*a.shape[3]");
+
+
+    std::cout << toeplitz.str() << std::endl;
     
 }
 
@@ -147,16 +172,6 @@ void compile_test() {
     )JIT");
     */
 
-    trace::trace_tensor<cuda_c64, 4> a("a");
-    trace::trace_tensor<cuda_c64, 3> b("b");
-    trace::trace_tensor<cuda_c64, 4> temp("temp");
-
-    auto toeplitz = trace::trace_function("toeplitz", a, b);
-    
-    toeplitz.add_line(temp.operator=<cuda_c64,4>(
-        trace::fftn(a, span({256,256,256,2}), span({1,2,3})));
-    );
-
 
     auto module = torch::jit::compile(R"JIT(
         def run(a: Tensor, b: Tensor) -> Tensor:
@@ -212,7 +227,9 @@ void compile_test() {
 
 int main() {
 
-    compile_test();
+    trace_test();
+
+    //compile_test();
 
     //toeplitz_test();
 
