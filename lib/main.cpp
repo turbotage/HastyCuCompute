@@ -10,7 +10,76 @@ import trace;
 import hdf5;
 
 void trace_test() {
+    using namespace hasty;
+    using namespace hasty::trace;
+
+    tensor_prototype<cuda_c64, 3> input("input");
+    tensor_prototype<cuda_c64, 4> coilmap("coilmap");
+    tensor_prototype<cuda_c64, 3> kernel("kernel");
+
+    tensor_prototype<cuda_c64, 3> output("output");
+
+    auto toeplitz = trace_function_factory<decltype(output)>::make("toeplitz", input, coilmap, kernel);
+
+    toeplitz.add_lines(
+std::format(R"ts(
+    shp = input.shape
+    spatial_shp = shp[1:]
+    expanded_shp = [2*s for s in spatial_shp]
+    transform_dims = [i+1 for i in range(len(spatial_shp))]
+
+    ncoil = coilmap.shape[0]
+    nrun = {0} // ncoil
     
+    out = torch.zeros_like(input)
+    for run in range(nrun):
+        bst = run*{0}
+        cmap = coilmap[bst:(bst+{0})]
+        c = cmap * input
+        c = torch.fft_fftn(c, expanded_shp, transform_dims)
+        c *= kernel
+        c = torch.fft_ifftn(c, None, transform_dims)
+
+        for dim in range(len(spatial_shp)):
+            c = torch.slice(c, dim+1, shp[dim+1]-1, -1)
+
+        c *= cmap.conj()
+        out += torch.sum(c, 0)
+
+    out *= (1 / torch.prod(torch.tensor(spatial_shp)))
+    
+    return out
+
+)ts", 2));
+
+    std::cout << toeplitz.str() << "\n";
+    
+    
+    
+    toeplitz.compile();
+
+    tensor<cuda_c64, 3> input_data = make_tensor<cuda_c64, 3>(span({256, 256, 256}), 
+                                        "cuda:0", tensor_make_opts::RAND_UNIFORM);
+
+    tensor<cuda_c64, 4> coilmap_data = make_tensor<cuda_c64, 4>(span({8, 256, 256, 256}), "cuda:0", tensor_make_opts::RAND_UNIFORM);
+
+    tensor<cuda_c64, 3> kernel_data = make_tensor<cuda_c64, 3>(span({512, 512, 512}), "cuda:0", tensor_make_opts::RAND_UNIFORM);
+
+
+    auto start = std::chrono::high_resolution_clock::now();
+    std::tuple<tensor<cuda_c64, 3>> output_data = toeplitz.run(input_data, coilmap_data, kernel_data);
+    auto end = std::chrono::high_resolution_clock::now();
+    std::cout << "Time Toep Kernel First Run: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms\n";
+
+    int runs = 50;
+    start = std::chrono::high_resolution_clock::now();
+    for (int i = 0; i < runs; ++i) {
+        output_data = toeplitz.run(input_data, coilmap_data, kernel_data);
+    }
+    end = std::chrono::high_resolution_clock::now();
+    std::cout << std::format("Time Toep Kernel {} runs: ", runs) << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms\n";
+
+
 }
 
 void toeplitz_test() {

@@ -5,29 +5,174 @@ module;
 export module trace;
 
 export import util;
+export import tensor;
 
 namespace hasty {
     namespace trace {
 
         export template<device_fp FPT, size_t RANK>
-        class trace_tensor {
+        class tensor_prototype {
         public:
 
-            trace_tensor(std::string name)
+            using tensor_device_fp = FPT;
+            static constexpr std::integral_constant<size_t, RANK> size = {};
+
+            tensor_prototype(std::string name)
                 : _tracestr(name)
             {};
+
+            std::string str() const {
+                return _tracestr;
+            }
 
         private:
             std::string _tracestr;
         };
 
         export template<typename T>
-        concept is_trace_tensor = requires(T t) {
-            []<device_fp FPT, size_t RANK>(trace_tensor<FPT, RANK>&){}(t);
+        concept is_tensor_prototype = requires(T t) {
+            []<device_fp FPT, size_t RANK>(tensor_prototype<FPT, RANK>&){}(t);
+        };
+
+        template<typename T>
+        struct tensor_prototype_conversion;
+
+        template<is_tensor_prototype T>
+        struct tensor_prototype_conversion<T> {
+            tensor<typename T::tensor_device_fp, T::size()> operator()(tensor_prototype<typename T::tensor_device_fp, T::size()> t);
+        };
+
+        template<is_tensor T>
+        struct tensor_prototype_conversion<T> {
+            tensor_prototype<typename T::tensor_device_fp, T::size()> operator()(tensor<typename T::tensor_device_fp, T::size()> t);
+        };
+
+        export template<is_tensor_prototype T>
+        using tensor_prototype_conversion_t = std::invoke_result_t<tensor_prototype_conversion<T>, T>;
+
+
+
+        export template<typename... U>
+        struct trace_function;
+
+        export template<is_tensor_prototype... ReturnTt, is_tensor_prototype... InputTt>
+        struct trace_function<std::tuple<ReturnTt...>, std::tuple<InputTt...>> {
+        private:
+            std::string _funcname;
+            std::string _tracestr;
+            std::shared_ptr<torch::jit::CompilationUnit> _cu;
+            std::tuple<InputTt...> _trace_tensors;
+        public:
+
+            using ReturnTraits = TupleTraits<ReturnTt...>;
+            using InputTraits = TupleTraits<InputTt...>;
+
+            trace_function(const std::string& funcname, InputTt&&... tts)
+                : _funcname(funcname), _cu(nullptr), _trace_tensors(std::forward<InputTt>(tts)...)
+            {
+                reset();
+            }
+
+            void reset() {
+                _tracestr = "";
+                _cu = nullptr;
+
+                std::string variables = for_sequence<sizeof...(InputTt)>([this](auto i, std::string& currentstr){
+                    currentstr += std::get<i>(_trace_tensors).str();
+                    if constexpr(i < sizeof...(InputTt) - 1) {
+                        currentstr += ",";
+                    }
+                }, std::string(""));
+
+                _tracestr = std::format("def {}({}):", _funcname, variables);
+            }
+
+            void add_line(const std::string& line)
+            {
+                _tracestr += "\n\t" + line;
+            }
+
+            void add_lines(const std::string& lines)
+            {
+                _tracestr += "\n" + lines;
+            }
+
+            const std::string& str() const {
+                return _tracestr;
+            }
+
+            void compile() {
+                if (_cu != nullptr) {
+                    throw std::runtime_error("CompilationUnit already exists");
+                }
+                _cu = torch::jit::compile(_tracestr);
+            }
+
+            template<is_tensor ...Ts>
+            auto run(Ts&&... tts) -> std::tuple<tensor_prototype_conversion_t<ReturnTt>...> {
+                
+                //auto ttstup = std::make_tuple(tts...);
+                using TsTraits = TupleTraits<Ts...>;
+
+                for_sequence<sizeof...(Ts)>([](auto i) {
+                    using TS_TN = std::remove_reference_t<typename TsTraits::template Nth<i>>;
+                    using INPUT_TN = std::remove_reference_t<typename InputTraits::template Nth<i>>;
+                    using ts_fp = typename TS_TN::tensor_device_fp;
+                    using input_fp = typename INPUT_TN::tensor_device_fp;
+                    static_assert(std::is_same_v<ts_fp, input_fp>, "device_fp types must be the same");
+                    static_assert(TS_TN::size() == INPUT_TN::size(), "Sizes must be the same");
+                });
+
+                std::tuple<tensor_prototype_conversion_t<ReturnTt>...> rets;
+
+                c10::IValue ret_ivalue = _cu->run_method(_funcname, std::forward<Ts>(tts)...);
+                if (ret_ivalue.isTensor()) {
+                    auto& retpos = std::get<0>(rets);
+                    retpos = ret_ivalue.toTensor();
+                } else if (ret_ivalue.isTuple()) {
+                    auto tuple_ptr = ret_ivalue.toTuple();
+                    auto& elements = tuple_ptr->elements();
+                    
+                    if (elements.size() != sizeof...(ReturnTt)) {
+                        throw std::runtime_error("Tuple size did not match return size");
+                    }
+
+                    for_sequence<sizeof...(ReturnTt)>([this, &rets, &elements](auto i) {
+                        auto& element = elements[i];
+                        if (element.isTensor()) {
+                            auto& retpos = std::get<i>(rets);
+                            retpos = element.toTensor();
+                        } else {
+                            throw std::runtime_error("Return type inside tuple was not a Tensor");
+                        }
+                    });
+
+                } else {
+                    throw std::runtime_error("Return type was neither a Tensor nor a Tuple");
+                }
+
+                return rets;
+            }
+
+        };
+
+
+        export template<is_tensor_prototype... ReturnTt>
+        struct trace_function_factory {
+
+            template<is_tensor_prototype... InputTt>
+            static auto make(const std::string& funcname, InputTt&&... tts) {
+                return trace_function<std::tuple<ReturnTt...>, std::tuple<InputTt...>>(
+                    funcname, std::forward<InputTt>(tts)...);
+            }
+
         };
 
 
 
+
+
+        /*
         export struct trace_scope {
             
             trace_scope(const std::string& scopestr)
@@ -47,49 +192,8 @@ namespace hasty {
             std::string _tracestr;
             std::vector<trace_scope> _tracescopes;
         };
+        */
 
-        export template<device_fp FP, size_t RETRANK, is_trace_tensor ...Tt>
-        struct trace_function {
-
-            trace_function(const std::string& funcname, Tt... tts)
-            {
-                auto ttstup = std::make_tuple(tts...);
-
-                std::string variables = for_sequence<sizeof...(Tt)>([&ttstup](auto i, std::string& currentstr){
-                    currentstr += std::get<i>(ttstup).name();
-                    if constexpr(i < sizeof...(Tt) - 1) {
-                        currentstr += ",";
-                    }
-                }, std::string(""));
-
-                _tracestr = std::format("def {}({}):", funcname, variables);
-            }
-
-            void add_line(const std::string& line)
-            {
-                _tracestr += "\n\t" + line;
-            }
-
-            const std::string& str() const {
-                return _tracestr;
-            }
-
-            template<is_tensor ...Ts>
-            void run(tensor<FP, RETRANK>& ret, Ts... tts) {
-                
-                auto tensor_rank = []<device_fp FPT, size_t RANK>() constexpr {
-                    
-                }
-
-                auto ttstup = std::make_tuple(tts...)
-                for_sequence<sizeof...(Ts)>([])
-
-            }
-
-        private:
-            auto 
-            std::string _tracestr;
-        };
 
     }
 

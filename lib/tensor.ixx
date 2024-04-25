@@ -8,7 +8,6 @@ import util;
 
 namespace hasty {
 
-    // Forward declare the tensor class
     export template<device_fp F, size_t R>
     class tensor;
 
@@ -52,6 +51,9 @@ namespace hasty {
     private:
         std::shared_ptr<tensor_impl<FPT,RANK>> _pimpl;
     public:
+
+        using tensor_device_fp = FPT;
+        static constexpr std::integral_constant<size_t, RANK> size = {};
 
         auto& get_pimpl() { return _pimpl; }
         const auto& get_pimpl() const { return _pimpl; }
@@ -336,13 +338,13 @@ namespace hasty {
         }
 
         template<size_t R>
-        requires less_than<R, RANK>
+        requires less_than_or_equal<R, RANK>
         void operator/=(const tensor<FPT, R>& other) {
             _pimpl->underlying_tensor.div_(other.get_tensor());
         }
 
         template<size_t R>
-        requires less_than<R, RANK>
+        requires less_than_or_equal<R, RANK>
         tensor<FPT,RANK>& div_(const tensor<FPT, R>& other) {
             _pimpl->underlying_tensor.div_(other.get_tensor());
             return *this;
