@@ -125,10 +125,26 @@ namespace hasty {
 
                 std::tuple<tensor_prototype_conversion_t<ReturnTt>...> rets;
 
-                c10::IValue ret_ivalue = _cu->run_method(_funcname, std::forward<Ts>(tts)...);
+                auto gettensorfunc = []<typename T>(T t) { return t.get_tensor(); };
+
+                //std::tuple<at::Tensor> input_tensors = std::make_tuple(gettensorfunc(tts)...);
+
+                //c10::IValue ret_ivalue = _cu->run_method(_funcname, std::forward<Ts>(tts)...);
+                c10::IValue ret_ivalue = _cu->run_method(_funcname, gettensorfunc(tts)...);
+
                 if (ret_ivalue.isTensor()) {
-                    auto& retpos = std::get<0>(rets);
-                    retpos = ret_ivalue.toTensor();
+                    if (sizeof...(ReturnTt) > 1) {
+                        throw std::runtime_error("ReturnTt indicated multiple return values, but only one was returned");
+                    }
+
+                    using RT = std::remove_reference_t<typename ReturnTraits::First>;
+                    using RTF = typename RT::tensor_device_fp;
+
+                    auto retten = ret_ivalue.toTensor();
+
+
+                    tensor_factory<RTF, RT::size()>::assign(std::get<0>(rets), ret_ivalue.toTensor());
+
                 } else if (ret_ivalue.isTuple()) {
                     auto tuple_ptr = ret_ivalue.toTuple();
                     auto& elements = tuple_ptr->elements();
@@ -140,8 +156,10 @@ namespace hasty {
                     for_sequence<sizeof...(ReturnTt)>([this, &rets, &elements](auto i) {
                         auto& element = elements[i];
                         if (element.isTensor()) {
-                            auto& retpos = std::get<i>(rets);
-                            retpos = element.toTensor();
+                            using RT = std::remove_reference_t<typename ReturnTraits::template Nth<i>>;
+                            using RTF = typename RT::tensor_device_fp;
+
+                            tensor_factory<RTF, RT::size()>::assign(std::get<i>(rets), element.toTensor());
                         } else {
                             throw std::runtime_error("Return type inside tuple was not a Tensor");
                         }

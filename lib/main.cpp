@@ -23,13 +23,13 @@ void trace_test() {
 
     toeplitz.add_lines(
 std::format(R"ts(
-    shp = input.shape
-    spatial_shp = shp[1:]
+    #shp = input.shape
+    spatial_shp = input.shape #shp[1:]
     expanded_shp = [2*s for s in spatial_shp]
     transform_dims = [i+1 for i in range(len(spatial_shp))]
 
     ncoil = coilmap.shape[0]
-    nrun = {0} // ncoil
+    nrun = ncoil // {0}
     
     out = torch.zeros_like(input)
     for run in range(nrun):
@@ -41,7 +41,7 @@ std::format(R"ts(
         c = torch.fft_ifftn(c, None, transform_dims)
 
         for dim in range(len(spatial_shp)):
-            c = torch.slice(c, dim+1, shp[dim+1]-1, -1)
+            c = torch.slice(c, dim+1, spatial_shp[dim]-1, -1)
 
         c *= cmap.conj()
         out += torch.sum(c, 0)
@@ -71,11 +71,12 @@ std::format(R"ts(
     auto end = std::chrono::high_resolution_clock::now();
     std::cout << "Time Toep Kernel First Run: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms\n";
 
-    int runs = 50;
+    int runs = 500;
     start = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < runs; ++i) {
         output_data = toeplitz.run(input_data, coilmap_data, kernel_data);
     }
+    torch::cuda::synchronize();
     end = std::chrono::high_resolution_clock::now();
     std::cout << std::format("Time Toep Kernel {} runs: ", runs) << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms\n";
 

@@ -11,7 +11,7 @@ namespace hasty {
     export template<device_fp F, size_t R>
     class tensor;
 
-    export template<device_fp FPT, size_t RANK>
+    template<device_fp FPT, size_t RANK>
     class tensor_impl {
     public:
 
@@ -47,9 +47,32 @@ namespace hasty {
 
 
     export template<device_fp FPT, size_t RANK>
+    class tensor_factory;
+
+    export template<device_fp FPT, size_t RANK>
     class tensor {
     private:
         std::shared_ptr<tensor_impl<FPT,RANK>> _pimpl;
+        friend class tensor_factory<FPT, RANK>;
+
+
+
+        tensor(const std::array<int64_t, RANK>& input_shape, at::Tensor input) 
+            : _pimpl(std::make_shared<tensor_impl<FPT, RANK>>(input_shape, std::move(input)))
+        {}
+
+        tensor(span<RANK> input_shape, at::Tensor input)
+            : _pimpl(std::make_shared<tensor_impl<FPT, RANK>>(input_shape, std::move(input)))
+        {}
+
+        void assign(std::array<int64_t, RANK>& input_shape, at::Tensor input) {
+            _pimpl = std::make_shared<tensor_impl<FPT, RANK>>(input_shape, std::move(input));
+        }
+
+        void assign(span<RANK> input_shape, at::Tensor input) {
+            _pimpl = std::make_shared<tensor_impl<FPT, RANK>>(input_shape, std::move(input));
+        }
+
     public:
 
         using tensor_device_fp = FPT;
@@ -62,14 +85,6 @@ namespace hasty {
         const auto& get_tensor() const { return _pimpl->underlying_tensor; }
 
         tensor() = default;
-
-        tensor(const std::array<int64_t, RANK>& input_shape, at::Tensor input) 
-            : _pimpl(std::make_shared<tensor_impl<FPT, RANK>>(input_shape, std::move(input)))
-        {}
-
-        tensor(span<RANK> input_shape, at::Tensor input)
-            : _pimpl(std::make_shared<tensor_impl<FPT, RANK>>(input_shape, std::move(input)))
-        {}
 
         template<size_t R>
         requires less_than<R, RANK>
@@ -150,6 +165,7 @@ namespace hasty {
                 new_shape[i] = tensorview.size(i);
             });
 
+            //return tensor_factory<FPT, RANK>::make(new_shape, std::move(tensorview));
             return tensor<FPT, RANK>(new_shape, std::move(tensorview));
         }
 
@@ -170,7 +186,7 @@ namespace hasty {
                 new_shape[i] = tensorview.size(i);
             });
 
-            return tensor<FPT, RETRANK>(new_shape, std::move(tensorview));
+            return tensor_factory<FPT, RETRANK>::make(new_shape, std::move(tensorview));
         }
 
         template<index_type ...Idx>
@@ -190,7 +206,7 @@ namespace hasty {
                 new_shape[i] = tensorview.size(i);
             });
 
-            return tensor<FPT, RETRANK>(new_shape, std::move(tensorview));
+            return tensor_factory<FPT, RETRANK>::make(new_shape, std::move(tensorview));
         }
 
         template<size_t R>
@@ -391,6 +407,53 @@ namespace hasty {
 
     };
 
+    
+    export template<device_fp FPT, size_t RANK>
+    class tensor_factory {
+    public:
+
+        static tensor<FPT,RANK> make(const std::array<int64_t, RANK>& input_shape, at::Tensor input) {
+            return tensor<FPT,RANK>(input_shape, std::move(input));
+        }
+
+        static tensor<FPT,RANK> make(span<RANK> input_shape, at::Tensor input) {
+            return tensor<FPT,RANK>(input_shape, std::move(input));
+        }
+
+        static std::unique_ptr<tensor<FPT, RANK>> make_unique(const std::array<int64_t, RANK>& input_shape, at::Tensor input) {
+            return std::make_unique<tensor<FPT, RANK>>(input_shape, std::move(input));
+        }
+
+        static std::unique_ptr<tensor<FPT, RANK>> make_unique(span<RANK> input_shape, at::Tensor input) {
+            return std::make_unique<tensor<FPT, RANK>>(input_shape, std::move(input));
+        }
+
+        static void assign(tensor<FPT, RANK>& t, at::Tensor input) {
+            
+            if (RANK != input.ndimension())
+                throw std::runtime_error("tensor_factory::assign: input.ndimension() did not match RANK");
+
+            if (static_type_to_scalar_type<FPT>() != input.dtype().toScalarType())
+                throw std::runtime_error("tensor_factory::assign: input.dtype() did not match FPT");
+
+            if (input.device().is_cuda() && (device_type_func<FPT>() != device_type::CUDA)) {
+                throw std::runtime_error("tensor_factory::assign: input.device() was cuda but FPT was not CUDA");
+            } else if (input.device().is_cpu() && (device_type_func<FPT>() != device_type::CPU)) {
+                throw std::runtime_error("tensor_factory::assign: input.device() was cpu but FPT was not CPU");
+            }
+
+            std::array<int64_t, RANK> shape;
+
+            for_sequence<RANK>([&](auto i) {
+                shape[i] = input.size(i);
+            });
+
+            t.assign(shape, std::move(input));
+        }
+
+    };
+    
+    
     export template<typename T>
     concept is_tensor = requires(T t) {
         []<device_fp FPT, size_t RANK>(tensor<FPT,RANK>&){}(t);
@@ -410,15 +473,17 @@ namespace hasty {
     {
         at::TensorOptions opts = at::TensorOptions(static_type_to_scalar_type<FP>()).device(device_str);
 
+        using TF = tensor_factory<FP, RANK>;
+
         switch (make_opts) {
             case tensor_make_opts::EMPTY:
-                return tensor<FP,RANK>(shape, std::move(at::empty(shape.to_arr_ref(), opts)));
+                return TF::make(shape, std::move(at::empty(shape.to_arr_ref(), opts)));
             case tensor_make_opts::ONES:
-                return tensor<FP,RANK>(shape, std::move(at::ones(shape.to_arr_ref(), opts)));
+                return TF::make(shape, std::move(at::ones(shape.to_arr_ref(), opts)));
             case tensor_make_opts::ZEROS:
-                return tensor<FP,RANK>(shape, std::move(at::zeros(shape.to_arr_ref(), opts)));
+                return TF::make(shape, std::move(at::zeros(shape.to_arr_ref(), opts)));
             case tensor_make_opts::RAND_UNIFORM:
-                return tensor<FP,RANK>(shape, std::move(at::rand(shape.to_arr_ref(), opts)));
+                return TF::make(shape, std::move(at::rand(shape.to_arr_ref(), opts)));
             default:
                 throw std::runtime_error("Unknown tensor_make_opts option");
         }
