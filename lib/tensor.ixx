@@ -8,6 +8,23 @@ import util;
 
 namespace hasty {
 
+    typedef enum {
+        CPU = -1,
+        CUDA0 = 0,
+        CUDA1 = 1,
+        CUDA2 = 2,
+        CUDA3 = 3,
+        CUDA4 = 4,
+        CUDA5 = 5,
+        CUDA6 = 6,
+        CUDA7 = 7,
+        CUDA8 = 8,
+        CUDA9 = 9,
+        CUDA10 = 10,
+        CUDA11 = 11,
+        CUDA12 = 12,
+    } device_idx;
+
     export template<device_fp F, size_t R>
     class tensor;
 
@@ -25,6 +42,10 @@ namespace hasty {
 
         underlying_type<FPT>* mutable_data_ptr() { return static_cast<underlying_type<FPT>*>(underlying_tensor.data_ptr()); }
         const underlying_type<FPT>* const_data_ptr() const { return static_cast<underlying_type<FPT>*>(underlying_tensor.data_ptr()); }
+
+        device_idx get_device_idx() const {
+            return static_cast<device_idx>(underlying_tensor.device().index());
+        }
 
         std::array<int64_t, RANK> shape;
         at::Tensor underlying_tensor;
@@ -56,6 +77,9 @@ namespace hasty {
         friend class tensor_factory<FPT, RANK>;
 
 
+        device_idx get_device_idx() const {
+            return _pimpl->get_device_idx();
+        }
 
         tensor(const std::array<int64_t, RANK>& input_shape, at::Tensor input) 
             : _pimpl(std::make_shared<tensor_impl<FPT, RANK>>(input_shape, std::move(input)))
@@ -451,6 +475,31 @@ namespace hasty {
             t.assign(shape, std::move(input));
         }
 
+        static std::unique_ptr<tensor<swap_device_t<FPT>, RANK>> move(
+            std::unique_ptr<tensor<FPT, RANK>> t, device_idx idx, bool block=true) {
+
+            if (idx == device_idx::CPU) {
+                if (device_type_func<FPT>() == device_type::CPU) {
+                    return std::move(t);
+                }
+                else {
+                    auto newtensor = t->get_tensor().to(at::kCPU);
+                    t = nullptr;
+                    return std::make_unique<tensor<swap_device_t<FPT>, RANK>>(t->get_pimpl()->shape, std::move(newtensor));
+                }
+            }
+            else {
+                if (device_type_func<FPT>() == device_type::CUDA) {
+                    auto newtensor = t->get_tensor().to(at::kCUDA, idx);
+                    t = nullptr;
+                    return std::make_unique<tensor<swap_device_t<FPT>, RANK>>(t->get_pimpl()->shape, std::move(newtensor));
+                }
+                else {
+                    throw std::runtime_error("tensor_factory::move_to: unknown device");
+                }
+            }
+        }
+
     };
     
     
@@ -639,5 +688,70 @@ namespace hasty {
         );
         return tensor<F, R>(span<R>(newtensor.sizes()), std::move(newtensor));
     }
+
+
+
+
+    export template<device_fp FPT, size_t RANK>
+    class cache_tensor {
+    private:
+
+        struct tensor_holder_cuda {
+            std::unique_ptr<tensor<FPT, RANK>> tensor_cuda;
+            std::unique_ptr<tensor<cpu_t<FPT>, RANK>> tensor_cpu;
+        };
+
+        struct tensor_holder_cpu {
+            std::unique_ptr<tensor<FPT, RANK>> tensor_cpu;
+        };
+
+        std::conditional_t<decltype(cuda_fp<FPT>), 
+            tensor_holder_cuda, tensor_holder_cpu> _tensor_holder;
+
+        std::enable_if<cuda_fp<FPT>, std::unique_ptr<tensor<FPT, RANK>>>::type& get_cuda_ptr(device_idx idx) {
+            if (!_tensor_holder.tensor_cuda)
+                _tensor_holder.tensor_cuda = tensor_factory<FPT, RANK>::move(std::move(_tensor_holder.tensor_cpu), idx);
+            else if (_tensor_holder.tensor_cuda.get_device_idx() != idx) {
+                _tensor_holder.tensor_cuda = tensor_factory<FPT, RANK>::move(std::move(_tensor_holder.tensor_cuda), idx);
+            }
+            return _tensor_holder.tensor_cuda;
+        }
+
+        std::enable_if<cuda_fp<FPT>, std::unique_ptr<tensor<cpu_t<FPT>, RANK>>>::type& get_cpu() {
+            if (!_tensor_holder.tensor_cpu) {
+                
+                _tensor_holder.tensor_cpu = tensor_factory<cpu_t<FPT>, RANK>::move(std::move(_tensor_holder.tensor_cuda), device_idx::CPU);
+            }
+
+
+            return *_tensor_holder.tensor_cpu;
+        }
+
+        void cache_disk() {
+
+        }
+
+        void load_from_disk() {
+
+        }
+
+
+    public:
+        
+        std::enable_if<cuda_fp<FPT>, tensor<FPT, RANK>>::type& get_cuda(device_idx idx) {
+            return *get_cuda_ptr(idx);
+        }
+
+        std::enable_if<cuda_fp<FPT>, tensor<cpu_t<FPT>, RANK>>::type& get_cpu() {
+            return *_tensor_holder.tensor_cpu;
+        }
+
+        std::enable_if<cpu_fp<FPT>, tensor<FPT, RANK>>::type& get_cpu() {
+            return *_tensor_holder.tensor_cpu;
+        }
+
+
+    };
+
 
 }

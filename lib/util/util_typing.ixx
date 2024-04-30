@@ -47,7 +47,6 @@ namespace hasty {
             COMPLEX
         };
 
-        
         template<typename T, typename U>
         struct strong_typedef : public strong_typedef_base {
 
@@ -58,7 +57,6 @@ namespace hasty {
 
         template<is_strong_type T>
         using underlying_type = decltype(T::strong_value);
-        
 
         using cpu_f32 = strong_typedef<float, struct cpu_f32_>;
         using cpu_f64 = strong_typedef<double, struct cpu_f64_>;

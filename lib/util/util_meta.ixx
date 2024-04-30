@@ -43,7 +43,6 @@ namespace hasty {
         }
 
 
-
         template<typename... Args>
         struct TupleTraits {
             using Tuple = std::tuple<Args...>;

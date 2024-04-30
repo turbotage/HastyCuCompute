@@ -53,9 +53,7 @@ std::format(R"ts(
 )ts", 2));
 
     std::cout << toeplitz.str() << "\n";
-    
-    
-    
+
     toeplitz.compile();
 
     tensor<cuda_c64, 3> input_data = make_tensor<cuda_c64, 3>(span({256, 256, 256}), 

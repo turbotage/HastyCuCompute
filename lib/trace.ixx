@@ -50,8 +50,6 @@ namespace hasty {
         export template<is_tensor_prototype T>
         using tensor_prototype_conversion_t = std::invoke_result_t<tensor_prototype_conversion<T>, T>;
 
-
-
         export template<typename... U>
         struct trace_function;
 
@@ -142,7 +140,6 @@ namespace hasty {
 
                     auto retten = ret_ivalue.toTensor();
 
-
                     tensor_factory<RTF, RT::size()>::assign(std::get<0>(rets), ret_ivalue.toTensor());
 
                 } else if (ret_ivalue.isTuple()) {
@@ -184,10 +181,13 @@ namespace hasty {
                     funcname, std::forward<InputTt>(tts)...);
             }
 
+            template<is_tensor_prototype... InputTt>
+            static auto make_unique(const std::string& funcname, InputTt&&... tts) {
+                return std::make_unique<trace_function<std::tuple<ReturnTt...>, std::tuple<InputTt...>>>(
+                    funcname, std::forward<InputTt>(tts)...);
+            }
+
         };
-
-
-
 
 
         /*
