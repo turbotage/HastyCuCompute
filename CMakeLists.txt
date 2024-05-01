@@ -5,6 +5,7 @@ project("HastyCuCompute" VERSION 0.1)
 enable_language(CUDA)
 
 include(cmake/CPM.cmake)
+include(FetchContent)
 
 #set(CMAKE_CXX_STANDARD 23)
 #set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -36,6 +37,18 @@ target_sources(HastyCuCompute
             "lib/nufft.ixx"
             "lib/trace.ixx"
 )
+
+
+FetchContent_Declare(
+  glaze
+  GIT_REPOSITORY https://github.com/stephenberry/glaze.git
+  GIT_TAG main
+  GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(glaze)
+target_link_libraries(HastyCuCompute PRIVATE glaze::glaze)
+
+
 
 set(CMAKE_VERBOSE_MAKEFILE ON)
 

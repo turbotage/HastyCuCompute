@@ -119,11 +119,13 @@ namespace hasty {
             }
         }
 
+        
+
         template<cuda_fp F>
-        using cpu_t = decltype(swap_device_type_func<F>());
+        using to_cpu_t = decltype(swap_device_type_func<F>());
 
         template<cpu_fp F>
-        using cuda_t = decltype(swap_device_type_func<F>());
+        using to_cuda_t = decltype(swap_device_type_func<F>());
 
         template<device_fp F>
         using swap_device_t = decltype(swap_device_type_func<F>());

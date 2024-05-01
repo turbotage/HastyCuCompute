@@ -32,7 +32,7 @@ namespace hasty {
     struct NormalOffResonance {
 
         template<device_fp FPT, size_t DIM>
-        NormalOffResonance(trajectory<FPT, DIM>& traj, const tensor<FPT, 1>& freqs)
+        NormalOffResonance(trajectory<FPT, DIM>& traj)
             : _traj(traj)
         {
 

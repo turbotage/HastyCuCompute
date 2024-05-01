@@ -689,9 +689,6 @@ namespace hasty {
         return tensor<F, R>(span<R>(newtensor.sizes()), std::move(newtensor));
     }
 
-
-
-
     export template<device_fp FPT, size_t RANK>
     class cache_tensor {
     private:
@@ -707,6 +704,10 @@ namespace hasty {
 
         std::conditional_t<decltype(cuda_fp<FPT>), 
             tensor_holder_cuda, tensor_holder_cpu> _tensor_holder;
+
+        size_t hashidx;
+        static std::string cache_dir;
+
 
         std::enable_if<cuda_fp<FPT>, std::unique_ptr<tensor<FPT, RANK>>>::type& get_cuda_ptr(device_idx idx) {
             if (!_tensor_holder.tensor_cuda)
@@ -728,7 +729,7 @@ namespace hasty {
         }
 
         void cache_disk() {
-
+            
         }
 
         void load_from_disk() {
@@ -742,6 +743,7 @@ namespace hasty {
             return *get_cuda_ptr(idx);
         }
 
+        
         std::enable_if<cuda_fp<FPT>, tensor<cpu_t<FPT>, RANK>>::type& get_cpu() {
             return *_tensor_holder.tensor_cpu;
         }
@@ -749,7 +751,6 @@ namespace hasty {
         std::enable_if<cpu_fp<FPT>, tensor<FPT, RANK>>::type& get_cpu() {
             return *_tensor_holder.tensor_cpu;
         }
-
 
     };
 

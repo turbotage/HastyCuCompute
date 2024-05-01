@@ -1,7 +1,7 @@
 
 #include <iostream>
 #include "pch.hpp"
-
+#include <fstream>
 
 import util;
 import nufft;
@@ -253,9 +253,28 @@ void compile_test() {
     std::cout << "Time: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms\n";
 }
 
+void iotest() {
+
+    std::vector<std::complex<float>> data(640*640*640);
+
+    std::ofstream outfile("/home/turbotage/Documents/io.mypt", std::ios::out | std::ios::binary);
+
+    std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
+    outfile.write(reinterpret_cast<char*>(data.data()), data.size()*sizeof(std::complex<float>));
+    outfile.close();
+    std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
+
+    auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    std::cout << "Time: " << millis << "ms\n";
+    std::cout << "Write Speed: " << (640*640*640*sizeof(std::complex<float>) / (1000*1000)) / ((double)millis / 1000.0) << "MB/s\n";
+
+}
+
 int main() {
 
-    trace_test();
+    iotest();
+
+    //trace_test();
 
     //compile_test();
 
