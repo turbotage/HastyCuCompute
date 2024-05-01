@@ -31,22 +31,6 @@ namespace hasty {
         using c64 = std::complex<float>;
         using c128 = std::complex<double>;
 
-
-        enum struct device_type {
-            CPU,
-            CUDA
-        };
-
-        enum struct precission {
-            F32,
-            F64
-        };
-
-        enum struct complexity {
-            REAL,
-            COMPLEX
-        };
-
         template<typename T, typename U>
         struct strong_typedef : public strong_typedef_base {
 
@@ -55,248 +39,75 @@ namespace hasty {
             T strong_value;
         };
 
-        template<is_strong_type T>
-        using underlying_type = decltype(T::strong_value);
+        template<typename T>
+        struct empty_strong_typedef : public strong_typedef_base {
+            empty_strong_typedef() = default;
+        };
 
-        using cpu_f32 = strong_typedef<float, struct cpu_f32_>;
-        using cpu_f64 = strong_typedef<double, struct cpu_f64_>;
-        using cpu_c64 = strong_typedef<std::complex<float>, struct cpu_c64_>;
-        using cpu_c128 = strong_typedef<std::complex<double>, struct cpu_c128_>;
+
+        using cuda_t = empty_strong_typedef<struct cuda_>;
+        using cpu_t = empty_strong_typedef<struct cpu_>;
 
         template<typename T>
-        concept cpu_real_fp = std::is_same_v<cpu_f32, T> || std::is_same_v<cpu_f64, T>;
+        concept is_device = std::is_same_v<T, cuda_t> || std::is_same_v<T, cpu_t>;
 
-        template<typename T>
-        concept cpu_complex_fp = std::is_same_v<cpu_c64, T> || std::is_same_v<cpu_c128, T>;
-
-        template<typename T>
-        concept cpu_fp = requires {cpu_complex_fp<T> || cpu_real_fp<T>;};
-
+        using f32_t     = strong_typedef<f32, struct f32_>;
+        using f64_t     = strong_typedef<f64, struct f64_>;
+        using c64_t     = strong_typedef<c64, struct c64_>;
+        using c128_t    = strong_typedef<c128, struct c128_>;
+        using i16_t     = strong_typedef<i16, struct i16_>;
+        using i32_t     = strong_typedef<i32, struct i32_>;
+        using i64_t     = strong_typedef<i64, struct i64_>;
+        using b8_t      = strong_typedef<bool, struct b8_>;
         
-        using cuda_f32 = strong_typedef<float, struct cuda_f32_>;
-        using cuda_f64 = strong_typedef<double, struct cuda_f64_>;
-        using cuda_c64 = strong_typedef<cuFloatComplex, struct cuda_c64_>;
-        using cuda_c128 = strong_typedef<cuDoubleComplex, struct cuda_c128_>;
+        template<typename T>
+        concept is_tensor_type =    std::is_same_v<T, f32_t> || std::is_same_v<T, f64_t> || 
+                                    std::is_same_v<T, c64_t> || std::is_same_v<T, c128_t> || 
+                                    std::is_same_v<T, i32_t> || std::is_same_v<T, i64_t> ||
+                                    std::is_same_v<T, i16_t> || std::is_same_v<T, b8_t>;
 
         template<typename T>
-        concept cuda_real_fp = std::is_same_v<cuda_f32, T> || std::is_same_v<cuda_f64, T>;
+        concept is_fp_tensor_type = std::is_same_v<T, f32_t> || std::is_same_v<T, f64_t> || 
+                                    std::is_same_v<T, c64_t> || std::is_same_v<T, c128_t>;
 
         template<typename T>
-        concept cuda_complex_fp = std::is_same_v<cuda_c64, T> || std::is_same_v<cuda_c128, T>;
+        concept is_fp32_tensor_type = std::is_same_v<T, f32_t> || std::is_same_v<T, c64_t>;
 
         template<typename T>
-        concept cuda_fp = requires {cuda_complex_fp<T> || cuda_real_fp<T>;};
-
-
+        concept is_fp64_tensor_type = std::is_same_v<T, f64_t> || std::is_same_v<T, c128_t>;
 
         template<typename T>
-        concept device_real_fp = requires { requires cpu_real_fp<T> || cuda_real_fp<T>;};
+        concept is_int_tensor_type =    std::is_same_v<T, i32_t> || std::is_same_v<T, i64_t> || 
+                                        std::is_same_v<T, i16_t>;
 
         template<typename T>
-        concept device_complex_fp = requires { cuda_complex_fp<T> || cpu_complex_fp<T>;};
+        concept is_bool_tensor_type = std::is_same_v<T, b8_t>;
 
-        template<typename T>
-        concept device_fp = requires { cuda_fp<T> || cpu_fp<T>; };
-
-        template<device_fp F>
-        constexpr auto swap_device_type_func() {
-            if constexpr (std::is_same_v<F, cpu_f32>) {
-                return cuda_f32();
-            } else if constexpr(std::is_same_v<F,cpu_f64>) {
-                return cuda_f64();
-            } else if constexpr(std::is_same_v<F,cpu_c64>) {
-                return cuda_c64();
-            } else if constexpr(std::is_same_v<F,cpu_c128>) {
-                return cuda_c128();
-            } else if constexpr(std::is_same_v<F,cuda_f32>) {
-                return cpu_f32();
-            } else if constexpr(std::is_same_v<F,cuda_f64>) {
-                return cpu_f64();
-            } else if constexpr(std::is_same_v<F,cuda_c64>) {
-                return cpu_c64();
-            } else if constexpr(std::is_same_v<F, cuda_c128>) {
-                return cpu_c128();
-            }
-        }
-
-        
-
-        template<cuda_fp F>
-        using to_cpu_t = decltype(swap_device_type_func<F>());
-
-        template<cpu_fp F>
-        using to_cuda_t = decltype(swap_device_type_func<F>());
-
-        template<device_fp F>
-        using swap_device_t = decltype(swap_device_type_func<F>());
-
-
-        template<device_fp F>
-        constexpr auto swap_complex_real_type_func() {
-            if constexpr (std::is_same_v<F, cpu_f32>) {
-                return cpu_c64();
-            } else if constexpr(std::is_same_v<F,cpu_f64>) {
-                return cpu_c128();
-            } else if constexpr(std::is_same_v<F,cpu_c64>) {
-                return cpu_f32();
-            } else if constexpr(std::is_same_v<F,cpu_c128>) {
-                return cpu_f64();
-            } else if constexpr(std::is_same_v<F,cuda_f32>) {
-                return cuda_c64();
-            } else if constexpr(std::is_same_v<F,cuda_f64>) {
-                return cuda_c128();
-            } else if constexpr(std::is_same_v<F,cuda_c64>) {
-                return cuda_f32();
-            } else if constexpr(std::is_same_v<F, cuda_c128>) {
-                return cpu_f64();
-            }
-        }
-
-        template<device_real_fp F>
-        using complex_t = decltype(swap_complex_real_type_func<F>());
-
-        template<device_complex_fp F>
-        using real_t = decltype(swap_complex_real_type_func<F>());
-
-        template<device_fp F>
-        constexpr bool is_cuda() 
-        { 
-            return 
-                std::is_same_v<F, cuda_f32> || 
-                std::is_same_v<F, cuda_f64> || 
-                std::is_same_v<F, cuda_c64> ||
-                std::is_same_v<F, cuda_c128>;
-        }
-
-        template<device_fp F>
-        constexpr bool is_cpu()
-        {
-            return 
-                std::is_same_v<F, cpu_f32> || 
-                std::is_same_v<F, cpu_f64> || 
-                std::is_same_v<F, cpu_c64> ||
-                std::is_same_v<F, cpu_c128>;
-        }
-
-        template<device_fp F>
-        constexpr bool is_real()
-        {
-            return
-                std::is_same_v<F, cpu_f32> ||
-                std::is_same_v<F, cpu_f64> ||
-                std::is_same_v<F, cuda_f32> ||
-                std::is_same_v<F, cuda_f64>;
-        }
-
-        template<device_fp F>
-        constexpr bool is_complex()
-        {
-            return
-                std::is_same_v<F, cpu_c64> ||
-                std::is_same_v<F, cpu_c128> ||
-                std::is_same_v<F, cuda_c64> ||
-                std::is_same_v<F, cuda_c128>;
-        }
-
-        template<device_fp F>
-        constexpr bool is_32bit_precission()
-        {
-            return
-                std::is_same_v<F, cpu_f32> ||
-                std::is_same_v<F, cuda_f32> ||
-                std::is_same_v<F, cpu_c64> ||
-                std::is_same_v<F, cuda_c64>;
-        }
-
-        template<device_fp F>
-        constexpr bool is_64bit_precission()
-        {
-            return
-                std::is_same_v<F, cpu_f64> ||
-                std::is_same_v<F, cuda_f64> ||
-                std::is_same_v<F, cpu_c128> ||
-                std::is_same_v<F, cuda_c128>;
-        }
-
-        template<device_fp FP>
-        constexpr at::ScalarType static_type_to_scalar_type()
-        {
-            if constexpr(std::is_same_v<FP, cpu_f32> || std::is_same_v<FP, cuda_f32>) {
+        template<is_tensor_type TT>
+        constexpr at::ScalarType scalar_type_func() {
+            if constexpr(std::is_same_v<TT, f32_t>) {
                 return at::ScalarType::Float;
-            }
-            else if constexpr(std::is_same_v<FP, cpu_f64> || std::is_same_v<FP, cuda_f64>) {
+            } else if constexpr(std::is_same_v<TT, f64_t>) {
                 return at::ScalarType::Double;
-            }
-            else if constexpr(std::is_same_v<FP, cpu_c64> || std::is_same_v<FP, cuda_c64>) {
+            } else if constexpr(std::is_same_v<TT, c64_t>) {
                 return at::ScalarType::ComplexFloat;
-            }
-            else if constexpr(std::is_same_v<FP, cpu_c128> || std::is_same_v<FP, cuda_c128>) {
+            } else if constexpr(std::is_same_v<TT, c128_t>) {
                 return at::ScalarType::ComplexDouble;
+            } else if constexpr(std::is_same_v<TT, i32_t>) {
+                return at::ScalarType::Int;
+            } else if constexpr(std::is_same_v<TT, i64_t>) {
+                return at::ScalarType::Long;
+            } else if constexpr(std::is_same_v<TT, i16_t>) {
+                return at::ScalarType::Short;
+            } else if constexpr(std::is_same_v<TT, b8_t>) {
+                return at::ScalarType::Bool;
             }
         }
 
-        template<device_fp FP>
-        constexpr device_type device_type_func()
-        {
-            if constexpr(is_cuda<FP>()) {
-                return device_type::CUDA;
-            } else if constexpr(is_cpu<FP>()) {
-                return device_type::CPU;
-            } else {
-                static_assert(false, "Invalid device type");
-            }
-        }
 
-        template<device_fp F1, device_fp F2>
-        constexpr auto nonloss_type_func() {
-            auto types = []<device_fp FP1, device_fp FP2>() -> bool {
-                return std::is_same_v<FP1, F1> && std::is_same_v<FP2, F2> ||
-                    std::is_same_v<FP1, F2> && std::is_same_v<FP2, F1>;
-            };
 
-            static_assert(device_type_func<F1>() == device_type_func<F2>(), "Types must have same device type");
-
-            if constexpr(std::is_same_v<F1,F2>) {
-                return F1();
-            } else if constexpr(types.template operator()<cpu_f32, cpu_f64>()) {
-                return cpu_f64();
-            } else if constexpr(types.template operator()<cpu_f32, cpu_c128>()) {
-                return cpu_c128();
-            } else if constexpr(types.template operator()<cpu_f64, cpu_c64>()) {
-                return cpu_c128();
-            } else if constexpr(types.template operator()<cpu_f64, cpu_c128>()) {
-                return cpu_c128();
-            } else if constexpr(types.template operator()<cpu_c64, cpu_c128>()) {
-                return cpu_c128();
-            } else if constexpr(types.template operator()<cuda_f32, cuda_f64>()) {
-                return cuda_f64();
-            } else if constexpr(types.template operator()<cuda_f32, cuda_c64>()) {
-                return cuda_c64();
-            } else if constexpr(types.template operator()<cuda_f32, cuda_c128>()) {
-                return cuda_c128();
-            } else if constexpr(types.template operator()<cuda_f64, cuda_c64>()) {
-                return cuda_c128();
-            } else if constexpr(types.template operator()<cuda_f64, cuda_c128>()) {
-                return cuda_c128();
-            } else if constexpr(types.template operator()<cuda_c64, cuda_c128>()) {
-                return cuda_c128();
-            } else {
-                static_assert(false, "Invalid types");
-            }
-        }
-
-        template<device_fp F1, device_fp F2>
-        using nonloss_type_t = decltype(nonloss_type_func<F1, F2>());
-
-        static_assert(alignof(cuda_f32) == alignof(float));
-        static_assert(sizeof(cuda_f32) == sizeof(float));
-        static_assert(alignof(cuda_f64) == alignof(double));
-        static_assert(sizeof(cuda_f64) == sizeof(double)); 
-        static_assert(alignof(cuda_c64) == alignof(cuFloatComplex));
-        static_assert(sizeof(cuda_c64) == sizeof(cuFloatComplex));
-        static_assert(alignof(cuda_c128) == alignof(cuDoubleComplex));
-        static_assert(sizeof(cuda_c128) == sizeof(cuDoubleComplex));
-
+        template<is_strong_type T>
+        using base_t = decltype(T::strong_value);
 
         template<typename T>
         using optrefw = std::optional<std::reference_wrapper<T>>;

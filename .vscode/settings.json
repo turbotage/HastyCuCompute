@@ -102,6 +102,7 @@
         "__functional_03": "cpp",
         "__string": "cpp",
         "coroutine": "cpp",
-        "expected": "cpp"
+        "expected": "cpp",
+        "stdfloat": "cpp"
     }
 }
