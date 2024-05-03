@@ -17,9 +17,9 @@ namespace hasty {
     template<size_t N>
     concept is_dim3 = N > 0 && N < 4;
 
-    template<device_real_fp FPT, size_t DIM>
+    template<is_device D, is_fp_real_tensor_type TT, size_t DIM>
     requires is_dim3<DIM>
-    void verify_coords(const std::array<tensor<FPT,1>,DIM>& coords)
+    void verify_coords(const std::array<tensor<D,TT,1>,DIM>& coords)
     {
         if constexpr(DIM == 2) {
             if (coords[0].template shape<0>() != coords[1].template shape<0>()) {
@@ -68,17 +68,17 @@ namespace hasty {
 
     // NUFFT OPTS
 
-    export template<typename FPT, size_t DIM, typename... Variadic>
-    requires device_real_fp<FPT> && is_dim3<DIM>
+    export template<is_device D, is_fp_real_tensor_type TT, size_t DIM, typename... Variadic>
+    requires is_dim3<DIM>
     struct nufft_opts {};
 
-    export template<typename FPT, size_t DIM> 
-    requires cuda_real_fp<FPT> && is_dim3<DIM>
-    struct nufft_opts<FPT,DIM> {
+    export template<is_fp_real_tensor_type TT, size_t DIM> 
+    requires is_dim3<DIM>
+    struct nufft_opts<cuda_t,TT,DIM> {
 
         std::array<int64_t, DIM> nmodes;
         int32_t ntransf;
-        underlying_type<FPT> tol;
+        base_t<TT> tol;
 
         nufft_sign sign;
         nufft_upsamp_cuda upsamp;
@@ -93,21 +93,21 @@ namespace hasty {
 
     // NUFFT PLAN
 
-    export template<typename FPT, size_t DIM, nufft_type NT, typename... Variadic>
-    requires device_real_fp<FPT> && is_dim3<DIM>
+    export template<is_device D, is_fp_real_tensor_type TT, size_t DIM, nufft_type NT, typename... Variadic>
+    requires is_dim3<DIM>
     struct nufft_plan {};
 
-    export template<typename FPT, size_t DIM, nufft_type NT>
-    requires cuda_real_fp<FPT> && is_dim3<DIM>
-    struct nufft_plan<FPT,DIM,NT> {
+    export template<is_fp_real_tensor_type TT, size_t DIM, nufft_type NT>
+    requires is_dim3<DIM>
+    struct nufft_plan<cuda_t,TT,DIM,NT> {
 
-        static std::unique_ptr<nufft_plan<FPT,DIM,NT>> make(const nufft_opts<FPT,DIM>& opts)
+        static uptr<nufft_plan<cuda_t,TT,DIM,NT>> make(const nufft_opts<cuda_t,TT,DIM>& opts)
         {
-            struct starter : public nufft_plan<FPT, DIM, NT> {
-                starter() : nufft_plan<FPT, DIM, NT>() {}
+            struct starter : public nufft_plan<cuda_t,TT,DIM,NT> {
+                starter() : nufft_plan<cuda_t,TT,DIM,NT>() {}
             };
 
-            std::unique_ptr<nufft_plan<FPT, DIM, NT>> ret = std::make_unique<starter>();
+            std::unique_ptr<nufft_plan<cuda_t,TT,DIM,NT>> ret = std::make_unique<starter>();
 
             ret->_opts = opts;
 
@@ -153,7 +153,7 @@ namespace hasty {
             }
 
             int result;
-            if constexpr(std::is_same_v<FPT, cuda_f32>) {
+            if constexpr(std::is_same_v<TT, f32_t>) {
                 result = cufinufftf_makeplan(static_cast<int>(NT), DIM, opts.nmodes.data(), opts.get_sign(),
                         opts.ntransf, opts.tol, &ret->_finufft_plan, &ret->_finufft_opts);
             } else {
@@ -169,7 +169,7 @@ namespace hasty {
         }
 
 
-        void setpts(const std::array<tensor<FPT, 1>,DIM>& coords)
+        void setpts(const std::array<tensor<cuda_t,TT,1>,DIM>& coords)
         {
             int32_t M = coords[0].template shape<0>();
             verify_coords(coords);
@@ -177,7 +177,7 @@ namespace hasty {
             using namespace std::placeholders;
             constexpr auto setptsfunc = std::bind([]()
             { 
-                if constexpr(std::is_same_v<FPT,cuda_f32>) {
+                if constexpr(std::is_same_v<TT,f32_t>) {
                     return cufinufftf_setpts;
                 } else {
                     return cufinufft_setpts;
@@ -201,17 +201,23 @@ namespace hasty {
         
         template<nufft_type U = NT>
         requires (U == nufft_type::TYPE_1)
-        void execute(const tensor<complex_t<FPT>,2>& input, tensor<complex_t<FPT>, DIM+1>& output) const
+        void execute(const tensor<cuda_t, complex_t<TT>,2>& input, tensor<cuda_t, complex_t<TT>, DIM+1>& output) const
         {
             int result;
 
             if (input.template shape<0>() != _opts.ntransf)
                 throw std::runtime_error("input first dimension must match ntransf");
 
-            if constexpr(std::is_same_v<FPT, cuda_f32>) {
-                result = cufinufftf_execute(_finufft_plan, input.unconsted_data_ptr(), output.mutable_data_ptr());
+            if constexpr(std::is_same_v<TT, f32_t>) {
+                result = cufinufftf_execute(_finufft_plan, 
+                            reinterpret_cast<cuFloatComplex*>(input.unconsted_data_ptr()), 
+                            reinterpret_cast<cuFloatComplex*>(output.mutable_data_ptr())
+                        );
             } else {
-                result = cufinufft_execute(_finufft_plan, input.unconsted_data_ptr(), output.mutable_data_ptr());
+                result = cufinufft_execute(_finufft_plan, 
+                            reinterpret_cast<cuDoubleComplex*>(input.unconsted_data_ptr()), 
+                            reinterpret_cast<cuDoubleComplex*>(output.mutable_data_ptr())
+                        );
             }
 
             if (result)
@@ -220,14 +226,20 @@ namespace hasty {
 
         template<nufft_type U = NT>
         requires (U == nufft_type::TYPE_2)
-        void execute(const tensor<complex_t<FPT>, DIM+1>& input, tensor<complex_t<FPT>, 2>& output) const
+        void execute(const tensor<cuda_t, complex_t<TT>, DIM+1>& input, tensor<cuda_t, complex_t<TT>, 2>& output) const
         {
             int result;
 
-            if constexpr(std::is_same_v<FPT, cuda_f32>) {
-                result = cufinufftf_execute(_finufft_plan, output.mutable_data_ptr(), input.unconsted_data_ptr());
+            if constexpr(std::is_same_v<TT, f32_t>) {
+                result = cufinufftf_execute(_finufft_plan, 
+                            reinterpret_cast<cuFloatComplex*>(output.mutable_data_ptr()), 
+                            reinterpret_cast<cuFloatComplex*>(input.unconsted_data_ptr())
+                        );
             } else {
-                result = cufinufft_execute(_finufft_plan, output.mutable_data_ptr(), input.unconsted_data_ptr());
+                result = cufinufft_execute(_finufft_plan, 
+                            reinterpret_cast<cuDoubleComplex*>(output.mutable_data_ptr()), 
+                            reinterpret_cast<cuDoubleComplex*>(input.unconsted_data_ptr())
+                        );
             }
 
             if (result)
@@ -245,26 +257,26 @@ namespace hasty {
         auto& pa_coords() { return _coords; }
         const auto& pa_coords() const { return _coords; }
 
-        template<size_t D>
-        requires less_than<D,DIM>
-        auto& pa_coords() { return _coords[D]; }
+        template<size_t R>
+        requires less_than<R,DIM>
+        auto& pa_coords() { return _coords[R]; }
 
-        template<size_t D>
-        requires less_than<D,DIM>
-        const auto& pa_coords() const { return _coords[D]; }
+        template<size_t R>
+        requires less_than<R,DIM>
+        const auto& pa_coords() const { return _coords[R]; }
 
-        nufft_opts<FPT,DIM>& pa_opts() { return _opts; }
-        const nufft_opts<FPT,DIM>& pa_opts() const { return _opts; }
+        nufft_opts<cuda_t,TT,DIM>& pa_opts() { return _opts; }
+        const nufft_opts<cuda_t,TT,DIM>& pa_opts() const { return _opts; }
 
         const std::array<int64_t, DIM>& nmodes() const { return _opts.nmodes; }
         int32_t ntransf() const { return _opts.ntransf; }
-        underlying_type<FPT> tol() const { return _opts.tol;}
+        base_t<TT> tol() const { return _opts.tol;}
 
 
         void free() {
             if (_finufft_plan != nullptr) {
                 int result;
-                if constexpr(std::is_same_v<FPT, cuda_f32>) {
+                if constexpr(std::is_same_v<TT, f32_t>) {
                     result = cufinufftf_destroy(_finufft_plan);
                 } else {
                     result = cufinufft_destroy(_finufft_plan);
@@ -286,20 +298,20 @@ namespace hasty {
         }
 
     private:
-        nufft_opts<FPT,DIM> _opts;
-        std::array<tensor<FPT,1>, DIM> _coords;
+        nufft_opts<cuda_t,TT,DIM> _opts;
+        std::array<tensor<cuda_t,TT,1>, DIM> _coords;
 
         cufinufft_opts _finufft_opts;
-        std::conditional_t<std::is_same_v<FPT,cuda_f32>, 
+        std::conditional_t<std::is_same_v<TT,f32_t>, 
             cufinufftf_plan, cufinufft_plan> _finufft_plan;
     };
 
     // TOEPLITZ KERNEL
-    
-    export template<cuda_real_fp FPT, size_t DIM>
+
+    export template<is_fp_complex_tensor_type TT, size_t DIM>
     requires is_dim3<DIM>
-    void toeplitz_kernel(const std::array<tensor<FPT, 1>,DIM>& coords, tensor<complex_t<FPT>, DIM>& kernel,
-        tensor<complex_t<FPT>, 2>& nudata)
+    void toeplitz_kernel(const std::array<tensor<cuda_t,real_t<TT>,1>,DIM>& coords, tensor<cuda_t,TT,DIM>& kernel,
+        tensor<cuda_t,TT,2>& nudata)
     {
         int M = coords[0].template shape<0>();
         verify_coords(coords);
@@ -320,16 +332,16 @@ namespace hasty {
             nvox *= (dimsize / 2);
         });
 
-        using FLTYPE = std::conditional_t<is_32bit_precission<FPT>(), float, double>;
+        using FLTYPE = std::conditional_t<is_fp32_tensor_type<TT>, float, double>;
         FLTYPE normfactor = double(1.0) / double(nvox);
 
-        auto reduced_kernel = make_tensor<complex_t<FPT>, DIM+1>(span(one_nmodes), kernel.devicestr());
+        auto reduced_kernel = make_tensor<cuda_t,TT,DIM+1>(span(one_nmodes), kernel.devicestr());
 
         {
-            auto plan = nufft_plan<FPT,DIM,nufft_type::TYPE_1>::make(nufft_opts<FPT,DIM>{
+            auto plan = nufft_plan<cuda_t,real_t<TT>,DIM,nufft_type::TYPE_1>::make(nufft_opts<cuda_t,real_t<TT>,DIM>{
                 .nmodes = nmodes,
                 .ntransf = 1,
-                .tol = std::is_same_v<FPT,cuda_f32> ? 1e-5 : 1e-12,
+                .tol = std::is_same_v<TT,f32_t> ? 1e-5 : 1e-12,
                 .sign = nufft_sign::DEFAULT_TYPE_1,
                 .upsamp = nufft_upsamp_cuda::DEFAULT,
                 .method = nufft_method_cuda::DEFAULT
@@ -353,9 +365,9 @@ namespace hasty {
         kernel *= normfactor;
     }
 
-    export template<cuda_fp FPT, size_t DIM>
+    export template<is_fp_complex_tensor_type TT, size_t DIM>
     requires is_dim3<DIM>
-    void toeplitz_multiply(tensor<FPT,DIM+1>& inout, const tensor<FPT,DIM>& kernel)
+    void toeplitz_multiply(tensor<cuda_t,TT,DIM+1>& inout, const tensor<cuda_t,TT,DIM>& kernel)
     {
         int64_t batchsize = inout.template shape<0>();
 

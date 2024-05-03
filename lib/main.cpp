@@ -13,11 +13,11 @@ void trace_test() {
     using namespace hasty;
     using namespace hasty::trace;
 
-    tensor_prototype<cuda_c64, 3> input("input");
-    tensor_prototype<cuda_c64, 4> coilmap("coilmap");
-    tensor_prototype<cuda_c64, 3> kernel("kernel");
+    tensor_prototype<cuda_t,c64_t, 3> input("input");
+    tensor_prototype<cuda_t,c64_t, 4> coilmap("coilmap");
+    tensor_prototype<cuda_t,c64_t, 3> kernel("kernel");
 
-    tensor_prototype<cuda_c64, 3> output("output");
+    tensor_prototype<cuda_t,c64_t, 3> output("output");
 
     auto toeplitz = trace_function_factory<decltype(output)>::make("toeplitz", input, coilmap, kernel);
 
@@ -56,16 +56,16 @@ std::format(R"ts(
 
     toeplitz.compile();
 
-    tensor<cuda_c64, 3> input_data = make_tensor<cuda_c64, 3>(span({256, 256, 256}), 
+    tensor<cuda_t,c64_t,3> input_data = make_tensor<cuda_t,c64_t,3>(span({256, 256, 256}), 
                                         "cuda:0", tensor_make_opts::RAND_UNIFORM);
 
-    tensor<cuda_c64, 4> coilmap_data = make_tensor<cuda_c64, 4>(span({8, 256, 256, 256}), "cuda:0", tensor_make_opts::RAND_UNIFORM);
+    tensor<cuda_t,c64_t,4> coilmap_data = make_tensor<cuda_t,c64_t,4>(span({8, 256, 256, 256}), "cuda:0", tensor_make_opts::RAND_UNIFORM);
 
-    tensor<cuda_c64, 3> kernel_data = make_tensor<cuda_c64, 3>(span({512, 512, 512}), "cuda:0", tensor_make_opts::RAND_UNIFORM);
+    tensor<cuda_t,c64_t,3> kernel_data = make_tensor<cuda_t,c64_t,3>(span({512, 512, 512}), "cuda:0", tensor_make_opts::RAND_UNIFORM);
 
 
     auto start = std::chrono::high_resolution_clock::now();
-    std::tuple<tensor<cuda_c64, 3>> output_data = toeplitz.run(input_data, coilmap_data, kernel_data);
+    std::tuple<tensor<cuda_t,c64_t,3>> output_data = toeplitz.run(input_data, coilmap_data, kernel_data);
     auto end = std::chrono::high_resolution_clock::now();
     std::cout << "Time Toep Kernel First Run: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms\n";
 
@@ -90,14 +90,14 @@ void toeplitz_test() {
     int64_t nz = 256;
     int64_t nupts = 400000;
 
-    auto kernel = make_tensor<cuda_c64, 3>(
+    auto kernel = make_tensor<cuda_t,c64_t,3>(
         span({2*nx,2*ny,2*nz}), 
         "cuda:0", tensor_make_opts::ZEROS);
 
-    auto coords = std::array<tensor<cuda_f32, 1>, 3>{
-        make_tensor<cuda_f32, 1>({nupts}, "cuda:0", tensor_make_opts::RAND_UNIFORM),
-        make_tensor<cuda_f32, 1>({nupts}, "cuda:0", tensor_make_opts::RAND_UNIFORM),
-        make_tensor<cuda_f32, 1>({nupts}, "cuda:0", tensor_make_opts::RAND_UNIFORM)
+    auto coords = std::array<tensor<cuda_t,f32_t,1>, 3>{
+        make_tensor<cuda_t,f32_t,1>({nupts}, "cuda:0", tensor_make_opts::RAND_UNIFORM),
+        make_tensor<cuda_t,f32_t,1>({nupts}, "cuda:0", tensor_make_opts::RAND_UNIFORM),
+        make_tensor<cuda_t,f32_t,1>({nupts}, "cuda:0", tensor_make_opts::RAND_UNIFORM)
     };
     
     coords[0].mul_(2*3.141592f).add_(-3.141592f);
@@ -105,7 +105,7 @@ void toeplitz_test() {
     coords[2].mul_(2*3.141592f).add_(-3.141592f);
 
     {
-        auto nudata = make_tensor<cuda_c64, 2>(span<2>({1, nupts}), "cuda:0");
+        auto nudata = make_tensor<cuda_t,c64_t,2>(span<2>({1, nupts}), "cuda:0");
         nudata.fill_(1.0f);
 
         auto start = std::chrono::high_resolution_clock::now();
@@ -114,7 +114,7 @@ void toeplitz_test() {
         std::cout << "Time Toep Multiply: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms\n";
     }
     
-    auto multiply_data = make_tensor<cuda_c64, 4>(span<4>({ntransf, nx, ny, nz}), "cuda:0",
+    auto multiply_data = make_tensor<cuda_t,c64_t,4>(span<4>({ntransf, nx, ny, nz}), "cuda:0",
         tensor_make_opts::ONES);
     
     int runs = 50;
@@ -130,15 +130,15 @@ void toeplitz_test() {
 
     std::cout << "Time Toep Multiply: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms\n";
 
-    auto nudata = make_tensor<cuda_c64, 2>(span<2>({ntransf, nupts}), "cuda:0");
+    auto nudata = make_tensor<cuda_t,c64_t, 2>(span<2>({ntransf, nupts}), "cuda:0");
     float subnelem = (1.0 / std::sqrt((double)nx*ny*nz));
 
     start = std::chrono::high_resolution_clock::now();
 
     for (int i = 0; i < runs; ++i) {
         {
-            auto plan = nufft_plan<cuda_f32, 3, nufft_type::TYPE_2>::make(
-                nufft_opts<cuda_f32, 3>{
+            auto plan = nufft_plan<cuda_t,f32_t,3,nufft_type::TYPE_2>::make(
+                nufft_opts<cuda_t,f32_t,3>{
                     .nmodes = {nx, ny, nz},
                     .ntransf = static_cast<i32>(ntransf),
                     .tol = 1e-5,
@@ -152,8 +152,8 @@ void toeplitz_test() {
             nudata *= subnelem;
         }
         {
-            auto plan = nufft_plan<cuda_f32, 3, nufft_type::TYPE_1>::make(
-                nufft_opts<cuda_f32, 3>{
+            auto plan = nufft_plan<cuda_t,f32_t,3,nufft_type::TYPE_1>::make(
+                nufft_opts<cuda_t,f32_t,3>{
                     .nmodes = {nx, ny, nz},
                     .ntransf = static_cast<i32>(ntransf),
                     .tol = 1e-5,

@@ -10,11 +10,12 @@ export import tensor;
 namespace hasty {
     namespace trace {
 
-        export template<device_fp FPT, size_t RANK>
+        export template<is_device D, is_tensor_type TT, size_t RANK>
         class tensor_prototype {
         public:
 
-            using tensor_device_fp = FPT;
+            using device_type_t = D;
+            using tensor_type_t = TT;
             static constexpr std::integral_constant<size_t, RANK> size = {};
 
             tensor_prototype(std::string name)
@@ -31,7 +32,7 @@ namespace hasty {
 
         export template<typename T>
         concept is_tensor_prototype = requires(T t) {
-            []<device_fp FPT, size_t RANK>(tensor_prototype<FPT, RANK>&){}(t);
+            []<is_device D, is_tensor_type TT, size_t RANK>(tensor_prototype<D,TT,RANK>&){}(t);
         };
 
         template<typename T>
@@ -39,12 +40,14 @@ namespace hasty {
 
         template<is_tensor_prototype T>
         struct tensor_prototype_conversion<T> {
-            tensor<typename T::tensor_device_fp, T::size()> operator()(tensor_prototype<typename T::tensor_device_fp, T::size()> t);
+            tensor<typename T::device_type_t, typename T::tensor_type_t, T::size()> operator()(
+                tensor_prototype<typename T::device_type_t, typename T::tensor_type_t, T::size()> t);
         };
 
         template<is_tensor T>
         struct tensor_prototype_conversion<T> {
-            tensor_prototype<typename T::tensor_device_fp, T::size()> operator()(tensor<typename T::tensor_device_fp, T::size()> t);
+            tensor_prototype<typename T::device_type_t, typename T::tensor_type_t, T::size()> operator()(
+                tensor<typename T::device_type_t, typename T::tensor_type_t, T::size()> t);
         };
 
         export template<is_tensor_prototype T>
@@ -115,9 +118,12 @@ namespace hasty {
                 for_sequence<sizeof...(Ts)>([](auto i) {
                     using TS_TN = std::remove_reference_t<typename TsTraits::template Nth<i>>;
                     using INPUT_TN = std::remove_reference_t<typename InputTraits::template Nth<i>>;
-                    using ts_fp = typename TS_TN::tensor_device_fp;
-                    using input_fp = typename INPUT_TN::tensor_device_fp;
-                    static_assert(std::is_same_v<ts_fp, input_fp>, "device_fp types must be the same");
+                    using ts_device = typename TS_TN::device_type_t;
+                    using input_device = typename INPUT_TN::device_type_t;
+                    using ts_tensor_type = typename TS_TN::tensor_type_t;
+                    using input_tensor_type = typename INPUT_TN::tensor_type_t;
+                    static_assert(std::is_same_v<ts_device, input_device>, "device_types must be the same");
+                    static_assert(std::is_same_v<ts_tensor_type, input_tensor_type>, "tensor_types must be the same");
                     static_assert(TS_TN::size() == INPUT_TN::size(), "Sizes must be the same");
                 });
 
@@ -135,13 +141,8 @@ namespace hasty {
                         throw std::runtime_error("ReturnTt indicated multiple return values, but only one was returned");
                     }
 
-                    using RT = std::remove_reference_t<typename ReturnTraits::First>;
-                    using RTF = typename RT::tensor_device_fp;
-
-                    auto retten = ret_ivalue.toTensor();
-
-                    tensor_factory<RTF, RT::size()>::assign(std::get<0>(rets), ret_ivalue.toTensor());
-
+                    std::get<0>(rets).assign(ret_ivalue.toTensor());
+                    
                 } else if (ret_ivalue.isTuple()) {
                     auto tuple_ptr = ret_ivalue.toTuple();
                     auto& elements = tuple_ptr->elements();
@@ -153,10 +154,7 @@ namespace hasty {
                     for_sequence<sizeof...(ReturnTt)>([this, &rets, &elements](auto i) {
                         auto& element = elements[i];
                         if (element.isTensor()) {
-                            using RT = std::remove_reference_t<typename ReturnTraits::template Nth<i>>;
-                            using RTF = typename RT::tensor_device_fp;
-
-                            tensor_factory<RTF, RT::size()>::assign(std::get<i>(rets), element.toTensor());
+                            std::get<i>(rets).assign(element.toTensor());
                         } else {
                             throw std::runtime_error("Return type inside tuple was not a Tensor");
                         }
@@ -188,30 +186,6 @@ namespace hasty {
             }
 
         };
-
-
-        /*
-        export struct trace_scope {
-            
-            trace_scope(const std::string& scopestr)
-                : _tracestr(scopestr) {}
-
-            void add_scope(trace_scope scope) {
-                _tracescopes.push_back(std::move(scope));
-            }
-
-            void print(std::string& retstr, int indent) {
-                retstr += _tracestr + "\n";
-                for (auto& scope : _tracescopes) {
-                    scope.print(retstr, indent + 1);
-                }
-            }
-
-            std::string _tracestr;
-            std::vector<trace_scope> _tracescopes;
-        };
-        */
-
 
     }
 

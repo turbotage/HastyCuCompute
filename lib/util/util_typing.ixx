@@ -20,6 +20,15 @@ namespace hasty {
     // export from here
     export {
 
+        template<typename T>
+        using uptr = std::unique_ptr<T>;
+
+        template<typename T>
+        using sptr = std::shared_ptr<T>;
+
+        template<typename T>
+        using opt = std::optional<T>;
+
         using i16 = int16_t;
         using i32 = int32_t;
         using i64 = int64_t;
@@ -77,6 +86,12 @@ namespace hasty {
         concept is_fp64_tensor_type = std::is_same_v<T, f64_t> || std::is_same_v<T, c128_t>;
 
         template<typename T>
+        concept is_fp_real_tensor_type = std::is_same_v<T, f32_t> || std::is_same_v<T, f64_t>;
+
+        template<typename T>
+        concept is_fp_complex_tensor_type = std::is_same_v<T, c64_t> || std::is_same_v<T, c128_t>;
+
+        template<typename T>
         concept is_int_tensor_type =    std::is_same_v<T, i32_t> || std::is_same_v<T, i64_t> || 
                                         std::is_same_v<T, i16_t>;
 
@@ -104,7 +119,74 @@ namespace hasty {
             }
         }
 
+        template<is_tensor_type F1, is_tensor_type F2>
+        constexpr auto nonloss_type_func() {
+            auto types = []<is_tensor_type FP1, is_tensor_type FP2>() -> bool {
+                return std::is_same_v<FP1, F1> && std::is_same_v<FP2, F2> ||
+                    std::is_same_v<FP1, F2> && std::is_same_v<FP2, F1>;
+            };
 
+            if constexpr(std::is_same_v<F1,F2>) {
+                return F1();
+            } else if (types.template operator()<f32_t, f64_t>()) {
+                return f64_t();
+            } else if (types.template operator()<f32_t, c128_t>()) {
+                return c128_t();
+            } else if (types.template operator()<f64_t, c64_t>()) {
+                return c128_t();
+            } else if (types.template operator()<f64_t, c128_t>()) {
+                return c128_t();
+            } else if (types.template operator()<c64_t, c128_t>()) {
+                return c128_t();
+            } else if (types.template operator()<f32_t, c64_t>()) {
+                return c64_t();
+            } else if (types.template operator()<i32_t, i64_t>()) {
+                return i64_t();
+            } else if (types.template operator()<i32_t, i16_t>()) {
+                return i32_t();
+            } else if (types.template operator()<i64_t, i16_t>()) {
+                return i64_t();
+            } else if (types.template operator()<b8_t, i32_t>()) {
+                return i32_t();
+            } else if (types.template operator()<b8_t, i64_t>()) {
+                return i64_t();
+            } else if (types.template operator()<b8_t, i16_t>()) {
+                return i16_t();
+            } else {
+                static_assert(false, "Invalid types");
+            }
+        }
+
+        template<is_tensor_type F1, is_tensor_type F2>
+        using nonloss_type_t = decltype(nonloss_type_func<F1, F2>());
+
+        template<is_fp_tensor_type TT>
+        constexpr auto complex_type_func() {
+            if constexpr(std::is_same_v<TT, f32_t>) {
+                return c64_t();
+            } else if constexpr(std::is_same_v<TT, f64_t>) {
+                return c128_t();
+            } else {
+                return TT();
+            }
+        }
+
+        template<is_fp_tensor_type TT>
+        using complex_t = decltype(complex_type_func<TT>());
+
+        template<is_fp_tensor_type TT>
+        constexpr auto real_Type_func() {
+            if constexpr(std::is_same_v<TT, c64_t>) {
+                return f32_t();
+            } else if constexpr(std::is_same_v<TT, c128_t>) {
+                return f64_t();
+            } else {
+                return TT();
+            }
+        }
+
+        template<is_fp_tensor_type TT>
+        using real_t = decltype(real_Type_func<TT>());
 
         template<is_strong_type T>
         using base_t = decltype(T::strong_value);

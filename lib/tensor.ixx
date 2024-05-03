@@ -8,7 +8,7 @@ import util;
 
 namespace hasty {
 
-    typedef enum {
+    export enum struct device_idx {
         CPU = -1,
         CUDA0 = 0,
         CUDA1 = 1,
@@ -23,7 +23,36 @@ namespace hasty {
         CUDA10 = 10,
         CUDA11 = 11,
         CUDA12 = 12,
-    } device_idx;
+        CUDA13 = 13,
+        CUDA14 = 14,
+        CUDA15 = 15,
+    };
+
+    at::Device get_torch_device(device_idx idx) {
+        if (idx == device_idx::CPU) {
+            return at::Device(at::DeviceType::CPU);
+        }
+        else {
+            return at::Device(at::DeviceType::CUDA, at::DeviceIndex(idx));
+        }
+    }
+
+    bool is_cuda(device_idx idx) {
+        return idx != device_idx::CPU;
+    }
+
+    template<is_device D>
+    constexpr bool device_match(device_idx idx) {
+        if constexpr(std::is_same_v<D, cuda_t>) {
+            return is_cuda(idx);
+        }
+        else if constexpr(std::is_same_v<D, cpu_t>) {
+            return !is_cuda(idx);
+        }
+        else {
+            static_assert(false, "device_match: unknown device type");
+        }
+    }
 
     export template<is_device D, is_tensor_type TT, size_t R>
     class tensor;
@@ -41,10 +70,11 @@ namespace hasty {
         {}
 
         base_t<TT>* mutable_data_ptr() { 
-            return static_cast<underlying_type<FPT>*>(underlying_tensor.data_ptr()); 
+            return static_cast<base_t<TT>*>(underlying_tensor.data_ptr()); 
         }
+
         const base_t<TT>* const_data_ptr() const { 
-            return static_cast<underlying_type<FPT>*>(underlying_tensor.data_ptr()); 
+            return static_cast<base_t<TT>*>(underlying_tensor.data_ptr()); 
         }
 
         device_idx get_device_idx() const {
@@ -62,12 +92,12 @@ namespace hasty {
         ORTHO
     };
 
-    template<is_device D, is_tensor_type TT, size_t R, size_t R1, size_t R2>
-    tensor<F, R> fftn(const tensor<F, R>& t, span<R1> s, span<R2> dim,
+    template<is_device D1, is_fp_complex_tensor_type TT1, size_t R, size_t R1, size_t R2>
+    tensor<D1,TT1,R> fftn(const tensor<D1,TT1,R>& t, span<R1> s, span<R2> dim,
         std::optional<fft_norm> norm);
 
-    template<is_device D, is_tensor_type TT, size_t R, size_t R1, size_t R2>
-    tensor<F, R> ifftn(const tensor<F, R>& t, span<R1> s, span<R2> dim,
+    template<is_device D1, is_fp_complex_tensor_type TT1, size_t R, size_t R1, size_t R2>
+    tensor<D1,TT1,R> ifftn(const tensor<D1,TT1,R>& t, span<R1> s, span<R2> dim,
         std::optional<fft_norm> norm);
 
 
@@ -78,33 +108,32 @@ namespace hasty {
     class tensor {
     private:
         std::shared_ptr<tensor_impl<D,TT,RANK>> _pimpl;
-        friend class tensor_factory<FPT, RANK>;
-
+        friend class tensor_factory<D,TT,RANK>;
 
         device_idx get_device_idx() const {
             return _pimpl->get_device_idx();
         }
 
         tensor(const std::array<int64_t, RANK>& input_shape, at::Tensor input) 
-            : _pimpl(std::make_shared<tensor_impl<FPT, RANK>>(input_shape, std::move(input)))
+            : _pimpl(std::make_shared<tensor_impl<D,TT,RANK>>(input_shape, std::move(input)))
         {}
 
         tensor(span<RANK> input_shape, at::Tensor input)
-            : _pimpl(std::make_shared<tensor_impl<FPT, RANK>>(input_shape, std::move(input)))
+            : _pimpl(std::make_shared<tensor_impl<D,TT,RANK>>(input_shape, std::move(input)))
         {}
 
         void assign(std::array<int64_t, RANK>& input_shape, at::Tensor input) {
-            _pimpl = std::make_shared<tensor_impl<FPT, RANK>>(input_shape, std::move(input));
+            _pimpl = std::make_shared<tensor_impl<D,TT,RANK>>(input_shape, std::move(input));
         }
 
         void assign(span<RANK> input_shape, at::Tensor input) {
-            _pimpl = std::make_shared<tensor_impl<FPT, RANK>>(input_shape, std::move(input));
+            _pimpl = std::make_shared<tensor_impl<D,TT,RANK>>(input_shape, std::move(input));
         }
 
     public:
 
-        using device_T = D;
-        using tensor_type_T = TT;
+        using device_type_t = D;
+        using tensor_type_t = TT;
         static constexpr std::integral_constant<size_t, RANK> size = {};
 
         auto& get_pimpl() { return _pimpl; }
@@ -114,6 +143,20 @@ namespace hasty {
         const auto& get_tensor() const { return _pimpl->underlying_tensor; }
 
         tensor() = default;
+
+        template<is_device DN, is_tensor_type TTN>
+        requires (!std::is_same_v<DN, D> || !std::is_same_v<TTN, TT>)
+        tensor(tensor<DN, TTN, RANK>&& other, device_idx idx = device_idx::CPU) {
+            if (!device_match<D>(idx))
+                throw std::runtime_error("tensor::tensor: device mismatch");
+
+            _pimpl = std::move(other._pimpl);
+            if (!(std::is_same_v<D, cpu_t> && std::is_same_v<DN, cpu_t>))
+                _pimpl->underlying_tensor = _pimpl->underlying_tensor.to(get_torch_device(idx));
+
+            if (!std::is_same_v<TT, TTN>)
+                _pimpl->underlying_tensor = _pimpl->underlying_tensor.to(scalar_type_func<TT>());
+        }
 
         template<size_t R>
         requires less_than<R, RANK>
@@ -144,8 +187,15 @@ namespace hasty {
         // I know what I am doing...
         base_t<TT>* unconsted_data_ptr() const { return const_cast<base_t<TT>*>(_pimpl->const_data_ptr()); }
 
-        template<cpu_fp F>
-        void fill_(F val) { _pimpl->underlying_tensor.fill_(val); }
+        void fill_(base_t<TT> val) {
+            if constexpr(!is_fp_complex_tensor_type<TT>) {
+                _pimpl->underlying_tensor.fill_(val);
+            }
+            else {
+                auto cten = at::complex(at::scalar_tensor(val.real()), at::scalar_tensor(val.imag())); 
+                _pimpl->underlying_tensor.fill_(cten);
+            }
+        }
 
         tensor<D, TT, RANK> clone() const {
             at::Tensor newtensor = _pimpl->underlying_tensor.clone();
@@ -179,26 +229,36 @@ namespace hasty {
 
         void assign(at::Tensor in)
         {
-            if (RANK != input.ndimension())
+            if (RANK != in.ndimension())
                 throw std::runtime_error("tensor_factory::assign: input.ndimension() did not match RANK");
 
-            if (scalar_type_func<TT>() != input.dtype().toScalarType())
+            if (scalar_type_func<TT>() != in.dtype().toScalarType())
                 throw std::runtime_error("tensor_factory::assign: input.dtype() did not match TT");
 
-            if (input.device().is_cuda() && !std::is_same_v<D, cuda_t>) {
+            if (in.device().is_cuda() && !std::is_same_v<D, cuda_t>) {
                 throw std::runtime_error("tensor_factory::assign: input.device() was cuda but TT was not CUDA");
-            } else if (input.device().is_cpu() && !std::is_same_v<D, cpu_t>) {
+            } else if (in.device().is_cpu() && !std::is_same_v<D, cpu_t>) {
                 throw std::runtime_error("tensor_factory::assign: input.device() was cpu but TT was not CPU");
             }
 
             std::array<int64_t, RANK> shape;
 
             for_sequence<RANK>([&](auto i) {
-                shape[i] = input.size(i);
+                shape[i] = in.size(i);
             });
 
-            _pimpl->underlying_tensor = std::move(input);
+            _pimpl->underlying_tensor = std::move(in);
             _pimpl->shape = shape;
+        }
+
+        template<is_device DN>
+        tensor<D, TT, RANK> to(device_idx idx) {
+            static_assert(!(std::is_same_v<D, cpu_t> && std::is_same_v<DN, cpu_t>), "don't move from cpu to cpu");
+
+            if (idx == get_device_idx())
+                throw std::runtime_error("tensor::to: tensor already on device");
+
+            return tensor<DN,TT,RANK>(_pimpl->underlying_tensor.shape, _pimpl->underlying_tensor.to(get_torch_device(idx)));
         }
 
         template<size_t N>
@@ -284,10 +344,9 @@ namespace hasty {
             _pimpl->underlying_tensor = std::move(other._pimpl->underlying_tensor);
         }
 
-        
-        template<>
-        requires is_fp_tensor_type<TT>
-        auto norm() const {
+        auto norm() const -> std::enable_if<is_fp_tensor_type<TT>, 
+            std::conditional_t<is_fp32_tensor_type<TT>, float, double>>::type {
+            
             if constexpr(is_fp32_tensor_type<TT>) {
                 return _pimpl->underlying_tensor.norm().template item<float>();
             }
@@ -429,86 +488,34 @@ namespace hasty {
             return *this;
         }
 
-        template<is_device D, is_tensor_type TT, size_t R1, size_t R2>
-        requires (device_type_func<F1>() == device_type_func<F2>())
-        friend auto operator+(const tensor<D,TT,R1>& lhs, const tensor<D,TT,R2>& rhs);
+        template<is_device D1, is_tensor_type TT1, is_tensor_type TT2, size_t R1, size_t R2>
+        friend auto operator+(const tensor<D1,TT1,R1>& lhs, const tensor<D,TT2,R2>& rhs);
 
-        template<is_device D, is_tensor_type TT, device_fp F2, size_t R1, size_t R2>
-        requires (device_type_func<F1>() == device_type_func<F2>())
-        friend auto operator-(const tensor<D,TT,R1>& lhs, const tensor<D,TT,R2>& rhs);
+        template<is_device D1, is_tensor_type TT1, is_tensor_type TT2, size_t R1, size_t R2>
+        friend auto operator-(const tensor<D1,TT,R1>& lhs, const tensor<D,TT,R2>& rhs);
 
-        template<is_device D, is_tensor_type TT, size_t R1, size_t R2>
-        requires (device_type_func<F1>() == device_type_func<F2>())
-        friend auto operator*(const tensor<D,TT,R1>& lhs, const tensor<D,TT,R2>& rhs);
+        template<is_device D1, is_tensor_type TT1, is_tensor_type TT2, size_t R1, size_t R2>
+        friend auto operator*(const tensor<D1,TT,R1>& lhs, const tensor<D,TT,R2>& rhs);
 
-        template<is_device D, is_tensor_type TT, size_t R1, size_t R2>
-        requires (device_type_func<F1>() == device_type_func<F2>())
-        friend auto operator/(const tensor<D,TT,R1>& lhs, const tensor<D,TT,R2>& rhs);
+        template<is_device D1, is_tensor_type TT1, is_tensor_type TT2, size_t R1, size_t R2>
+        friend auto operator/(const tensor<D1,TT,R1>& lhs, const tensor<D,TT,R2>& rhs);
         
-        template<is_device D, is_tensor_type TT, size_t R, size_t R1, size_t R2>
+        template<is_device D1, is_fp_complex_tensor_type TT1, size_t R, size_t R1, size_t R2>
         requires less_than_or_equal<R1, R> && less_than_or_equal<R2, R> && equal_or_left_zero<R1, R2>
-        friend tensor<F, R> fftn(const tensor<D,TT,R>& t, span<R1> s, span<R2> dim,
-            std::optional<fft_norm> norm);
+        friend tensor<D1,TT1,R> fftn(const tensor<D1,TT1,R>& t, span<R1> s, span<R2> dim,
+            opt<fft_norm> norm);
 
-        template<is_device D, is_tensor_type TT, size_t R, size_t R1, size_t R2>
+        template<is_device D1, is_fp_complex_tensor_type TT1, size_t R, size_t R1, size_t R2>
         requires less_than_or_equal<R1, R> && less_than_or_equal<R2, R> && equal_or_left_zero<R1, R2>
-        friend tensor<F, R> ifftn(const tensor<D,TT,R>& t, span<R1> s, span<R2> dim,
-            std::optional<fft_norm> norm);  
-
-    };
-
-    
-    export template<is_device D, is_tensor_type TT, size_t RANK>
-    class tensor_factory {
-    public:
-
-        static tensor<D,TT,RANK> make(const std::array<int64_t, RANK>& input_shape, at::Tensor input) {
-            return tensor<D,TT,RANK>(input_shape, std::move(input));
-        }
-
-        static tensor<D,TT,RANK> make(span<RANK> input_shape, at::Tensor input) {
-            return tensor<D,TT,RANK>(input_shape, std::move(input));
-        }
-
-        static std::unique_ptr<tensor<D,TT,RANK>> make_unique(const std::array<int64_t, RANK>& input_shape, at::Tensor input) {
-            return std::make_unique<tensor<D,TT,RANK>>(input_shape, std::move(input));
-        }
-
-        static std::unique_ptr<tensor<D,TT,RANK>> make_unique(span<RANK> input_shape, at::Tensor input) {
-            return std::make_unique<tensor<D,TT,RANK>>(input_shape, std::move(input));
-        }
-
-        static std::unique_ptr<tensor<swap_device_t<FPT>, RANK>> move(
-            std::unique_ptr<tensor<FPT, RANK>> t, device_idx idx, bool block=true) {
-
-            if (idx == device_idx::CPU) {
-                if (device_type_func<FPT>() == device_type::CPU) {
-                    return std::move(t);
-                }
-                else {
-                    auto newtensor = t->get_tensor().to(at::kCPU);
-                    t = nullptr;
-                    return std::make_unique<tensor<swap_device_t<FPT>, RANK>>(t->get_pimpl()->shape, std::move(newtensor));
-                }
-            }
-            else {
-                if (device_type_func<FPT>() == device_type::CUDA) {
-                    auto newtensor = t->get_tensor().to(at::kCUDA, idx);
-                    t = nullptr;
-                    return std::make_unique<tensor<swap_device_t<FPT>, RANK>>(t->get_pimpl()->shape, std::move(newtensor));
-                }
-                else {
-                    throw std::runtime_error("tensor_factory::move_to: unknown device");
-                }
-            }
-        }
+        friend tensor<D1,TT1,R> ifftn(const tensor<D1,TT1,R>& t, span<R1> s, span<R2> dim,
+            opt<fft_norm> norm);  
 
     };
     
     
     export template<typename T>
     concept is_tensor = requires(T t) {
-        []<is_device D, is_tensor_type TT, size_t RANK>(tensor<D,TT,RANK>&){}(t);
+        []<is_device D2, is_tensor_type TT2, size_t RANK2>(tensor<D2,TT2,RANK2>&){}(t);
     };
 
 
@@ -525,7 +532,7 @@ namespace hasty {
     {
         at::TensorOptions opts = at::TensorOptions(scalar_type_func<TT>()).device(device_str);
 
-        using TF = tensor_factory<FP, RANK>;
+        using TF = tensor_factory<D,TT,RANK>;
 
         switch (make_opts) {
             case tensor_make_opts::EMPTY:
@@ -560,9 +567,8 @@ namespace hasty {
  
 
 
-    export template<device_fp F1, device_fp F2, size_t R1, size_t R2>
-    requires (device_type_func<F1>() == device_type_func<F2>())
-    auto operator+(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs) {
+    export template<is_device D1, is_tensor_type TT1, is_tensor_type TT2, size_t R1, size_t R2>
+    auto operator+(const tensor<D1,TT1,R1>& lhs, const tensor<D1,TT2,R2>& rhs) {
         constexpr size_t RETRANK = R1 > R2 ? R1 : R2;
 
         at::Tensor newtensor = lhs._pimpl->underlying_tensor.add(rhs._pimpl->underlying_tensor);
@@ -574,12 +580,11 @@ namespace hasty {
             new_shape[i] = newtensor.size(i);
         });
 
-        return tensor<nonloss_type_t<F1,F2>, RETRANK>(new_shape, std::move(newtensor));
+        return tensor<D1,nonloss_type_t<TT1,TT2>,RETRANK>(new_shape, std::move(newtensor));
     }
 
-    export template<device_fp F1, device_fp F2, size_t R1, size_t R2>
-    requires (device_type_func<F1>() == device_type_func<F2>())
-    auto operator-(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs)
+    export template<is_device D1, is_tensor_type TT1, is_tensor_type TT2, size_t R1, size_t R2>
+    auto operator-(const tensor<D1,TT1,R1>& lhs, const tensor<D1,TT2,R2>& rhs)
     {
         constexpr size_t RETRANK = R1 > R2 ? R1 : R2;
 
@@ -592,12 +597,11 @@ namespace hasty {
             new_shape[i] = newtensor.size(i);
         });
 
-        return tensor<nonloss_type_t<F1,F2>, RETRANK>(new_shape, std::move(newtensor));
+        return tensor<D1,nonloss_type_t<TT1,TT2>,RETRANK>(new_shape, std::move(newtensor));
     }
 
-    export template<device_fp F1, device_fp F2, size_t R1, size_t R2>
-    requires (device_type_func<F1>() == device_type_func<F2>())
-    auto operator*(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs) {
+    export template<is_device D1, is_tensor_type TT1, is_tensor_type TT2, size_t R1, size_t R2>
+    auto operator*(const tensor<D1,TT1,R1>& lhs, const tensor<D1,TT2,R2>& rhs) {
         constexpr size_t RETRANK = R1 > R2 ? R1 : R2;
 
         at::Tensor newtensor = lhs._pimpl->underlying_tensor.mul(rhs._pimpl->underlying_tensor);
@@ -609,12 +613,11 @@ namespace hasty {
             new_shape[i] = newtensor.size(i);
         });
 
-        return tensor<nonloss_type_t<F1,F2>, RETRANK>(new_shape, std::move(newtensor));
+        return tensor<D1,nonloss_type_t<TT1,TT2>,RETRANK>(new_shape, std::move(newtensor));
     }
 
-    export template<device_fp F1, device_fp F2, size_t R1, size_t R2>
-    requires (device_type_func<F1>() == device_type_func<F2>())
-    auto operator/(const tensor<F1, R1>& lhs, const tensor<F2, R2>& rhs) {
+    export template<is_device D1, is_tensor_type TT1, is_tensor_type TT2, size_t R1, size_t R2>
+    auto operator/(const tensor<D1,TT1,R1>& lhs, const tensor<D1,TT2,R2>& rhs) {
         constexpr size_t RETRANK = R1 > R2 ? R1 : R2;
 
         at::Tensor newtensor = lhs._pimpl->underlying_tensor.div(rhs._pimpl->underlying_tensor);
@@ -626,15 +629,15 @@ namespace hasty {
             new_shape[i] = newtensor.size(i);
         });
 
-        return tensor<nonloss_type_t<F1,F2>, RETRANK>(new_shape, std::move(newtensor));
+        return tensor<D1,nonloss_type_t<TT1,TT2>,RETRANK>(new_shape, std::move(newtensor));
     }
 
-    export template<device_fp F, size_t R, size_t R1, size_t R2>
+    export template<is_device D1, is_fp_complex_tensor_type TT1, size_t R, size_t R1, size_t R2>
     requires less_than_or_equal<R1, R> && less_than_or_equal<R2, R> && equal_or_left_zero<R1, R2>
-    tensor<F, R> fftn(const tensor<F, R>& t,
+    tensor<D1,TT1,R> fftn(const tensor<D1,TT1,R>& t,
         span<R1> s,
         span<R2> dim,
-        std::optional<fft_norm> norm)
+        opt<fft_norm> norm)
     {
         auto normstr = [&norm]() -> at::optional<c10::string_view> {
             if (norm.has_value()) {
@@ -658,15 +661,15 @@ namespace hasty {
             dim.to_opt_arr_ref(),
             normstr()
         );
-        return tensor<F, R>(span<R>(newtensor.sizes()), std::move(newtensor));
+        return tensor<D1,TT1,R>(span<R>(newtensor.sizes()), std::move(newtensor));
     }
 
-    export template<device_fp F, size_t R, size_t R1, size_t R2>
+    export template<is_device D1, is_fp_complex_tensor_type TT1, size_t R, size_t R1, size_t R2>
     requires less_than_or_equal<R1, R> && less_than_or_equal<R2, R> && equal_or_left_zero<R1, R2>
-    tensor<F, R> ifftn(const tensor<F, R>& t,
+    tensor<D1,TT1,R> ifftn(const tensor<D1,TT1,R>& t,
         span<R1> s,
         span<R2> dim,
-        std::optional<fft_norm> norm)
+        opt<fft_norm> norm)
     {
         auto normstr = [&norm]() -> at::optional<c10::string_view> {
             if (norm.has_value()) {
@@ -689,70 +692,175 @@ namespace hasty {
             dim.to_opt_arr_ref(),
             normstr()
         );
-        return tensor<F, R>(span<R>(newtensor.sizes()), std::move(newtensor));
+        return tensor<D1,TT1,R>(span<R>(newtensor.sizes()), std::move(newtensor));
     }
 
-    export template<device_fp FPT, size_t RANK>
+
+
+    export template<is_device D, is_tensor_type TT, size_t RANK>
+    class tensor_factory {
+    public:
+
+        static tensor<D,TT,RANK> make(const std::array<int64_t, RANK>& input_shape, at::Tensor input) {
+            return tensor<D,TT,RANK>(input_shape, std::move(input));
+        }
+
+        static tensor<D,TT,RANK> make(span<RANK> input_shape, at::Tensor input) {
+            return tensor<D,TT,RANK>(input_shape, std::move(input));
+        }
+
+        static uptr<tensor<D,TT,RANK>> make_unique(const std::array<int64_t, RANK>& input_shape, at::Tensor input) {
+            return std::make_unique<tensor<D,TT,RANK>>(input_shape, std::move(input));
+        }
+
+        static uptr<tensor<D,TT,RANK>> make_unique(span<RANK> input_shape, at::Tensor input) {
+            return std::make_unique<tensor<D,TT,RANK>>(input_shape, std::move(input));
+        }
+
+        /*
+        template<is_device DN>
+        static auto move_device(uptr<tensor<D,TT,RANK>> t, device_idx idx, bool block=true) -> 
+            uptr<tensor<DN, RANK>> {
+
+            if (idx == device_idx::CPU) {
+                if (device_type_func<FPT>() == device_type::CPU) {
+                    return std::move(t);
+                }
+                else {
+                    auto newtensor = t->get_tensor().to(at::kCPU);
+                    t = nullptr;
+                    return std::make_unique<tensor<swap_device_t<FPT>, RANK>>(t->get_pimpl()->shape, std::move(newtensor));
+                }
+            }
+            else {
+                if (device_type_func<FPT>() == device_type::CUDA) {
+                    auto newtensor = t->get_tensor().to(at::kCUDA, idx);
+                    t = nullptr;
+                    return std::make_unique<tensor<swap_device_t<FPT>, RANK>>(t->get_pimpl()->shape, std::move(newtensor));
+                }
+                else {
+                    throw std::runtime_error("tensor_factory::move_to: unknown device");
+                }
+            }
+        }
+        */
+
+    };
+
+
+
+
+
+
+
+
+
+
+
+
+    export template<is_device D, is_tensor_type TT, size_t RANK>
     class cache_tensor {
     private:
 
         struct tensor_holder_cuda {
-            std::unique_ptr<tensor<FPT, RANK>> tensor_cuda;
-            std::unique_ptr<tensor<cpu_t<FPT>, RANK>> tensor_cpu;
+            std::unique_ptr<tensor<cuda_t,TT,RANK>> tensor_cuda;
+            std::unique_ptr<tensor<cpu_t,TT,RANK>> tensor_cpu;
         };
 
         struct tensor_holder_cpu {
-            std::unique_ptr<tensor<FPT, RANK>> tensor_cpu;
+            std::unique_ptr<tensor<cpu_t,TT,RANK>> tensor_cpu;
         };
 
-        std::conditional_t<decltype(cuda_fp<FPT>), 
+        std::conditional_t<std::is_same_v<D,cuda_t>, 
             tensor_holder_cuda, tensor_holder_cpu> _tensor_holder;
 
         size_t hashidx;
-        static std::string cache_dir;
+        static std::filesystem::path cache_dir;
+        std::array<i64, RANK> shape;
 
 
-        std::enable_if<cuda_fp<FPT>, std::unique_ptr<tensor<FPT, RANK>>>::type& get_cuda_ptr(device_idx idx) {
-            if (!_tensor_holder.tensor_cuda)
-                _tensor_holder.tensor_cuda = tensor_factory<FPT, RANK>::move(std::move(_tensor_holder.tensor_cpu), idx);
-            else if (_tensor_holder.tensor_cuda.get_device_idx() != idx) {
-                _tensor_holder.tensor_cuda = tensor_factory<FPT, RANK>::move(std::move(_tensor_holder.tensor_cuda), idx);
+        auto get_cuda_ptr(device_idx idx) -> std::enable_if<std::is_same_v<D,cuda_t>, uptr<tensor<cuda_t,TT,RANK>>>::type& {
+            if (!_tensor_holder.tensor_cuda) {
+                _tensor_holder.tensor_cuda = std::make_unique<tensor<cuda_t,TT,RANK>>(std::move(_tensor_holder.get_cpu_ptr()), idx);
+                return _tensor_holder.tensor_cuda;
             }
-            return _tensor_holder.tensor_cuda;
+            else if (_tensor_holder.tensor_cuda.get_device_idx() != idx) {
+                _tensor_holder.tensor_cuda = std::make_unique<tensor<cuda_t,TT,RANK>>(std::move(_tensor_holder.tensor_cuda), idx);
+                return _tensor_holder.tensor_cuda;
+            } else {
+                return _tensor_holder.tensor_cuda;
+            }
         }
 
-        std::enable_if<cuda_fp<FPT>, std::unique_ptr<tensor<cpu_t<FPT>, RANK>>>::type& get_cpu() {
-            if (!_tensor_holder.tensor_cpu) {
-                
-                _tensor_holder.tensor_cpu = tensor_factory<cpu_t<FPT>, RANK>::move(std::move(_tensor_holder.tensor_cuda), device_idx::CPU);
+        auto get_cpu_ptr() -> uptr<tensor<cpu_t,TT,RANK>>&  {
+            if (_tensor_holder.tensor_cpu)
+                return _tensor_holder.tensor_cpu;
+
+            if constexpr(std::is_same_v<D,cuda_t>) {
+                if (_tensor_holder.tensor_cuda) {
+                    _tensor_holder.tensor_cpu = std::make_unique<cpu_t,TT,RANK>(std::move(_tensor_holder.tensor_cuda));
+                    return _tensor_holder.tensor_cpu;
+                }
             }
 
+            _tensor_holder.tensor_cpu = load_from_disk();
 
-            return *_tensor_holder.tensor_cpu;
+            return _tensor_holder.tensor_cpu;
         }
 
         void cache_disk() {
-            
+            if constexpr(std::is_same_v<D,cuda_t>) {
+                if (_tensor_holder.tensor_cuda) {
+                    _tensor_holder.tensor_cpu = std::make_unique<cpu_t,TT,RANK>(std::move(_tensor_holder.tensor_cuda));
+                    return _tensor_holder.tensor_cpu;
+                }
+            }
+
+            if (!_tensor_holder.tensor_cpu)
+                throw std::runtime_error("cache_disk: no tensor to cache");
+
+            auto tt = _tensor_holder.tensor_cpu.get_tensor().contiguous();
+
+            namespace fs = std::filesystem;
+            std::ofstream ofs(cache_dir / fs::path(std::to_string(hashidx) + ".htc"), std::ios::binary | std::ios::out);
+            if (!ofs.is_open())
+                throw std::runtime_error("cache_disk: could not open file for writing");
+
+            ofs.write(reinterpret_cast<char*>(tt.data_ptr()), tt.numel() * sizeof(base_t<TT>));
+            ofs.close();
         }
 
-        void load_from_disk() {
+        uptr<tensor<cpu_t,TT,RANK>> load_from_disk() {
+            namespace fs = std::filesystem;
+            std::ifstream ifs(cache_dir / fs::path(std::to_string(hashidx) + ".htc"), std::ios::binary | std::ios::in);
+            if (!ifs.is_open())
+                throw std::runtime_error("load_from_disk: could not open file for reading");
 
+            auto tt = tensor_factory<cpu_t,TT,RANK>::make(shape, at::empty(span(shape), at::kCPU));
+
+            ifs.read(reinterpret_cast<char*>(tt->mutable_data_ptr()), tt->nelem() * sizeof(base_t<TT>));
+            ifs.close();
+
+            return tt;
         }
 
 
     public:
         
-        std::enable_if<cuda_fp<FPT>, tensor<FPT, RANK>>::type& get_cuda(device_idx idx) {
+        std::enable_if<std::is_same_v<D,cuda_t>, tensor<cuda_t,TT,RANK>>::type& get_cuda(device_idx idx) {
             return *get_cuda_ptr(idx);
         }
 
-        
-        std::enable_if<cuda_fp<FPT>, tensor<cpu_t<FPT>, RANK>>::type& get_cpu() {
-            return *_tensor_holder.tensor_cpu;
+        tensor<cpu_t,TT,RANK>& get_cpu() {
+            return *get_cpu_ptr();
         }
 
-        std::enable_if<cpu_fp<FPT>, tensor<FPT, RANK>>::type& get_cpu() {
-            return *_tensor_holder.tensor_cpu;
+        void cache() {
+            cache_disk();
+        }
+
+        void uncache() {
+            _tensor_holder.tensor_cpu = load_from_disk();
         }
 
     };

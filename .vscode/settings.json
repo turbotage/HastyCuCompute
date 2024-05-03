@@ -103,6 +103,10 @@
         "__string": "cpp",
         "coroutine": "cpp",
         "expected": "cpp",
-        "stdfloat": "cpp"
+        "stdfloat": "cpp",
+        "target": "cpp",
+        "ios": "cpp",
+        "queue": "cpp",
+        "stack": "cpp"
     }
 }
