@@ -247,8 +247,13 @@ namespace hasty {
                 shape[i] = in.size(i);
             });
 
-            _pimpl->underlying_tensor = std::move(in);
-            _pimpl->shape = shape;
+            if (_pimpl == nullptr) {
+                _pimpl = std::make_shared<tensor_impl<D,TT,RANK>>(shape, std::move(in));
+            }
+            else {
+                _pimpl->shape = shape;
+                _pimpl->underlying_tensor = std::move(in);
+            }
         }
 
         template<is_device DN>
@@ -821,25 +826,40 @@ namespace hasty {
 
             auto tt = _tensor_holder.tensor_cpu.get_tensor().contiguous();
 
-            namespace fs = std::filesystem;
-            std::ofstream ofs(cache_dir / fs::path(std::to_string(hashidx) + ".htc"), std::ios::binary | std::ios::out);
-            if (!ofs.is_open())
-                throw std::runtime_error("cache_disk: could not open file for writing");
 
-            ofs.write(reinterpret_cast<char*>(tt.data_ptr()), tt.numel() * sizeof(base_t<TT>));
-            ofs.close();
+            try {
+                namespace fs = std::filesystem;
+                std::ofstream ofs(cache_dir / fs::path(std::to_string(hashidx) + ".htc"), std::ios::binary | std::ios::out);
+                if (!ofs.is_open())
+                    throw std::runtime_error("cache_disk: could not open file for writing");
+
+                ofs.write(reinterpret_cast<char*>(tt.data_ptr()), tt.numel() * sizeof(base_t<TT>));
+                ofs.close();
+            } catch (std::ifstream::failure e) {
+                std::cerr << "cache_disk: Exception opening/reading/closing file\n";
+                throw;
+            } catch (...) {
+                throw;
+            }
         }
 
         uptr<tensor<cpu_t,TT,RANK>> load_from_disk() {
             namespace fs = std::filesystem;
-            std::ifstream ifs(cache_dir / fs::path(std::to_string(hashidx) + ".htc"), std::ios::binary | std::ios::in);
-            if (!ifs.is_open())
-                throw std::runtime_error("load_from_disk: could not open file for reading");
-
             auto tt = tensor_factory<cpu_t,TT,RANK>::make(shape, at::empty(span(shape), at::kCPU));
-
-            ifs.read(reinterpret_cast<char*>(tt->mutable_data_ptr()), tt->nelem() * sizeof(base_t<TT>));
-            ifs.close();
+            
+            try {
+                std::ifstream ifs(cache_dir / fs::path(std::to_string(hashidx) + ".htc"), std::ios::binary | std::ios::in);
+                if (!ifs.is_open())
+                    throw std::runtime_error("load_from_disk: could not open file for reading");
+                    
+                ifs.read(reinterpret_cast<char*>(tt->mutable_data_ptr()), tt->nelem() * sizeof(base_t<TT>));
+                ifs.close();
+            } catch (std::ostream::failure e) {
+                std::cerr << "load_from_disk: Exception opening/writing/closing file\n";
+                throw;
+            } catch (...) {
+                throw;
+            }
 
             return tt;
         }

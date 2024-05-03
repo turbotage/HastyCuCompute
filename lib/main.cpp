@@ -69,7 +69,7 @@ std::format(R"ts(
     auto end = std::chrono::high_resolution_clock::now();
     std::cout << "Time Toep Kernel First Run: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms\n";
 
-    int runs = 500;
+    int runs = 50;
     start = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < runs; ++i) {
         output_data = toeplitz.run(input_data, coilmap_data, kernel_data);
@@ -78,7 +78,7 @@ std::format(R"ts(
     end = std::chrono::high_resolution_clock::now();
     std::cout << std::format("Time Toep Kernel {} runs: ", runs) << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms\n";
 
-
+    
 }
 
 void toeplitz_test() {
@@ -253,6 +253,7 @@ void compile_test() {
     std::cout << "Time: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms\n";
 }
 
+
 void iotest() {
 
     std::vector<std::complex<float>> data(640*640*640);
@@ -272,9 +273,9 @@ void iotest() {
 
 int main() {
 
-    iotest();
+    //iotest();
 
-    //trace_test();
+    trace_test();
 
     //compile_test();
 
