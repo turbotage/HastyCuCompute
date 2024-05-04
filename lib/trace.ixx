@@ -4,8 +4,8 @@ module;
 
 export module trace;
 
-export import util;
-export import tensor;
+import util;
+import tensor;
 
 namespace hasty {
     namespace trace {

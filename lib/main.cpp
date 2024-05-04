@@ -6,6 +6,7 @@
 import util;
 import nufft;
 import trace;
+import tensor;
 
 import hdf5;
 

@@ -7,8 +7,8 @@ module;
 
 export module nufft;
 
-export import util;
-export import tensor;
+import util;
+import tensor;
 
 namespace hasty {
 

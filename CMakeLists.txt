@@ -32,6 +32,7 @@ target_sources(HastyCuCompute
             "lib/util/util_torch.ixx"
             "lib/util/util_typing.ixx"
             "lib/util/util.ixx"
+            "lib/op/op.ixx"
             "lib/hdf5.ixx"
             "lib/tensor.ixx"
             "lib/nufft.ixx"
