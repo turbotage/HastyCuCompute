@@ -11,11 +11,7 @@ import trace;
 namespace hasty {
 
     template<is_square_tensor_operator Op, is_square_tensor_operator PrecondOp>
-    auto conjugate_gradient(
-        Op A, 
-        const tensor<Op::device_type_t, Op::output_tensor_type_t, Op::output_rank_t::value> &b,
-        tensor<Op::device_type_t, Op::output_tensor_type_t, Op::output_rank_t::value> &x,
-        opt<PrecondOp> P, i32 max_iter = 0, double tol) 
+    auto conjugate_gradient(sptr<Op> A, sptr<PrecondOp> P, i32 max_iter = 0, double tol) 
     {
         using D = Op::device_type_t;
         using TT == Op::input_tensor_type_t;
@@ -33,19 +29,23 @@ namespace hasty {
         tensor_prototype<D,TT,R> r("r");
         tensor_prototype<D,TT,R> z("z");
 
+        auto cg1 = trace_function_factory<decltype(x), decltype(r)>::make("cg_step1", x,p,r);
 
-        auto cg = trace_function_factory<decltype(x)>::make("cg_step", x,p,r,z);
-
-        cg.add_lines(
+        cg1.add_lines(
 std::format(R"ts(
-    
+    pAp = torch.real(torch.vdot(p.flatten(),Ap.flatten()))
+    alpha = rzold / pAp
+    x += p * alpha
+    r -= Ap * alpha
+    return (x, r)
+)ts"));
 
-)ts"))
+        cg1.compile();
 
-        for (i32 i = 0; i < max_iter; i++) {
-            auto Ap = A(p);
+        auto cg2 = trace_function<decltype(p)>::make("cg_step2", z, r, )
+        
 
-        }
+
     }
 
 }
