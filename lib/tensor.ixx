@@ -142,6 +142,16 @@ namespace hasty {
         auto& get_tensor() { return _pimpl->underlying_tensor; }
         const auto& get_tensor() const { return _pimpl->underlying_tensor; }
 
+        auto decay_to_tensor() { 
+            at::Tensor ten = std::move(_pimpl->underlying_tensor); 
+            _pimpl = nullptr;
+            return std::move(ten);
+        }
+
+        auto ninstances() const {
+            return _pimpl.use_count();
+        }
+
         tensor() = default;
 
         template<is_device DN, is_tensor_type TTN>
@@ -156,6 +166,10 @@ namespace hasty {
 
             if (!std::is_same_v<TT, TTN>)
                 _pimpl->underlying_tensor = _pimpl->underlying_tensor.to(scalar_type_func<TT>());
+        }
+
+        base_t<TT> item() const requires (RANK == 0){
+            return _pimpl->underlying_tensor.template item<base_t<TT>>();
         }
 
         template<size_t R>
@@ -389,6 +403,16 @@ namespace hasty {
             return _pimpl->underlying_tensor.min().template item<base_t<TT>>();
         }
 
+        auto real() const  {
+            if constexpr(is_fp_complex_tensor_type<TT>) {
+                auto ret = _pimpl->underlying_tensor.real();
+                return tensor<D, real_t<TT>, RANK>(_pimpl->shape, std::move(ret));
+            }
+            else {
+                return clone();
+            }
+        }
+
         template<size_t R>
         requires less_than<R, RANK>
         void operator+=(const tensor<D,TT,R>& other) {
@@ -514,6 +538,9 @@ namespace hasty {
         requires less_than_or_equal<R1, R> && less_than_or_equal<R2, R> && equal_or_left_zero<R1, R2>
         friend tensor<D1,TT1,R> ifftn(const tensor<D1,TT1,R>& t, span<R1> s, span<R2> dim,
             opt<fft_norm> norm);  
+
+        template<is_device D1, is_tensor_type TT1, size_t R>
+        friend tensor<D,TT1,0> vdot(const tensor<D1,TT1,R>& lhs, const tensor<D1,TT1,R>& rhs);
 
     };
     
@@ -699,6 +726,18 @@ namespace hasty {
         );
         return tensor<D1,TT1,R>(span<R>(newtensor.sizes()), std::move(newtensor));
     }
+
+
+    template<is_device D1, is_tensor_type TT1, size_t R>
+    tensor<D1,TT1,0> vdot(const tensor<D1,TT1,R>& lhs, const tensor<D1,TT1,R>& rhs) 
+    {
+        at::Tensor newtensor = at::vdot(lhs._pimpl->underlying_tensor.flatten(), rhs._pimpl->underlying_tensor.flatten());
+        return tensor<D1,TT1,0>({}, std::move(newtensor));
+    }
+
+
+
+
 
 
 

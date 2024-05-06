@@ -110,7 +110,7 @@ namespace hasty {
             }
 
             template<is_tensor ...Ts>
-            auto run(Ts&&... tts) -> std::tuple<tensor_prototype_conversion_t<ReturnTt>...> {
+            auto run(Ts&&... tts) const -> std::tuple<tensor_prototype_conversion_t<ReturnTt>...> {
                 
                 //auto ttstup = std::make_tuple(tts...);
                 using TsTraits = TupleTraits<Ts...>;
@@ -129,9 +129,14 @@ namespace hasty {
 
                 std::tuple<tensor_prototype_conversion_t<ReturnTt>...> rets;
 
-                auto gettensorfunc = []<typename T>(T t) { return t.get_tensor(); };
+                auto ttscopy = std::tuple(Ts(std::forward<Ts>(tts))...);
 
-                //std::tuple<at::Tensor> input_tensors = std::make_tuple(gettensorfunc(tts)...);
+                auto gettensorfunc = []<typename T>(T&& t) { 
+                    if (t.ninstances() == 1) {
+                        return t.decay_to_tensor();
+                    }
+                    return t.get_tensor();
+                };
 
                 //c10::IValue ret_ivalue = _cu->run_method(_funcname, std::forward<Ts>(tts)...);
                 c10::IValue ret_ivalue = _cu->run_method(_funcname, gettensorfunc(tts)...);

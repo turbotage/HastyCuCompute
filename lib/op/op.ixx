@@ -73,6 +73,28 @@ namespace hasty {
 
     };
 
+    export template<typename T>
+    concept is_hom_tensor_operator = requires(T t) {
+
+        requires is_basic_tensor_operator<T, typename T::device_type_t, 
+                    typename T::input_tensor_type_t, typename T::output_tensor_type_t, 
+                    typename T::input_rank_t, typename T::output_rank_t>;
+
+        requires std::same_as<typename T::input_tensor_type_t, typename T::output_tensor_type_t>;
+
+    };
+
+    export template<typename T>
+    concept is_hom_square_tensor_operator = requires(T t) {
+
+        requires is_square_tensor_operator<T>;
+
+        requires is_hom_tensor_operator<T>;
+
+    };
+
+
+
 
     export template<is_device D, is_tensor_type TT, size_t RANK>
     class optensor {
@@ -133,7 +155,7 @@ namespace hasty {
     };
 
     export template<typename T>
-    concept is_normalable_tensor_operator = requires(T t) {
+    concept is_normalable_optensor_operator = requires(T t) {
         
         requires is_basic_optensor_operator<T, typename T::device_type_t, 
                     typename T::input_tensor_type_t, typename T::output_tensor_type_t, 
@@ -156,7 +178,25 @@ namespace hasty {
 
     };
 
+    export template<typename T>
+    concept is_hom_optensor_operator = requires(T t) {
+            
+        requires is_basic_optensor_operator<T, typename T::device_type_t, 
+                    typename T::input_tensor_type_t, typename T::output_tensor_type_t, 
+                    typename T::input_rank_t, typename T::output_rank_t>;
 
+        requires std::same_as<typename T::input_tensor_type_t, typename T::output_tensor_type_t>;
+
+    };
+
+    export template<typename T>
+    concept is_hom_square_optensor_operator = requires(T t) {
+
+        requires is_square_optensor_operator<T>;
+
+        requires is_hom_optensor_operator<T>;
+
+    };
 
 
 }
