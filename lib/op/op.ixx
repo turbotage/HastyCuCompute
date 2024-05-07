@@ -23,6 +23,13 @@ namespace hasty {
         { RIN::value} -> std::same_as<size_t>;
         { ROUT::value} -> std::same_as<size_t>;
 
+        /*
+        requires std::same_as<typename T::input_tensor_type_t, TIN>;
+        requires std::same_as<typename T::output_tensor_type_t, TOUT>;
+        requires std::same_as<typename T::input_rank_t, RIN>;
+        requires std::same_as<typename T::output_rank_t, ROUT>;
+        */
+
         // Ensure the operator has a call operator that takes a tensor of type TIN and returns a tensor of type TOUT.
         { t.operator()(tensor<D,TIN,RIN::value>()) } -> std::same_as<tensor<D,TOUT,ROUT::value>>;
     };

@@ -138,8 +138,10 @@ namespace hasty {
                     return t.get_tensor();
                 };
 
-                //c10::IValue ret_ivalue = _cu->run_method(_funcname, std::forward<Ts>(tts)...);
-                c10::IValue ret_ivalue = _cu->run_method(_funcname, gettensorfunc(tts)...);
+                c10::IValue ret_ivalue;
+                std::apply([&](auto&&... args) {
+                    ret_ivalue = _cu->run_method(_funcname, gettensorfunc(std::forward<decltype(args)>(args))...);
+                }, ttscopy);
 
                 if (ret_ivalue.isTensor()) {
                     if (sizeof...(ReturnTt) > 1) {
