@@ -188,6 +188,44 @@ namespace hasty {
         template<is_fp_tensor_type TT>
         using real_t = decltype(real_Type_func<TT>());
 
+        template<is_tensor_type TT>
+        constexpr auto up_precision_func() {
+            if constexpr(std::is_same_v<TT, f32_t>) {
+                return f64_t();
+            } else if constexpr(std::is_same_v<TT, c64_t>) {
+                return c128_t();
+            } else if constexpr(std::is_same_v<TT, i32_t>) {
+                return i64_t();
+            } else if constexpr(std::is_same_v<TT, i16_t>) {
+                return i32_t();
+            } else {
+                return TT();
+            }
+        }
+
+        template<is_tensor_type TT>
+        using up_precision_t = decltype(up_precision_func<TT>());
+
+        template<is_tensor_type TT>
+        constexpr auto down_precision_func() {
+            if constexpr(std::is_same_v<TT, f64_t>) {
+                return f32_t();
+            } else if constexpr(std::is_same_v<TT, c128_t>) {
+                return c64_t();
+            } else if constexpr(std::is_same_v<TT, i64_t>) {
+                return i32_t();
+            } else if constexpr(std::is_same_v<TT, i32_t>) {
+                return i16_t();
+            } else {
+                return TT();
+            }
+        }
+
+        template<is_tensor_type TT>
+        using down_precision_t = decltype(down_precision_func<TT>());
+
+
+
         template<is_strong_type T>
         using base_t = decltype(T::strong_value);
 

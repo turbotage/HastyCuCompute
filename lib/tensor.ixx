@@ -110,10 +110,6 @@ namespace hasty {
         std::shared_ptr<tensor_impl<D,TT,RANK>> _pimpl;
         friend class tensor_factory<D,TT,RANK>;
 
-        device_idx get_device_idx() const {
-            return _pimpl->get_device_idx();
-        }
-
         tensor(const std::array<int64_t, RANK>& input_shape, at::Tensor input) 
             : _pimpl(std::make_shared<tensor_impl<D,TT,RANK>>(input_shape, std::move(input)))
         {}
@@ -193,6 +189,10 @@ namespace hasty {
 
         std::string devicestr() const {
             return _pimpl->underlying_tensor.device().str();
+        }
+
+        device_idx get_device_idx() const {
+            return _pimpl->get_device_idx();
         }
 
         base_t<TT>* mutable_data_ptr() { return _pimpl->mutable_data_ptr(); }
@@ -278,6 +278,12 @@ namespace hasty {
                 throw std::runtime_error("tensor::to: tensor already on device");
 
             return tensor<DN,TT,RANK>(_pimpl->underlying_tensor.shape, _pimpl->underlying_tensor.to(get_torch_device(idx)));
+        }
+
+        template<is_tensor_type TTN>
+        tensor<D,TTN,RANK> to() {
+            return tensor<D,TTN,RANK>(_pimpl->underlying_tensor.shape, 
+                _pimpl->underlying_tensor.to(scalar_type_func<TTN>()));
         }
 
         template<size_t N>
@@ -560,9 +566,9 @@ namespace hasty {
 
     export template<is_device D, is_tensor_type TT, size_t RANK>
     tensor<D,TT,RANK> make_tensor(span<RANK> shape, 
-        const std::string& device_str="cpu", tensor_make_opts make_opts=tensor_make_opts::EMPTY)
+        device_idx didx = device_idx::CPU, tensor_make_opts make_opts=tensor_make_opts::EMPTY)
     {
-        at::TensorOptions opts = at::TensorOptions(scalar_type_func<TT>()).device(device_str);
+        at::TensorOptions opts = at::TensorOptions(scalar_type_func<TT>()).device(didx);
 
         using TF = tensor_factory<D,TT,RANK>;
 

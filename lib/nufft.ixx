@@ -335,7 +335,7 @@ namespace hasty {
         using FLTYPE = std::conditional_t<is_fp32_tensor_type<TT>, float, double>;
         FLTYPE normfactor = double(1.0) / double(nvox);
 
-        auto reduced_kernel = make_tensor<cuda_t,TT,DIM+1>(span(one_nmodes), kernel.devicestr());
+        auto reduced_kernel = make_tensor<cuda_t,TT,DIM+1>(span(one_nmodes), kernel.get_device_idx());
 
         {
             auto plan = nufft_plan<cuda_t,real_t<TT>,DIM,nufft_type::TYPE_1>::make(nufft_opts<cuda_t,real_t<TT>,DIM>{

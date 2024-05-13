@@ -105,6 +105,14 @@ namespace hasty {
             : _data(arr.data())
         {}
 
+        std::array<i64> operator*(i64 m) const {
+            std::array<i64, N> arr;
+            for_sequence<N>([&](auto i) {
+                arr[i] = _data[i] * m;
+            });
+            return arr;
+        }
+
         at::ArrayRef<i64> to_arr_ref() {
             return at::ArrayRef<i64>(_data, N);
         }
