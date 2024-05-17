@@ -824,9 +824,9 @@ namespace hasty {
         std::conditional_t<std::is_same_v<D,cuda_t>, 
             tensor_holder_cuda, tensor_holder_cpu> _tensor_holder;
 
-        size_t hashidx;
-        static std::filesystem::path cache_dir;
-        std::array<i64, RANK> shape;
+        size_t _hashidx;
+        static std::filesystem::path _cache_dir;
+        std::array<i64, RANK> _shape;
 
 
         auto get_cuda_ptr(device_idx idx) -> std::enable_if<std::is_same_v<D,cuda_t>, uptr<tensor<cuda_t,TT,RANK>>>::type& {
@@ -874,7 +874,7 @@ namespace hasty {
 
             try {
                 namespace fs = std::filesystem;
-                std::ofstream ofs(cache_dir / fs::path(std::to_string(hashidx) + ".htc"), std::ios::binary | std::ios::out);
+                std::ofstream ofs(_cache_dir / fs::path(std::to_string(_hashidx) + ".htc"), std::ios::binary | std::ios::out);
                 if (!ofs.is_open())
                     throw std::runtime_error("cache_disk: could not open file for writing");
 
@@ -890,10 +890,10 @@ namespace hasty {
 
         uptr<tensor<cpu_t,TT,RANK>> load_from_disk() {
             namespace fs = std::filesystem;
-            auto tt = tensor_factory<cpu_t,TT,RANK>::make(shape, at::empty(span(shape), at::kCPU));
+            auto tt = tensor_factory<cpu_t,TT,RANK>::make(_shape, at::empty(span(_shape), at::kCPU));
             
             try {
-                std::ifstream ifs(cache_dir / fs::path(std::to_string(hashidx) + ".htc"), std::ios::binary | std::ios::in);
+                std::ifstream ifs(_cache_dir / fs::path(std::to_string(_hashidx) + ".htc"), std::ios::binary | std::ios::in);
                 if (!ifs.is_open())
                     throw std::runtime_error("load_from_disk: could not open file for reading");
                     
@@ -912,6 +912,15 @@ namespace hasty {
 
     public:
         
+        template<is_device D2>
+        tensor<D2,TT,RANK>& get(device_idx idx) {
+            if constexpr(std::is_same_v<D2,cpu_t>) {
+                return get_cpu();
+            } else {
+                return get_cuda(idx);
+            }
+        }
+
         std::enable_if<std::is_same_v<D,cuda_t>, tensor<cuda_t,TT,RANK>>::type& get_cuda(device_idx idx) {
             return *get_cuda_ptr(idx);
         }

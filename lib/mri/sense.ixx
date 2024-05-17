@@ -4,8 +4,10 @@ module;
 
 export module sense;
 
+import util;
 import trajectory;
 import tensor;
+import trace;
 import nufft;
 
 namespace hasty {
@@ -20,79 +22,98 @@ namespace hasty {
         static constexpr std::integral_constant<size_t, DIM> input_rank_t = {};
         static constexpr std::integral_constant<size_t, DIM> output_rank_t = {};
 
-        sense_normal(cache_tensor<D,TT,DIM-1>&& kernel, cache_tensor<D,TT,DIM>&& smaps)
+        sense_normal(cache_tensor<D,TT,DIM>&& kernel, cache_tensor<D,TT,DIM+1>&& smaps)
             : _kernel(kernel), _smaps(smaps)
         {}
 
-        sense_normal(const trajectory<D,TT,DIM-1>& traj, span<DIM-1> shape, device_idx didx, bool precise,
-            tensor<D,TT,1>& smaps)
+        sense_normal(const trajectory<D,TT,DIM>& traj, cache_tensor<D,TT,1>&& smaps, span<DIM> shape, device_idx didx, bool precise)
             : _smaps(smaps)
         {
-            auto M = traj.coords[0].shape<0>();
+            auto M = traj.coords[0].template shape<0>();
 
             auto twoshape = shape * 2;
 
             using UTT = up_precision_t<TT>;
             if (precise && !std::is_same_v<UTT, TT>) {
 
-                auto upkernel = make_tensor<D,UTT,DIM-1>(span<DIM-1>(twoshape));
+                auto upkernel = make_tensor<D,UTT,DIM>(span<DIM>(twoshape));
 
-                std::array<tensor<D,UTT,1>,DIM-1> coords;
+                std::array<tensor<D,UTT,1>,DIM> coords;
                 for_sequence<DIM-1>([&](auto i) {
-                    coords[i] = traj.coords[i].to<UTT>();
+                    coords[i] = traj.coords[i].template to<UTT>();
                 });
 
                 auto ones = make_tensor<D,UTT,2>({1, M}, didx, tensor_make_opts::ONES);
 
-                nufft::toeplitz_kernel<D,UTT,DIM-1> upkernel(coords, upkernel, ones);
+                toeplitz_kernel(coords, upkernel, ones);
 
-                _kernel = upkernel.to<TT>();
+                _kernel = upkernel.template to<TT>();
             } else {
 
                 auto ones = make_tensor<D,TT,2>({1, M}, didx, tensor_make_opts::ONES);
 
-                _kernel = make_tensor<D,TT,DIM-1>(span<DIM-1>(twoshape));
+                _kernel = make_tensor<D,TT,DIM>(span<DIM>(twoshape));
 
-                nufft::toeplitz_kernel<D,TT,DIM-1> kernel(traj.coords, _kernel, ones);
+                toeplitz_kernel(traj.coords, _kernel, ones);
             }
+
+
+            trace::tensor_prototype<D,TT,DIM>     input("input");
+            trace::tensor_prototype<D,TT,DIM+1>   coilmap("coilmap");
+            trace::tensor_prototype<D,TT,DIM>     kernel("kernel");
+            trace::tensor_prototype<D,TT,DIM>     output("output");
+
+            _toeplitz = trace::trace_function_factory<decltype(output)>::make("toeplitz", input, coilmap, kernel);
+
+            _toeplitz.add_lines(std::format(R"ts(
+    #shp = input.shape
+    spatial_shp = input.shape #shp[1:]
+    expanded_shp = [2*s for s in spatial_shp]
+    transform_dims = [i+1 for i in range(len(spatial_shp))]
+
+    ncoil = coilmap.shape[0]
+    nrun = ncoil // {0}
+    
+    out = torch.zeros_like(input)
+    for run in range(nrun):
+        bst = run*{0}
+        cmap = coilmap[bst:(bst+{0})]
+        c = cmap * input
+        c = torch.fft_fftn(c, expanded_shp, transform_dims)
+        c *= kernel
+        c = torch.fft_ifftn(c, None, transform_dims)
+
+        for dim in range(len(spatial_shp)):
+            c = torch.slice(c, dim+1, spatial_shp[dim]-1, -1)
+
+        c *= cmap.conj()
+        out += torch.sum(c, 0)
+
+    out *= (1 / torch.prod(torch.tensor(spatial_shp)))
+    
+    return out
+)ts", 2));
+
+            _toeplitz.compile();
+
         }
-        {
-            auto M = traj.coords[0].shape<0>();
 
-            auto twoshape = shape * 2;
-
-            using UTT = up_precision_t<TT>;
-            if (precise && !std::is_same_v<UTT, TT>) {
-
-                auto upkernel = make_tensor<D,UTT,DIM-1>(span<DIM-1>(twoshape));
-
-                std::array<tensor<D,UTT,1>,DIM-1> coords;
-                for_sequence<DIM-1>([&](auto i) {
-                    coords[i] = traj.coords[i].to<UTT>();
-                });
-
-                auto ones = make_tensor<D,UTT,2>({1, M}, didx, tensor_make_opts::ONES);
-
-                nufft::toeplitz_kernel<D,UTT,DIM-1> upkernel(coords, upkernel, ones);
-
-                _kernel = upkernel.to<TT>();
-            } else {
-
-                auto ones = make_tensor<D,TT,2>({1, M}, didx, tensor_make_opts::ONES);
-
-                _kernel = make_tensor<D,TT,DIM-1>(span<DIM-1>(twoshape));
-
-                nufft::toeplitz_kernel<D,TT,DIM-1> kernel(traj.coords, _kernel, ones);
-            }
-        }
-
-        tensor<D,TT,DIM> operator()(const tensor<D,TT,DIM>& x) {
-            return x;
+        tensor<D,TT,DIM> operator()(tensor<D,TT,DIM>&& x) {
+            auto didx = x.get_device_idx();
+            std::tuple<tensor<D,TT,DIM>> output_data = _toeplitz.run(x, 
+                _smaps.template get<D>(didx), _kernel.template get<D>(didx));
+            return std::get<0>(output_data);
         }
 
     private:
-        cache_tensor<D,TT,DIM-1> _kernel;
-        cache_tensor<D,TT,DIM> _smaps;
+        cache_tensor<D,TT,DIM> _kernel;
+        cache_tensor<D,TT,DIM+1> _smaps;
+
+        using RETT = trace::tensor_prototype<D,TT,DIM>;
+        using IN1 = trace::tensor_prototype<D,TT,DIM+1>;
+        using IN2 = trace::tensor_prototype<D,TT,DIM>;
+
+        trace::trace_function<std::tuple<RETT>, std::tuple<IN1,IN2,IN1>> _toeplitz;
     };
 
 }
