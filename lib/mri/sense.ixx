@@ -9,6 +9,7 @@ import trajectory;
 import tensor;
 import trace;
 import nufft;
+import threading;
 
 namespace hasty {
 
@@ -24,7 +25,9 @@ namespace hasty {
 
         sense_normal_image(cache_tensor<D,TT,DIM>&& kernel, cache_tensor<D,TT,DIM+1>&& smaps)
             : _kernel(kernel), _smaps(smaps)
-        {}
+        {
+            build_runner();
+        }
 
         sense_normal_image(const trajectory<D,TT,DIM>& traj, cache_tensor<D,TT,1>&& smaps, span<DIM> shape, bool precise)
             : _smaps(smaps)
@@ -58,15 +61,28 @@ namespace hasty {
                 toeplitz_kernel(traj.coords, _kernel, ones);
             }
 
+            build_runner();
 
+        }
+
+        tensor<D,TT,DIM> operator()(tensor<D,TT,DIM>&& x) {
+            auto didx = x.get_device_idx();
+            std::tuple<tensor<D,TT,DIM>> output_data = _runner.run(x, 
+                _smaps.template get<D>(didx), _kernel.template get<D>(didx));
+            return std::get<0>(output_data);
+        }
+
+    private:
+
+        void build_runner() {
             trace::tensor_prototype<D,TT,DIM>     input("input");
             trace::tensor_prototype<D,TT,DIM+1>   coilmap("coilmap");
             trace::tensor_prototype<D,TT,DIM>     kernel("kernel");
             trace::tensor_prototype<D,TT,DIM>     output("output");
 
-            _toeplitz = trace::trace_function_factory<decltype(output)>::make("toeplitz", input, coilmap, kernel);
+            _runner = trace::trace_function_factory<decltype(output)>::make("toeplitz", input, coilmap, kernel);
 
-            _toeplitz.add_lines(std::format(R"ts(
+            _runner.add_lines(std::format(R"ts(
     #shp = input.shape
     spatial_shp = input.shape #shp[1:]
     expanded_shp = [2*s for s in spatial_shp]
@@ -95,18 +111,11 @@ namespace hasty {
     return out
 )ts", 2));
 
-            _toeplitz.compile();
-
-        }
-
-        tensor<D,TT,DIM> operator()(tensor<D,TT,DIM>&& x) {
-            auto didx = x.get_device_idx();
-            std::tuple<tensor<D,TT,DIM>> output_data = _toeplitz.run(x, 
-                _smaps.template get<D>(didx), _kernel.template get<D>(didx));
-            return std::get<0>(output_data);
+            _runner.compile();
         }
 
     private:
+
         cache_tensor<D,TT,DIM> _kernel;
         cache_tensor<D,TT,DIM+1> _smaps;
 
@@ -114,7 +123,7 @@ namespace hasty {
         using IN1 = trace::tensor_prototype<D,TT,DIM+1>;
         using IN2 = trace::tensor_prototype<D,TT,DIM>;
 
-        trace::trace_function<std::tuple<RETT>, std::tuple<IN1,IN2,IN1>> _toeplitz;
+        trace::trace_function<std::tuple<RETT>, std::tuple<IN1,IN2,IN1>> _runner;
     };
 
 
@@ -130,7 +139,9 @@ namespace hasty {
 
         sense_normal_image_diagonal(cache_tensor<D,TT,DIM>&& kernel, cache_tensor<D,TT,DIM+1>&& smaps, cache_tensor<D,TT,DIM>&& diagonal)
             : _kernel(kernel), _smaps(smaps), _diagonal(diagonal)
-        {}
+        {
+            build_runner();
+        }
 
         sense_normal_image_diagonal(const trajectory<D,TT,DIM>& traj, cache_tensor<D,TT,1>&& smaps, cache_tensor<D,TT,DIM>&& diagonal, span<DIM> shape, bool precise)
             : _smaps(smaps), _diagonal(diagonal)
@@ -164,16 +175,29 @@ namespace hasty {
                 toeplitz_kernel(traj.coords, _kernel, ones);
             }
 
+            build_runner();
 
+        }
+
+        tensor<D,TT,DIM> operator()(tensor<D,TT,DIM>&& x) {
+            auto didx = x.get_device_idx();
+            std::tuple<tensor<D,TT,DIM>> output_data = _runner.run(x, 
+                _smaps.template get<D>(didx), _kernel.template get<D>(didx), _diagonal.template get<D>(didx));
+            return std::get<0>(output_data);
+        }
+
+    private:
+
+        void build_runner() {
             trace::tensor_prototype<D,TT,DIM>     input("input");
             trace::tensor_prototype<D,TT,DIM+1>   coilmap("coilmap");
             trace::tensor_prototype<D,TT,DIM>     kernel("kernel");
             trace::tensor_prototype<D,TT,DIM>     output("output");
-            trace::tensor_prototype<D,TT,DIM>     diagonal("diagonal");
+            trace::tensor_prototype<D,TT,DIM>     diag("diag");
 
-            _toeplitz = trace::trace_function_factory<decltype(output)>::make("toeplitz", input, coilmap, kernel);
+            _runner = trace::trace_function_factory<decltype(output)>::make("toeplitz", input, coilmap, kernel);
 
-            _toeplitz.add_lines(std::format(R"ts(
+            _runner.add_lines(std::format(R"ts(
     #shp = input.shape
     spatial_shp = input.shape #shp[1:]
     expanded_shp = [2*s for s in spatial_shp]
@@ -183,7 +207,7 @@ namespace hasty {
     nrun = ncoil // {0}
     
     out = torch.zeros_like(input)
-    input *= diagonal
+    input *= diag
     for run in range(nrun):
         bst = run*{0}
         cmap = coilmap[bst:(bst+{0})]
@@ -197,22 +221,14 @@ namespace hasty {
 
         c *= cmap.conj()
         out += torch.sum(c, 0)
-    out *= diagonal.conj()
+    out *= diag.conj()
 
     out *= (1 / torch.prod(torch.tensor(spatial_shp)))
     
     return out
 )ts", 2));
 
-            _toeplitz.compile();
-
-        }
-
-        tensor<D,TT,DIM> operator()(tensor<D,TT,DIM>&& x) {
-            auto didx = x.get_device_idx();
-            std::tuple<tensor<D,TT,DIM>> output_data = _toeplitz.run(x, 
-                _smaps.template get<D>(didx), _kernel.template get<D>(didx), _diagonal.template get<D>(didx));
-            return std::get<0>(output_data);
+            _runner.compile();
         }
 
     private:
@@ -224,7 +240,7 @@ namespace hasty {
         using IN1 = trace::tensor_prototype<D,TT,DIM+1>;
         using IN2 = trace::tensor_prototype<D,TT,DIM>;
 
-        trace::trace_function<std::tuple<RETT>, std::tuple<IN1,IN2,IN1>> _toeplitz;
+        trace::trace_function<std::tuple<RETT>, std::tuple<IN1,IN2,IN1>> _runner;
     };
 
     /*
@@ -234,15 +250,46 @@ namespace hasty {
     }
     */
 
-
     template<is_device D, is_fp_complex_tensor_type TT, size_t DIM>
     class sense_admm_minimizer {
+    public:
 
-        sense_admm_minimizer(std::vector<trajectory<D,real_type<TT>,DIM>> trajes, std::vector<cache_tensor<D,TT,2>> data, cache_tensor<D,TT,DIM+1> smaps)
-            : _trajes(trajes), _data(data), _smaps(smaps)
+        sense_admm_minimizer(std::vector<trajectory<D,real_t<TT>,DIM>> trajes, 
+            std::vector<cache_tensor<D,TT,2>> data, cache_tensor<D,TT,DIM+1> smaps, cache_tensor<D,IT,DIM> diagonal)
+            : _trajes(trajes), _data(data), _smaps(smaps), _diagonal(diagonal)
         {
 
+
+            auto func = [](cuda_context& cctx, i32 idx) {
+
+                
+                auto opts = nufft_plan<cuda_t, f64_t, DIM>{
+                    .ntransf = _smaps.template shape<0>(),
+                    .tol = 1e-13,
+                    .upsamp = nufft_upsamp_cuda::UPSAMP_2_0,
+                    .device_idx = i32(cctx.device_idx)
+                };
+                for_sequence<DIM>([&](auto i) {
+                    opts.nmodes[i] = _smaps.template shape<1+i>();
+                });
+
+                auto plan = nufft_plan<cuda_t, f64_t, DIM>::make(opts);
+
+
+
+            };
+
+
+            for (size_t i = 0; i < trajes.size(); i++) {
+                // Create RHS
+                auto traj = trajes[i];
+                
+
+
+            }
         }
+
+    private:
 
     };
 

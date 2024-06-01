@@ -40,6 +40,7 @@ target_sources(HastyCuCompute
             "lib/hdf5.ixx"
             "lib/tensor.ixx"
             "lib/nufft.ixx"
+            "lib/threading.ixx"
             "lib/trace.ixx"
 )
 
