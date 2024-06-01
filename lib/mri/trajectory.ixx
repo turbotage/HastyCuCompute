@@ -26,8 +26,8 @@ namespace hasty {
         {}
 
     private:
-        std::array<tensor<D,TT,1>,DIM> _coords;
-        std::optional<tensor<D,TT,1>> _time;
+        std::array<cache_tensor<D,TT,1>,DIM> _coords;
+        std::optional<cache_tensor<D,TT,1>> _time;
         std::optional<TT> _echo;
     };
 

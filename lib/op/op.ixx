@@ -113,8 +113,6 @@ namespace hasty {
         using tensor_type_t = TT;
         static constexpr std::integral_constant<size_t, RANK> size = {};
 
-
-
         auto operator[](size_t idx) -> tensor<D,TT,RANK>&
         {
             return _tensors[idx];
@@ -122,6 +120,10 @@ namespace hasty {
 
     };
 
+    export template<typename T>
+    concept is_optensor = requires(T t) {
+        []<is_device D, is_tensor_type TT, size_t RANK>(optensor<D,TT,RANK>&){}(t);
+    };
 
     template<typename T, typename D, typename TIN, typename TOUT, typename RIN, typename ROUT>
     concept is_basic_optensor_operator = requires(T t) {
@@ -204,6 +206,30 @@ namespace hasty {
         requires is_hom_optensor_operator<T>;
 
     };
+
+
+
+
+    export template<typename T>
+    concept is_anytensor = is_tensor<T> || is_optensor<T>;
+
+    export template<typename T>
+    concept is_anytensor_operator = is_tensor_operator<T> || is_optensor_operator<T>;
+
+    export template<typename T>
+    concept is_normalable_anytensor_operator = is_normalable_tensor_operator<T> || is_normalable_optensor_operator<T>; 
+
+    export template<typename T>
+    concept is_square_anytensor_operator = is_square_tensor_operator<T> || is_square_optensor_operator<T>;
+
+    export template<typename T>
+    concept is_hom_anytensor_operator = is_hom_tensor_operator<T> || is_hom_optensor_operator<T>;
+
+    export template<typename T>
+    concept is_nom_square_anytensor_operator = is_hom_square_tensor_operator<T> || is_hom_square_optensor_operator<T>;
+
+
+
 
 
 }

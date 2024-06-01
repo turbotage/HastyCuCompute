@@ -107,6 +107,8 @@
         "target": "cpp",
         "ios": "cpp",
         "queue": "cpp",
-        "stack": "cpp"
+        "stack": "cpp",
+        "__mutex_base": "cpp",
+        "__node_handle": "cpp"
     }
 }

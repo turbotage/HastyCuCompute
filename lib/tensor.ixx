@@ -524,16 +524,16 @@ namespace hasty {
         }
 
         template<is_device D1, is_tensor_type TT1, is_tensor_type TT2, size_t R1, size_t R2>
-        friend auto operator+(const tensor<D1,TT1,R1>& lhs, const tensor<D,TT2,R2>& rhs);
+        friend auto operator+(const tensor<D1,TT1,R1>& lhs, const tensor<D1,TT2,R2>& rhs);
 
         template<is_device D1, is_tensor_type TT1, is_tensor_type TT2, size_t R1, size_t R2>
-        friend auto operator-(const tensor<D1,TT,R1>& lhs, const tensor<D,TT,R2>& rhs);
+        friend auto operator-(const tensor<D1,TT,R1>& lhs, const tensor<D1,TT,R2>& rhs);
 
         template<is_device D1, is_tensor_type TT1, is_tensor_type TT2, size_t R1, size_t R2>
-        friend auto operator*(const tensor<D1,TT,R1>& lhs, const tensor<D,TT,R2>& rhs);
+        friend auto operator*(const tensor<D1,TT,R1>& lhs, const tensor<D1,TT,R2>& rhs);
 
         template<is_device D1, is_tensor_type TT1, is_tensor_type TT2, size_t R1, size_t R2>
-        friend auto operator/(const tensor<D1,TT,R1>& lhs, const tensor<D,TT,R2>& rhs);
+        friend auto operator/(const tensor<D1,TT,R1>& lhs, const tensor<D1,TT,R2>& rhs);
         
         template<is_device D1, is_fp_complex_tensor_type TT1, size_t R, size_t R1, size_t R2>
         requires less_than_or_equal<R1, R> && less_than_or_equal<R2, R> && equal_or_left_zero<R1, R2>
@@ -568,7 +568,8 @@ namespace hasty {
     tensor<D,TT,RANK> make_tensor(span<RANK> shape, 
         device_idx didx = device_idx::CPU, tensor_make_opts make_opts=tensor_make_opts::EMPTY)
     {
-        at::TensorOptions opts = at::TensorOptions(scalar_type_func<TT>()).device(didx);
+        at::TensorOptions opts = at::TensorOptions(scalar_type_func<TT>(
+                )).device(c10::Device(device_type_func<D>(), i32(didx)));
 
         using TF = tensor_factory<D,TT,RANK>;
 
@@ -821,60 +822,88 @@ namespace hasty {
             std::unique_ptr<tensor<cpu_t,TT,RANK>> tensor_cpu;
         };
 
-        std::conditional_t<std::is_same_v<D,cuda_t>, 
-            tensor_holder_cuda, tensor_holder_cpu> _tensor_holder;
 
-        size_t _hashidx;
-        static std::filesystem::path _cache_dir;
-        std::array<i64, RANK> _shape;
+        struct cache_tensor_block {
+            size_t _hashidx;
+            static std::filesystem::path _cache_dir;
+            std::array<i64, RANK> _shape;
+            i32 _cacheable_count;
+            std::conditional_t<std::is_same_v<D,cuda_t>, 
+                tensor_holder_cuda, tensor_holder_cpu> _tensor_holder;
+        };
+
+        std::shared_ptr<cache_tensor_block> _block;
+        bool _marked_cacheable;
 
 
         auto get_cuda_ptr(device_idx idx) -> std::enable_if<std::is_same_v<D,cuda_t>, uptr<tensor<cuda_t,TT,RANK>>>::type& {
-            if (!_tensor_holder.tensor_cuda) {
-                _tensor_holder.tensor_cuda = std::make_unique<tensor<cuda_t,TT,RANK>>(std::move(_tensor_holder.get_cpu_ptr()), idx);
-                return _tensor_holder.tensor_cuda;
+            auto& th = _block->_tensor_holder;
+            
+            if (!th.tensor_cuda) {
+                th.tensor_cuda = std::make_unique<tensor<cuda_t,TT,RANK>>(std::move(th.get_cpu_ptr()), idx);
+                return th.tensor_cuda;
             }
-            else if (_tensor_holder.tensor_cuda.get_device_idx() != idx) {
-                _tensor_holder.tensor_cuda = std::make_unique<tensor<cuda_t,TT,RANK>>(std::move(_tensor_holder.tensor_cuda), idx);
-                return _tensor_holder.tensor_cuda;
+            else if (th.tensor_cuda.get_device_idx() != idx) {
+                th.tensor_cuda = std::make_unique<tensor<cuda_t,TT,RANK>>(std::move(th.tensor_cuda), idx);
+                return th.tensor_cuda;
             } else {
-                return _tensor_holder.tensor_cuda;
+                return th.tensor_cuda;
             }
         }
 
         auto get_cpu_ptr() -> uptr<tensor<cpu_t,TT,RANK>>&  {
-            if (_tensor_holder.tensor_cpu)
-                return _tensor_holder.tensor_cpu;
+            auto& th = _block->_tensor_holder;
+
+            if (th.tensor_cpu)
+                return th.tensor_cpu;
 
             if constexpr(std::is_same_v<D,cuda_t>) {
-                if (_tensor_holder.tensor_cuda) {
-                    _tensor_holder.tensor_cpu = std::make_unique<cpu_t,TT,RANK>(std::move(_tensor_holder.tensor_cuda));
-                    return _tensor_holder.tensor_cpu;
+                if (th.tensor_cuda) {
+                    th.tensor_cpu = std::make_unique<cpu_t,TT,RANK>(std::move(th.tensor_cuda));
+                    return th.tensor_cpu;
                 }
             }
 
-            _tensor_holder.tensor_cpu = load_from_disk();
+            th.tensor_cpu = load_from_disk();
 
-            return _tensor_holder.tensor_cpu;
+            return th.tensor_cpu;
+        }
+
+        void mark_cacheable() {
+            if (_marked_cacheable)
+                return;
+
+            ++(_block->_cacheable_count);
+            if (_block->_cacheable_count == _block.use_count()) {
+                cache_disk();
+            }
+        }
+
+        void mark_uncacheable() {
+            if (!_marked_cacheable)
+                return;
+            --(_block->_cacheable_count);
         }
 
         void cache_disk() {
+            auto& th = _block->_tensor_holder;
+
             if constexpr(std::is_same_v<D,cuda_t>) {
-                if (_tensor_holder.tensor_cuda) {
-                    _tensor_holder.tensor_cpu = std::make_unique<cpu_t,TT,RANK>(std::move(_tensor_holder.tensor_cuda));
-                    return _tensor_holder.tensor_cpu;
+                if (th.tensor_cuda) {
+                    th.tensor_cpu = std::make_unique<cpu_t,TT,RANK>(std::move(th.tensor_cuda));
+                    return th.tensor_cpu;
                 }
             }
 
-            if (!_tensor_holder.tensor_cpu)
+            if (!th.tensor_cpu)
                 throw std::runtime_error("cache_disk: no tensor to cache");
 
-            auto tt = _tensor_holder.tensor_cpu.get_tensor().contiguous();
+            auto tt = th.tensor_cpu.get_tensor().contiguous();
 
 
             try {
                 namespace fs = std::filesystem;
-                std::ofstream ofs(_cache_dir / fs::path(std::to_string(_hashidx) + ".htc"), std::ios::binary | std::ios::out);
+                std::ofstream ofs(_block->_cache_dir / fs::path(std::to_string(_block->_hashidx) + ".htc"), std::ios::binary | std::ios::out);
                 if (!ofs.is_open())
                     throw std::runtime_error("cache_disk: could not open file for writing");
 
@@ -890,10 +919,10 @@ namespace hasty {
 
         uptr<tensor<cpu_t,TT,RANK>> load_from_disk() {
             namespace fs = std::filesystem;
-            auto tt = tensor_factory<cpu_t,TT,RANK>::make(_shape, at::empty(span(_shape), at::kCPU));
+            auto tt = tensor_factory<cpu_t,TT,RANK>::make(_block->_shape, at::empty(span(_block->_shape), at::kCPU));
             
             try {
-                std::ifstream ifs(_cache_dir / fs::path(std::to_string(_hashidx) + ".htc"), std::ios::binary | std::ios::in);
+                std::ifstream ifs(_block->_cache_dir / fs::path(std::to_string(_block->_hashidx) + ".htc"), std::ios::binary | std::ios::in);
                 if (!ifs.is_open())
                     throw std::runtime_error("load_from_disk: could not open file for reading");
                     
@@ -934,7 +963,8 @@ namespace hasty {
         }
 
         void uncache() {
-            _tensor_holder.tensor_cpu = load_from_disk();
+            auto& th = _block->_tensor_holder;
+            th.tensor_cpu = load_from_disk();
         }
 
     };

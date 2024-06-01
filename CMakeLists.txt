@@ -34,6 +34,7 @@ target_sources(HastyCuCompute
             "lib/util/util.ixx"
             "lib/op/op.ixx"
             "lib/op/cg.ixx"
+            "lib/op/min.ixx"
             "lib/mri/trajectory.ixx"
             "lib/mri/sense.ixx"
             "lib/hdf5.ixx"

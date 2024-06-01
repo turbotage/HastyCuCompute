@@ -28,7 +28,7 @@ namespace hasty {
         trace::tensor_prototype<D,TT,R> z("z");
         trace::tensor_prototype<D,real_t<TT>,0> rzold("rzold");
 
-        auto cg1 = trace_function_factory<decltype(x), decltype(r)>::make("cg_step1", x,p,Ap,r);
+        auto cg1 = trace::trace_function_factory<decltype(x), decltype(r)>::make("cg_step1", x,p,Ap,r);
 
         cg1.add_lines(
 std::format(R"ts(
@@ -41,7 +41,7 @@ std::format(R"ts(
 
         cg1.compile();
 
-        auto cg2 = trace_function<decltype(p), decltype(rzold)>::make("cg_step2", z,r,p,rzold);
+        auto cg2 = trace::trace_function_factory<decltype(p), decltype(rzold)>::make("cg_step2", z,r,p,rzold);
 
         cg2.add_lines(
 std::format(R"ts(
@@ -102,28 +102,29 @@ std::format(R"ts(
         trace::tensor_prototype<D,TT,R> r("r");
         trace::tensor_prototype<D,real_t<TT>,0> rzold("rzold");
 
-        auto cg1 = trace::trace_function_factory<decltype(x), decltype(r)>::make("cg_step1", x,p,Ap,r);
+        auto cg = trace::trace_function_factory<decltype(x), decltype(r), 
+                        decltype(p), decltype(rzold)>::make("cg_step", x,p,Ap,r);
 
-        cg1.add_lines(
+        cg.add_lines(
 std::format(R"ts(
     pAp = torch.real(torch.vdot(p.flatten(),Ap.flatten()))
     alpha = rzold / pAp
     x += p * alpha
     r -= Ap * alpha
 
-    rznew = torch.real(torch.vdot(r.flatten(),z.flatten()))
-    p = z + p * (rznew / rzold)
+    rznew = torch.real(torch.vdot(r.flatten(),r.flatten()))
+    p = r + p * (rznew / rzold)
     
-    return p, rznew
+    return x, r, p, rznew
 )ts"));
 
-        cg1.compile();
+        cg.compile();
 
-        auto cgl = [cg1 = std::move(cg1), A = std::move(A),
+        auto cgl = [cg = std::move(cg), A = std::move(A),
                             max_iter, tol](tensor<D,TT,R>& x, const tensor<D,TT,R>& b) {
 
             auto r = b - A(x);
-            auto p = z.clone();
+            auto p = r.clone();
 
             auto rzold = vdot(r, r).real();
             double resid = std::sqrt(rzold.item());
@@ -136,7 +137,7 @@ std::format(R"ts(
 
                 auto Ap = A(p);
 
-                std::tie(x,r) = cg1.run(std::move(x), p, std::move(Ap), std::move(r));
+                std::tie(x,r,p,rzold) = cg.run(std::move(x), std::move(p), std::move(Ap), std::move(r));
 
                 resid = std::sqrt(rzold.item());
 

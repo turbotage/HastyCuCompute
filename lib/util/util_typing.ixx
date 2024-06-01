@@ -119,6 +119,16 @@ namespace hasty {
             }
         }
 
+        template<is_device D>
+        constexpr at::DeviceType device_type_func() {
+            if constexpr(std::is_same_v<D, cuda_t>) {
+                return at::DeviceType::CUDA;
+            } else if constexpr(std::is_same_v<D, cpu_t>) {
+                return at::DeviceType::CPU;
+            }
+        }
+
+
         template<is_tensor_type F1, is_tensor_type F2>
         constexpr auto nonloss_type_func() {
             auto types = []<is_tensor_type FP1, is_tensor_type FP2>() -> bool {
