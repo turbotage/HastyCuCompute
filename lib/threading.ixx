@@ -32,162 +32,9 @@ namespace hasty {
         return devices;
     }
 
-    export template<is_tensor_type TT> 
-    struct cuda_context_holder {
-        
-        using tensor_type_t = TT;
-
-        using TypeTuple = TupleTraits<
-            std::unordered_map<std::string, cache_tensor<cuda_t,TT,0>>,
-            std::unordered_map<std::string, cache_tensor<cuda_t,TT,1>>,
-            std::unordered_map<std::string, cache_tensor<cuda_t,TT,2>>,
-            std::unordered_map<std::string, cache_tensor<cuda_t,TT,3>>,
-            std::unordered_map<std::string, cache_tensor<cuda_t,TT,4>>,
-            std::unordered_map<std::string, cache_tensor<cuda_t,TT,5>>,
-            std::unordered_map<std::string, cache_tensor<cuda_t,TT,6>>,
-            std::unordered_map<std::string, cache_tensor<cuda_t,TT,7>>
-        >;
-
-        TypeTuple::Tuple tensors;
-
-        std::array<std::set<std::string>, 8> tensor_names;
-
-    
-        template<size_t RANK>
-        void add(const std::string& name, cache_tensor<cuda_t,TT,RANK>&& tensor) {
-            tensor_names[RANK].insert(name);
-            std::get<RANK>(tensors).emplace(name, std::move(tensor));
-        }
-
-        template<size_t RANK>
-        cache_tensor<cuda_t,TT,RANK>& get(const std::string& name) {
-            return std::get<RANK>(tensors).at(name);
-        }
-
-        template<size_t RANK>
-        void remove(const std::string& name) {
-            tensor_names[RANK].erase(name);
-            std::get<RANK>(tensors).erase(name);
-        }
-
-        void remove(const std::string& name) {
-            for_sequence<TypeTuple::Size>([this,&name](auto i) {
-                tensor_names[i].erase(name);
-                std::get<i>(tensors).erase(name);
-            });
-        }
-
-        template<size_t RANK>
-        void clear() {
-            tensor_names[RANK].clear();
-            std::get<RANK>(tensors).clear();
-        }
-
-        void clear() {
-            for_sequence<TypeTuple::Size>([this](auto i) {
-                tensor_names[i].clear();
-                std::get<i>(tensors).clear();
-            });
-        }
-
-        std::set<std::string> names() {
-            std::set<std::string> names;
-            for_sequence<TypeTuple::Size>([&names, this](auto i) {
-                for (const auto& name : tensor_names[i]) {
-                    names.insert(name);
-                }
-            });
-            return names;
-        }
-
-    };
-
-    export struct cuda_context {
-
-        using TypeTuple = TupleTraits<
-            cuda_context_holder<f32_t>,
-            cuda_context_holder<f64_t>,
-            cuda_context_holder<c64_t>,
-            cuda_context_holder<c128_t>,
-            cuda_context_holder<i16_t>,
-            cuda_context_holder<i32_t>,
-            cuda_context_holder<i64_t>,
-            cuda_context_holder<b8_t>
-        >;
-        
-        TypeTuple::Tuple holders;
-
-
-        template<is_tensor_type TT>
-        constexpr cuda_context_holder<TT>& holder() {
-            std::reference_wrapper<cuda_context_holder<TT>> retholder;
-            for_sequence<TypeTuple::Size>([&retholder, this](auto i) {
-                if constexpr(std::is_same_v<typename TypeTuple::Nth<i>::tensor_type_t, TT>) 
-                {
-                    retholder = std::get<i>(holders);
-                }
-            });
-            return retholder.get();
-        }
-
-        template<is_tensor_type TT, size_t RANK>
-        void add(const std::string& name, cache_tensor<cuda_t,TT,RANK>&& tensor) {
-            holder<TT>().add(name, std::move(tensor));
-        }
-
-        template<is_tensor_type TT, size_t RANK>
-        cache_tensor<cuda_t,TT,RANK>& get(const std::string& name) {
-            return holder<TT>().template get<RANK>(name);
-        }
-
-        template<is_tensor_type TT, size_t RANK>
-        void remove(const std::string& name) {
-            holder<TT>().template remove<RANK>(name);
-        }
-
-        template<is_tensor_type TT>
-        void remove(const std::string& name) {
-            holder<TT>().remove(name);
-        }
-
-        void remove(std::string& name) {
-            for_sequence<TypeTuple::Size>([this, &name](auto i) {
-                std::get<i>(holders).remove(name);
-            });
-        }
-
-        template<is_tensor_type TT, size_t RANK>
-        void clear() {
-            holder<TT>().template clear<RANK>();
-        }
-
-        template<is_tensor_type TT>
-        void clear() {
-            holder<TT>().clear();
-        }
-
-        void clear() {
-            for_sequence<TypeTuple::Size>([this](auto i) {
-                std::get<i>(holders).clear();
-            });
-        }
-
-        std::set<std::string> names() {
-            std::set<std::string> names;
-            for_sequence<TypeTuple::Size>([this, &names](auto i) {
-                auto innernames = std::get<i>(holders).names();
-                for (const auto& name : innernames) {
-                    names.insert(name);
-                }
-            });
-            return names;
-        }
-
-    };
-
-
     export class storage {
     private:
+
         struct key {
             std::string name;
             std::type_index type;
@@ -196,19 +43,27 @@ namespace hasty {
                 return name == other.name && type == other.type;
             }
 
-            auto operator()(const key& p) const -> size_t {
-                return std::hash<std::string>()(p.name) ^ p.type.hash_code();
-            }
+        };
 
+        struct key_hash {
+            std::size_t operator()(const key& k) const {
+                return std::hash<std::string>()(k.name) ^ std::hash<std::type_index>()(k.type);
+            }
+        };
+
+        struct key_equal {
+            bool operator()(const key& lhs, const key& rhs) const {
+                return lhs == rhs;
+            }
         };
         
-        std::unordered_map<key, std::shared_ptr<void>> _storage;
+        std::unordered_map<key, std::shared_ptr<void>, key_hash, key_equal> _storage;
         std::unordered_multimap<std::string, key> _names;
 
     public:
 
         template<typename T>
-        std::optional<std::reference_wrapper<T>> get_ref(const std::string& name) {
+        auto get_ref(const std::string& name) -> std::optional<std::reference_wrapper<T>> {
             key k = {name, typeid(T)};
             auto it = _storage.find(k);
             if (it != _storage.end()) {
@@ -219,7 +74,7 @@ namespace hasty {
         }
 
         template<typename T>
-        std::shared_ptr<T> get_ptr(const std::string& name) {
+        auto get_ptr(const std::string& name) -> std::shared_ptr<T> {
             key k = {name, typeid(T)};
             auto it = _storage.find(k);
             if (it != _storage.end()) {
@@ -255,15 +110,32 @@ namespace hasty {
             return _names.contains(name);
         };
 
+        std::set<std::string> names() {
+            std::set<std::string> names;
+            for (const auto& [name, key] : _names) {
+                names.insert(name);
+            }
+            return names;
+        }
+
+        std::vector<key> keys() {
+            std::vector<key> keys;
+            keys.reserve(_storage.size());
+            for (const auto& [key, ptr] : _storage) {
+                keys.push_back(key);
+            }
+            return keys;
+        }
+
     };
 
-    export class cuda_thread_pool {
+    export class storage_thread_pool {
     public:
 
-        cuda_thread_pool(std::vector<cuda_context>&& contexts)
-            : _stop(false), _work_length(0), _contexts(contexts)
+        storage_thread_pool(std::vector<storage>&& storages)
+            : _stop(false), _work_length(0), _storages(storages)
         {
-            _nthreads = _contexts.size();
+            _nthreads = _storages.size();
             _threads.resize(_nthreads);
             try {
                 for (size_t i = 0; i < _nthreads; i++) {
@@ -285,7 +157,7 @@ namespace hasty {
             }
         }
 
-        ~cuda_thread_pool() {
+        ~storage_thread_pool() {
             {
                 std::lock_guard<std::mutex> lock(_mutex);
                 _stop = true;
@@ -299,15 +171,15 @@ namespace hasty {
         }
 
         template<class F, class... Args>
-        std::future<typename std::invoke_result<F, cuda_context&, Args...>::type> enqueue(F&& f, std::set<std::string> names, Args&&... args) {
-            using return_type = typename std::invoke_result<F, cuda_context&, Args...>::type;
+        std::future<typename std::invoke_result<F, storage&, Args...>::type> enqueue(F&& f, std::set<std::string> names, Args&&... args) {
+            using return_type = typename std::invoke_result<F, storage&, Args...>::type;
 
-            auto task = std::make_shared<std::packaged_task<return_type(cuda_context&)>>(
+            auto task = std::make_shared<std::packaged_task<return_type(storage&)>>(
                 std::bind(std::forward<F>(f), std::placeholders::_1, std::forward<Args>(args)...)
             );
 
             std::future<return_type> res = task->get_future();
-            std::function<void(cuda_context&)> task_func = [task](cuda_context& context) { (*task)(context); };
+            std::function<void(storage&)> task_func = [task](storage& store) { (*task)(store); };
             {
                 std::lock_guard<std::mutex> lock(_mutex);
                 _work.push_back(std::make_pair(task, names));
@@ -320,13 +192,13 @@ namespace hasty {
     private:
 
         void work(size_t index) {
-            auto& context = _contexts[index];
+            auto& store = _storages[index];
 
             i32 sleeps_since_work = 0;
 
             while (true) {
                 
-                std::optional<std::function<void(cuda_context&)>> task;
+                std::optional<std::function<void(storage&)>> task;
                 {
                     std::unique_lock<std::mutex> lock(_mutex);
                     // We do quite alot of work here under a mutex lock, 
@@ -339,14 +211,14 @@ namespace hasty {
                         _cv.wait(lock);
                     }
 
-                    auto context_names = context.names();
+                    auto store_names = store.names();
                     
-                    if (context_names.size() != 0) {
+                    if (store_names.size() != 0) {
                         // Find most suitable work item
                         bool found = false;
                         for (auto workit = _work.begin(); workit != _work.end(); workit++) {
                             for (const auto& element : workit->second) {
-                                if (context_names.count(element) > 0) {
+                                if (store_names.count(element) > 0) {
                                     task = workit->first;
                                     _work.erase(workit);
                                     found = true;
@@ -376,7 +248,7 @@ namespace hasty {
 
                 // If a suitable task was found, of if we have slept for too long, execute the task
                 if (task.has_value()) {
-                    task.value()(context);
+                    task.value()(store);
                     sleeps_since_work = 0;
                     _work_length -= 1;
                 } else {
@@ -387,18 +259,23 @@ namespace hasty {
 
     private:
         i32 _nthreads;
-        std::vector<cuda_context> _contexts;
+        std::vector<storage> _storages;
         std::vector<std::thread> _threads;
 
         std::condition_variable _cv;
         std::mutex _mutex;
 
-        std::list<std::pair<std::function<void(cuda_context&)>, std::set<std::string>>> _work;
+        std::list<
+            std::pair<
+                std::function<void(storage&)>, 
+                std::set<std::string>
+            >
+        > _work;
 
         bool _stop;
         std::atomic<int> _work_length;
 
     };
 
-
 }
+

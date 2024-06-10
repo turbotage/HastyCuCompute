@@ -23,13 +23,13 @@ namespace hasty {
         static constexpr std::integral_constant<size_t, DIM> input_rank_t = {};
         static constexpr std::integral_constant<size_t, DIM> output_rank_t = {};
 
-        sense_normal_image(cache_tensor<D,TT,DIM>&& kernel, cache_tensor<D,TT,DIM+1>&& smaps)
+        sense_normal_image(cache_tensor<TT,DIM>&& kernel, cache_tensor<TT,DIM+1>&& smaps)
             : _kernel(kernel), _smaps(smaps)
         {
             build_runner();
         }
 
-        sense_normal_image(const trajectory<D,TT,DIM>& traj, cache_tensor<D,TT,1>&& smaps, span<DIM> shape, bool precise)
+        sense_normal_image(const trajectory<TT,DIM>& traj, cache_tensor<TT,1>&& smaps, span<DIM> shape, bool precise)
             : _smaps(smaps)
         {
             auto M = traj.coords[0].template shape<0>();
@@ -116,8 +116,8 @@ namespace hasty {
 
     private:
 
-        cache_tensor<D,TT,DIM> _kernel;
-        cache_tensor<D,TT,DIM+1> _smaps;
+        cache_tensor<TT,DIM> _kernel;
+        cache_tensor<TT,DIM+1> _smaps;
 
         using RETT = trace::tensor_prototype<D,TT,DIM>;
         using IN1 = trace::tensor_prototype<D,TT,DIM+1>;
@@ -137,13 +137,13 @@ namespace hasty {
         static constexpr std::integral_constant<size_t, DIM> input_rank_t = {};
         static constexpr std::integral_constant<size_t, DIM> output_rank_t = {};
 
-        sense_normal_image_diagonal(cache_tensor<D,TT,DIM>&& kernel, cache_tensor<D,TT,DIM+1>&& smaps, cache_tensor<D,TT,DIM>&& diagonal)
+        sense_normal_image_diagonal(cache_tensor<TT,DIM>&& kernel, cache_tensor<TT,DIM+1>&& smaps, cache_tensor<TT,DIM>&& diagonal)
             : _kernel(kernel), _smaps(smaps), _diagonal(diagonal)
         {
             build_runner();
         }
 
-        sense_normal_image_diagonal(const trajectory<D,TT,DIM>& traj, cache_tensor<D,TT,1>&& smaps, cache_tensor<D,TT,DIM>&& diagonal, span<DIM> shape, bool precise)
+        sense_normal_image_diagonal(const trajectory<TT,DIM>& traj, cache_tensor<TT,1>&& smaps, cache_tensor<TT,DIM>&& diagonal, span<DIM> shape, bool precise)
             : _smaps(smaps), _diagonal(diagonal)
         {
             auto M = traj.coords[0].template shape<0>();
@@ -232,9 +232,9 @@ namespace hasty {
         }
 
     private:
-        cache_tensor<D,TT,DIM> _kernel;
-        cache_tensor<D,TT,DIM+1> _smaps;
-        cache_tensor<D,TT,DIM> _diagonal;
+        cache_tensor<TT,DIM> _kernel;
+        cache_tensor<TT,DIM+1> _smaps;
+        cache_tensor<TT,DIM> _diagonal;
 
         using RETT = trace::tensor_prototype<D,TT,DIM>;
         using IN1 = trace::tensor_prototype<D,TT,DIM+1>;
@@ -252,41 +252,114 @@ namespace hasty {
 
     template<is_device D, is_fp_complex_tensor_type TT, size_t DIM>
     class sense_admm_minimizer {
+    private:
+
+        std::vector<cache_tensor<TT,2>> _data;
+        std::vector<cache_tensor<TT,DIM+1>> _smaps;
+        cache_tensor<TT,DIM> _diagonal;
+
     public:
 
-        sense_admm_minimizer(std::vector<trajectory<D,real_t<TT>,DIM>> trajes, 
-            std::vector<cache_tensor<D,TT,2>> data, cache_tensor<D,TT,DIM+1> smaps, cache_tensor<D,IT,DIM> diagonal)
-            : _trajes(trajes), _data(data), _smaps(smaps), _diagonal(diagonal)
+        sense_admm_minimizer(
+            std::vector<trajectory<real_t<TT>,DIM>> trajes, 
+            std::vector<cache_tensor<TT,2>> data,
+            std::vector<cache_tensor<TT,DIM>> fixed_img,
+            std::vector<std::tuple<i32,i32,i32>> frame_indices,
+            cache_tensor<TT,DIM+1> smaps, 
+            cache_tensor<TT,1> diagonal, 
+            cache_tensor<b8_t,DIM> interior_mask, 
+            cache_tensor<b8_t,1> fixed_mask
+            float lambda1,
+            float lambda2,
+            float lambda3)
+            : _data(data), _smaps(smaps), _diagonal(diagonal)
         {
+            
+            auto devices = get_cuda_devices();
+            std::vector<storage> storages(devices.size());
+            // This loop could also be done in parallel on all the devices
+            for (size_t i = 0; i < devices.size(); i++) {
+                device_idx didx = devices[i];
+                storages[i].template add<tensor<cuda_t,TT,DIM+1>>("smaps", 
+                        std::make_shared(_smaps.template get<cuda_t>(didx)));
+                storages[i].template add<tensor<cuda_t,b8_t,DIM>>("interior_mask", 
+                        std::make_shared(interior_mask.template get<cuda_t>(didx)));
+                storages[i].template add<tensor<cuda_t,TT,1>>("diagonal", 
+                        std::make_shared(_diagonal.template get<cuda_t>(didx)));
+                storages[i].template add<tensor<cuda_t,b8_t,1>>("fixed_mask",
+                        std::make_shared(fixed_mask.template get<cuda_t>(didx)));
 
-
-            auto func = [](cuda_context& cctx, i32 idx) {
-
-                
-                auto opts = nufft_plan<cuda_t, f64_t, DIM>{
-                    .ntransf = _smaps.template shape<0>(),
+                auto opts = nufft_opts<cuda_t, f64_t, DIM>{
+                    .ntransf = 1,
                     .tol = 1e-13,
                     .upsamp = nufft_upsamp_cuda::UPSAMP_2_0,
-                    .device_idx = i32(cctx.device_idx)
+                    .device_idx = i32(didx)
                 };
                 for_sequence<DIM>([&](auto i) {
                     opts.nmodes[i] = _smaps.template shape<1+i>();
                 });
 
-                auto plan = nufft_plan<cuda_t, f64_t, DIM>::make(opts);
+                sptr<nufft_plan<cuda_t, f64_t, DIM, nufft_type::BACKWARD>> plan = 
+                    std::move(nufft_plan<cuda_t, f64_t, DIM, nufft_type::BACKWARD>::make(opts));
+                storages[i].template add<nufft_plan<cuda_t, f64_t, DIM>>("backward_plan", std::move(plan));
+
+            }
+
+            std::mutex traj_mutex;
+            std::mutex data_mutex;
+            std::mutex fixed_img_mutex;
 
 
+            auto func = [&](storage& store, i32 idx) {
+                auto d_smaps = store.template get_ptr<tensor<cuda_t,TT,DIM+1>>("smaps");
+                auto d_interior_mask = store.template get_ptr<tensor<cuda_t,b8_t,DIM>>("interior_mask");
+                auto d_diagonal = store.template get_ptr<tensor<cuda_t,TT,1>>("diagonal");
+                auto d_fixed_mask = store.template get_ptr<tensor<cuda_t,b8_t,1>>("fixed_mask");
+                auto d_plan = store.template get_ptr<nufft_plan<cuda_t, f64_t, DIM>>("backward_plan");
+
+                device_idx didx = d_smaps->get_device_idx();
+
+                std::unique_lock<std::mutex> data_lock(data_mutex);
+                auto d_data = _data[idx].template get<cuda_t>(didx);
+                data_mutex.unlock();
+
+                // Create RHS
+
+                // Sensing Matrix part
+                std::array<tensor<cuda_t,TT,1>,DIM> d_coords;
+                for_sequence<DIM>([&](auto i) {
+                    std::unique_lock<std::mutex> traj_lock(traj_mutex);
+                    coords[i] = *trajes[idx].coords()[i].template get<cuda_t>(didx);
+                });
+
+                d_plan->set_coords(d_coords);
+
+                // create empty like
+                auto d_sum_img = make_zeros_tensor_like(d_smaps[0,Ellipsis()]);
+                auto d_nufft_output = make_zeros_tensor_like(d_sum_img);
+
+                for (i32 coilidx = 0; coilidx < d_smaps->shape<0>(); coilidx++) {
+                    auto d_cmap = d_smaps[coilidx,Ellipsis()];
+                    auto d_coildata = d_data[coilidx,Ellipsis()];
+
+                    d_plan->execute(d_coildata, d_nufft_output);
+                    
+                    d_sum_img += d_cmap.conj() * d_nufft_output;
+                }
+
+                auto d_output = d_diagonal.conj() * d_sum_img[d_interior_mask];
+
+                // Fixed image part
+                std::unique_lock<std::mutex> fixed_img_lock(fixed_img_mutex);
+                auto d_fixed_img = fixed_img[idx].template get<cuda_t>(didx);
+
+                auto d_fixed_output = d_fixed_img[d_fixed_mask] + d_output[d_fixed_mask];
+                d_fixed_output *= lambda1;
+                d_output.masked_scatter_(d_fixed_mask, d_fixed_output);
 
             };
 
 
-            for (size_t i = 0; i < trajes.size(); i++) {
-                // Create RHS
-                auto traj = trajes[i];
-                
-
-
-            }
         }
 
     private:

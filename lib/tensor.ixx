@@ -26,6 +26,7 @@ namespace hasty {
         CUDA13 = 13,
         CUDA14 = 14,
         CUDA15 = 15,
+        MAX_CUDA_DEVICES = 16
     };
 
     at::Device get_torch_device(device_idx idx) {
@@ -156,7 +157,8 @@ namespace hasty {
             if (!device_match<D>(idx))
                 throw std::runtime_error("tensor::tensor: device mismatch");
 
-            _pimpl = std::move(other._pimpl);
+            auto myother = std::move(other);
+            _pimpl = std::move(myother._pimpl);
             if (!(std::is_same_v<D, cpu_t> && std::is_same_v<DN, cpu_t>))
                 _pimpl->underlying_tensor = _pimpl->underlying_tensor.to(get_torch_device(idx));
 
@@ -173,6 +175,10 @@ namespace hasty {
         int64_t shape() const { 
             assert(_pimpl->shape[R] == _pimpl->underlying_tensor.size(R));    
             return _pimpl->shape[R]; 
+        }
+
+        std::array<int64_t, RANK> shape() const { 
+            return _pimpl->shape; 
         }
 
         constexpr int64_t ndim() const { 
@@ -286,9 +292,10 @@ namespace hasty {
                 _pimpl->underlying_tensor.to(scalar_type_func<TTN>()));
         }
 
+        /* must return a view */
         template<size_t N>
-        requires less_than_or_equal<N, RANK>
-        auto operator[](const std::array<Slice, N>& slices) {
+        requires less_than_or_equal<N, RANK> && less_than<0,RANK>
+        auto operator[](const std::array<Slice, N>& slices) -> tensor<D, TT, RANK> {
             
             at::Tensor tensorview = _pimpl->underlying_tensor.index(tch::torchidx(std::tuple_cat(slices)));
 
@@ -307,7 +314,9 @@ namespace hasty {
             return tensor<D, TT, RANK>(new_shape, std::move(tensorview));
         }
 
+        /* must return a view */
         template<index_type ...Idx>
+        requires less_than<0,RANK>
         auto operator[](std::tuple<Idx...> indices) {
             constexpr auto RETRANK = get_slice_rank<RANK, Idx...>();
 
@@ -324,10 +333,13 @@ namespace hasty {
                 new_shape[i] = tensorview.size(i);
             });
 
-            return tensor_factory<D, TT, RETRANK>::make(new_shape, std::move(tensorview));
+            //return tensor_factory<D, TT, RETRANK>::make(new_shape, std::move(tensorview));
+            return tensor<D,TT,RETRANK>(new_shape, std::move(tensorview));
         }
 
+        /* must return a view */
         template<index_type ...Idx>
+        requires less_than<0,RANK>
         auto operator[](Idx... indices) {
             constexpr auto RETRANK = get_slice_rank<RANK, Idx...>();
 
@@ -344,7 +356,15 @@ namespace hasty {
                 new_shape[i] = tensorview.size(i);
             });
 
-            return tensor_factory<D, TT, RETRANK>::make(new_shape, std::move(tensorview));
+            //return tensor_factory<D, TT, RETRANK>::make(new_shape, std::move(tensorview));
+            return tensor<D,TT,RETRANK>(new_shape, std::move(tensorview));
+        }
+
+        /* will not return a view */
+        auto operator[](const tensor<D,b8_t,RANK>& mask) -> tensor<D,TT,1> {
+            at::Tensor ret = _pimpl->underlying_tensor.index(mask.get_tensor());
+            std::array<int64_t, 1> new_shape = {ret.size(0)};
+            return tensor<D,TT,1>(new_shape, std::move(ret));
         }
 
         template<size_t R>
@@ -368,6 +388,11 @@ namespace hasty {
                 throw std::runtime_error("tensor::assign_: other tensor shape did not match this tensor shape");
             _pimpl->underlying_tensor = std::move(other._pimpl->underlying_tensor);
         }
+
+        void masked_scatter_(const tensor<D,b8_t,RANK>& mask, const tensor<D, TT, RANK>& src) {
+            _pimpl->underlying_tensor.masked_scatter_(mask.get_tensor(), src.get_tensor());
+        }
+
 
         auto norm() const -> std::enable_if<is_fp_tensor_type<TT>, 
             std::conditional_t<is_fp32_tensor_type<TT>, float, double>>::type {
@@ -550,12 +575,25 @@ namespace hasty {
 
     };
     
-    
     export template<typename T>
     concept is_tensor = requires(T t) {
         []<is_device D2, is_tensor_type TT2, size_t RANK2>(tensor<D2,TT2,RANK2>&){}(t);
     };
 
+    export template<is_tensor_type TT>
+    class scalar {
+    public:
+
+        scalar(base_t<TT> val) : _val(val) {}
+
+        template<is_device D>
+        tensor<D, TT, 0> to_tensor() {
+            return tensor<D, TT, 0>({}, at::scalar_tensor(_val));
+        }
+
+    private:
+        base_t<TT> _val;
+    };
 
     export enum struct tensor_make_opts {
         EMPTY,
@@ -565,30 +603,81 @@ namespace hasty {
     };
 
     export template<is_device D, is_tensor_type TT, size_t RANK>
+    tensor<D,TT,RANK> make_empty_tensor(span<RANK> shape, device_idx didx = device_idx::CPU) {
+        at::TensorOptions opts = at::TensorOptions(scalar_type_func<TT>(
+                )).device(c10::Device(device_type_func<D>(), i32(didx)));
+        using TF = tensor_factory<D,TT,RANK>;
+        return TF::make(shape, std::move(at::empty(shape.to_arr_ref(), opts)));
+    }
+
+    export template<is_device D, is_tensor_type TT, size_t RANK>
+    tensor<D,TT,RANK> make_ones_tensor(span<RANK> shape, device_idx didx = device_idx::CPU) {
+        at::TensorOptions opts = at::TensorOptions(scalar_type_func<TT>(
+                )).device(c10::Device(device_type_func<D>(), i32(didx)));
+        using TF = tensor_factory<D,TT,RANK>;
+        return TF::make(shape, std::move(at::ones(shape.to_arr_ref(), opts)));
+    }
+
+    export template<is_device D, is_tensor_type TT, size_t RANK>
+    tensor<D,TT,RANK> make_zeros_tensor(span<RANK> shape, device_idx didx = device_idx::CPU) {
+        at::TensorOptions opts = at::TensorOptions(scalar_type_func<TT>(
+                )).device(c10::Device(device_type_func<D>(), i32(didx)));
+        using TF = tensor_factory<D,TT,RANK>;
+        return TF::make(shape, std::move(at::zeros(shape.to_arr_ref(), opts)));
+    }
+
+    export template<is_device D, is_tensor_type TT, size_t RANK>
+    tensor<D,TT,RANK> make_rand_tensor(span<RANK> shape, device_idx didx = device_idx::CPU) {
+        at::TensorOptions opts = at::TensorOptions(scalar_type_func<TT>(
+                )).device(c10::Device(device_type_func<D>(), i32(didx)));
+        using TF = tensor_factory<D,TT,RANK>;
+        return TF::make(shape, std::move(at::rand(shape.to_arr_ref(), opts)));
+    }
+
+    export template<is_device D, is_tensor_type TT, size_t RANK>
     tensor<D,TT,RANK> make_tensor(span<RANK> shape, 
         device_idx didx = device_idx::CPU, tensor_make_opts make_opts=tensor_make_opts::EMPTY)
     {
-        at::TensorOptions opts = at::TensorOptions(scalar_type_func<TT>(
-                )).device(c10::Device(device_type_func<D>(), i32(didx)));
-
-        using TF = tensor_factory<D,TT,RANK>;
-
         switch (make_opts) {
             case tensor_make_opts::EMPTY:
-                return TF::make(shape, std::move(at::empty(shape.to_arr_ref(), opts)));
+                return make_empty_tensor<D,TT,RANK>(shape, didx);
             case tensor_make_opts::ONES:
-                return TF::make(shape, std::move(at::ones(shape.to_arr_ref(), opts)));
+                return make_ones_tensor<D,TT,RANK>(shape, didx);
             case tensor_make_opts::ZEROS:
-                return TF::make(shape, std::move(at::zeros(shape.to_arr_ref(), opts)));
+                return make_zeros_tensor<D,TT,RANK>(shape, didx);
             case tensor_make_opts::RAND_UNIFORM:
-                return TF::make(shape, std::move(at::rand(shape.to_arr_ref(), opts)));
+                return make_rand_tensor<D,TT,RANK>(shape, didx);
             default:
                 throw std::runtime_error("Unknown tensor_make_opts option");
         }
     }
 
     export template<is_device D, is_tensor_type TT, size_t RANK>
-    std::unique_ptr<tensor<D,TT,RANK>> make_tensor(at::Tensor tensorin)
+    tensor<D,TT,RANK> make_empty_tensor_like(const tensor<D,TT,RANK>& other)
+    {
+        return tensor_factory<D,TT,RANK>::make(other.shape(), std::move(at::empty_like(other.get_tensor())));
+    }
+
+    export template<is_device D, is_tensor_type TT, size_t RANK>
+    tensor<D,TT,RANK> make_ones_tensor_like(const tensor<D,TT,RANK>& other)
+    {
+        return tensor_factory<D,TT,RANK>::make(other.shape(), std::move(at::ones_like(other.get_tensor())));
+    }
+
+    export template<is_device D, is_tensor_type TT, size_t RANK>
+    tensor<D,TT,RANK> make_zeros_tensor_like(const tensor<D,TT,RANK>& other)
+    {
+        return tensor_factory<D,TT,RANK>::make(other.shape(), std::move(at::zeros_like(other.get_tensor())));
+    }
+
+    export template<is_device D, is_tensor_type TT, size_t RANK>
+    tensor<D,TT,RANK> make_rand_tensor_like(const tensor<D,TT,RANK>& other)
+    {
+        return tensor_factory<D,TT,RANK>::make(other.shape(), std::move(at::rand_like(other.get_tensor())));
+    }
+
+    export template<is_device D, is_tensor_type TT, size_t RANK>
+    auto make_tensor_unique(at::Tensor tensorin) -> uptr<tensor<D,TT,RANK>>
     {
         if (tensorin.ndimension() != RANK)
             throw std::runtime_error("make_tensor: tensor.ndimension() did not match RANK");
@@ -768,138 +857,53 @@ namespace hasty {
             return std::make_unique<tensor<D,TT,RANK>>(input_shape, std::move(input));
         }
 
-        /*
-        template<is_device DN>
-        static auto move_device(uptr<tensor<D,TT,RANK>> t, device_idx idx, bool block=true) -> 
-            uptr<tensor<DN, RANK>> {
-
-            if (idx == device_idx::CPU) {
-                if (device_type_func<FPT>() == device_type::CPU) {
-                    return std::move(t);
-                }
-                else {
-                    auto newtensor = t->get_tensor().to(at::kCPU);
-                    t = nullptr;
-                    return std::make_unique<tensor<swap_device_t<FPT>, RANK>>(t->get_pimpl()->shape, std::move(newtensor));
-                }
-            }
-            else {
-                if (device_type_func<FPT>() == device_type::CUDA) {
-                    auto newtensor = t->get_tensor().to(at::kCUDA, idx);
-                    t = nullptr;
-                    return std::make_unique<tensor<swap_device_t<FPT>, RANK>>(t->get_pimpl()->shape, std::move(newtensor));
-                }
-                else {
-                    throw std::runtime_error("tensor_factory::move_to: unknown device");
-                }
-            }
-        }
-        */
-
     };
 
 
 
 
-
-
-
-
-
-
-
-
-    export template<is_device D, is_tensor_type TT, size_t RANK>
+    export template<is_tensor_type TT, size_t RANK>
     class cache_tensor {
     private:
 
-        struct tensor_holder_cuda {
-            std::unique_ptr<tensor<cuda_t,TT,RANK>> tensor_cuda;
-            std::unique_ptr<tensor<cpu_t,TT,RANK>> tensor_cpu;
-        };
+        struct block {
+            std::mutex mutex;
 
-        struct tensor_holder_cpu {
-            std::unique_ptr<tensor<cpu_t,TT,RANK>> tensor_cpu;
-        };
-
-
-        struct cache_tensor_block {
-            size_t _hashidx;
-            static std::filesystem::path _cache_dir;
-            std::array<i64, RANK> _shape;
-            i32 _cacheable_count;
-            std::conditional_t<std::is_same_v<D,cuda_t>, 
-                tensor_holder_cuda, tensor_holder_cpu> _tensor_holder;
-        };
-
-        std::shared_ptr<cache_tensor_block> _block;
-        bool _marked_cacheable;
-
-
-        auto get_cuda_ptr(device_idx idx) -> std::enable_if<std::is_same_v<D,cuda_t>, uptr<tensor<cuda_t,TT,RANK>>>::type& {
-            auto& th = _block->_tensor_holder;
+            sptr<tensor<cpu_t,TT,RANK>> tensor_cpu;
+            std::array<i64, RANK> shape;
             
-            if (!th.tensor_cuda) {
-                th.tensor_cuda = std::make_unique<tensor<cuda_t,TT,RANK>>(std::move(th.get_cpu_ptr()), idx);
-                return th.tensor_cuda;
-            }
-            else if (th.tensor_cuda.get_device_idx() != idx) {
-                th.tensor_cuda = std::make_unique<tensor<cuda_t,TT,RANK>>(std::move(th.tensor_cuda), idx);
-                return th.tensor_cuda;
-            } else {
-                return th.tensor_cuda;
-            }
-        }
+            std::array<sptr<tensor<cuda_t,TT,RANK>>, size_t(device_idx::MAX_CUDA_DEVICES)> cuda_tensors;
+        };
+        std::shared_ptr<block> _block;
 
-        auto get_cpu_ptr() -> uptr<tensor<cpu_t,TT,RANK>>&  {
-            auto& th = _block->_tensor_holder;
-
-            if (th.tensor_cpu)
-                return th.tensor_cpu;
-
-            if constexpr(std::is_same_v<D,cuda_t>) {
-                if (th.tensor_cuda) {
-                    th.tensor_cpu = std::make_unique<cpu_t,TT,RANK>(std::move(th.tensor_cuda));
-                    return th.tensor_cpu;
+        size_t hashidx;
+        static std::filesystem::path cache_dir;
+        
+        void clean_cuda() 
+        {
+            for (auto& ct : _block->cuda_tensors) {
+                // Only the cache tensor is holding the cuda tensor so it's unecessary to keep it
+                if (ct->use_count() == 1) {
+                    ct = nullptr;
                 }
             }
-
-            th.tensor_cpu = load_from_disk();
-
-            return th.tensor_cpu;
         }
 
-        void mark_cacheable() {
-            if (_marked_cacheable)
-                return;
+        auto get_cpu_ptr() -> sptr<tensor<cpu_t,TT,RANK>>&  {
+            if (_block->tensor_cpu)
+                return _block->tensor_cpu;
 
-            ++(_block->_cacheable_count);
-            if (_block->_cacheable_count == _block.use_count()) {
-                cache_disk();
-            }
-        }
+            uncache_disk();
 
-        void mark_uncacheable() {
-            if (!_marked_cacheable)
-                return;
-            --(_block->_cacheable_count);
+            return _block->tensor_cpu;
         }
 
         void cache_disk() {
-            auto& th = _block->_tensor_holder;
 
-            if constexpr(std::is_same_v<D,cuda_t>) {
-                if (th.tensor_cuda) {
-                    th.tensor_cpu = std::make_unique<cpu_t,TT,RANK>(std::move(th.tensor_cuda));
-                    return th.tensor_cpu;
-                }
-            }
-
-            if (!th.tensor_cpu)
+            if (_block->tensor_cpu == nullptr)
                 throw std::runtime_error("cache_disk: no tensor to cache");
 
-            auto tt = th.tensor_cpu.get_tensor().contiguous();
-
+            auto tt = _block->tensor_cpu.get_tensor().contiguous();
 
             try {
                 namespace fs = std::filesystem;
@@ -917,7 +921,7 @@ namespace hasty {
             }
         }
 
-        uptr<tensor<cpu_t,TT,RANK>> load_from_disk() {
+        void uncache_disk() {
             namespace fs = std::filesystem;
             auto tt = tensor_factory<cpu_t,TT,RANK>::make(_block->_shape, at::empty(span(_block->_shape), at::kCPU));
             
@@ -935,39 +939,49 @@ namespace hasty {
                 throw;
             }
 
-            return tt;
+            _block->tensor_cpu = std::move(tt);
         }
 
+        auto get_cuda_ptr(device_idx didx) -> sptr<tensor<cuda_t,TT,RANK>>& {
+            if (_block->cuda_tensors[didx])
+                return _block->cuda_tensors[didx];
+
+            _block->cuda_tensors[didx] = std::make_shared(get_cpu_ptr().template to<cuda_t>(didx));
+
+            return _block->cuda_tensors[didx];
+        }
 
     public:
         
-        template<is_device D2>
-        tensor<D2,TT,RANK>& get(device_idx idx) {
-            if constexpr(std::is_same_v<D2,cpu_t>) {
-                return get_cpu();
+        template<is_device D>
+        auto get(device_idx idx = device_idx::CPU) -> sptr<tensor<D,TT,RANK>> {
+            std::unique_lock<std::mutex> lock(_block->mutex);
+
+            if constexpr(std::is_same_v<D,cpu_t>) {
+                return get_cpu_ptr();
             } else {
-                return get_cuda(idx);
+                return get_cuda_ptr(idx);
             }
         }
 
-        std::enable_if<std::is_same_v<D,cuda_t>, tensor<cuda_t,TT,RANK>>::type& get_cuda(device_idx idx) {
-            return *get_cuda_ptr(idx);
-        }
-
-        tensor<cpu_t,TT,RANK>& get_cpu() {
-            return *get_cpu_ptr();
-        }
-
         void cache() {
+            std::unique_lock<std::mutex> lock(_block->mutex);
             cache_disk();
         }
 
+        void free_cpu() {
+            std::unique_lock<std::mutex> lock(_block->mutex);
+            _block->tensor_cpu = nullptr;
+        }
+
         void uncache() {
-            auto& th = _block->_tensor_holder;
-            th.tensor_cpu = load_from_disk();
+            std::unique_lock<std::mutex> lock(_block->mutex);
+            uncache_disk();
         }
 
     };
 
 
 }
+
+
