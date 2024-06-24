@@ -186,7 +186,7 @@ namespace hasty {
             return RANK; 
         }
 
-        int64_t nelem() const { 
+        int64_t numel() const { 
             int64_t nelem = 0; 
             for_sequence<RANK>([&](auto i) { nelem *= _pimpl->shape[i]; });
             assert(nelem == _pimpl->underlying_tensor.numel());
@@ -356,8 +356,8 @@ namespace hasty {
                 new_shape[i] = tensorview.size(i);
             });
 
-            //return tensor_factory<D, TT, RETRANK>::make(new_shape, std::move(tensorview));
-            return tensor<D,TT,RETRANK>(new_shape, std::move(tensorview));
+            return tensor_factory<D, TT, RETRANK>::make(new_shape, std::move(tensorview));
+            //return tensor<D,TT,RETRANK>(new_shape, std::move(tensorview));
         }
 
         /* will not return a view */
@@ -393,9 +393,10 @@ namespace hasty {
             _pimpl->underlying_tensor.masked_scatter_(mask.get_tensor(), src.get_tensor());
         }
 
-
-        auto norm() const -> std::enable_if<is_fp_tensor_type<TT>, 
-            std::conditional_t<is_fp32_tensor_type<TT>, float, double>>::type {
+        
+        auto norm() const -> std::conditional_t<is_fp32_tensor_type<TT>, float, double> 
+        requires is_fp_tensor_type<TT> 
+        {
             
             if constexpr(is_fp32_tensor_type<TT>) {
                 return _pimpl->underlying_tensor.norm().template item<float>();
@@ -538,7 +539,12 @@ namespace hasty {
         template<typename T>
         requires std::integral<T> || std::floating_point<T>
         void operator/=(T val) {
+            auto utype = _pimpl->underlying_tensor.scalar_type();
             _pimpl->underlying_tensor.div_(val);
+            auto after_utype = _pimpl->underlying_tensor.scalar_type();
+            if (utype != after_utype)
+                throw std::runtime_error("tensor::operator/=: scalar type changed");
+                //_pimpl->underlying_tensor = _pimpl->underlying_tensor.to(utype);
         }
 
         template<typename T>
@@ -608,7 +614,7 @@ namespace hasty {
                 )).device(c10::Device(device_type_func<D>(), i32(didx)));
         using TF = tensor_factory<D,TT,RANK>;
         return TF::make(shape, std::move(at::empty(shape.to_arr_ref(), opts)));
-    }
+    }   
 
     export template<is_device D, is_tensor_type TT, size_t RANK>
     tensor<D,TT,RANK> make_ones_tensor(span<RANK> shape, device_idx didx = device_idx::CPU) {

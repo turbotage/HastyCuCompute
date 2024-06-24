@@ -275,29 +275,13 @@ void iotest() {
 }
 
 
-struct minner {
-
-    
-
-};
-
-void concept_test() {
-
-    using namespace hasty;
-
-    tensor<cuda_t, f32_t, 3> x;
-    tensor<cuda_t, f32_t, 3> u;
-    
-    
-
-}
 
 
 int main() {
 
-    concept_test();
+    //concept_test();
 
-    //iotest();
+    iotest();
 
     //trace_test();
 
