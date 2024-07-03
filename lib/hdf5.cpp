@@ -24,7 +24,7 @@ HighFive::CompoundType make_complex_double() {
 HIGHFIVE_REGISTER_TYPE(std::complex<double>, make_complex_double);
 
 
-at::Tensor hasty::import_tensor(const std::string& filepath, const std::string& dataset)
+at::Tensor import_tensor(const std::string& filepath, const std::string& dataset)
 {
     HighFive::File file(filepath, HighFive::File::ReadOnly);
     HighFive::DataSet dset = file.getDataSet(dataset);
@@ -58,7 +58,7 @@ at::Tensor hasty::import_tensor(const std::string& filepath, const std::string& 
         HighFive::CompoundType ctype(std::move(dtype));
         auto members = ctype.getMembers();
         if (members.size() != 2)
-            throw std::runtime_error("HighFive reported an Compound64 type");
+            throw std::runtime_error("HighFive reported an Compound128 type");
         std::vector<std::complex<double>> data(nelem);
         dset.read(data.data());
         return at::from_blob(data.data(), at::makeArrayRef(dims), at::ScalarType::ComplexDouble).detach().clone();
@@ -68,6 +68,55 @@ at::Tensor hasty::import_tensor(const std::string& filepath, const std::string& 
     }
 
 }
+
+namespace hasty {
+
+    auto import_tensors(const HighFive::DataSet& dataset) ->
+        std::variant<at::Tensor, std::vector<at::Tensor>>
+    {
+
+        HighFive::DataType dtype = dataset.getDataType();
+        std::string dtype_str = dtype.string();
+        size_t dtype_size = dtype.getSize();
+        std::vector<int64_t> dims = hasty::util::vector_cast<int64_t>(dataset.getDimensions());
+        size_t nelem = dataset.getElementCount();
+
+        if (dtype_str == "Float32") {
+            std::vector<float> data(nelem);
+            dataset.read(data.data());
+            return at::from_blob(data.data(), at::makeArrayRef(dims), at::ScalarType::Float).detach().clone();
+        }
+        else if (dtype_str == "Float64") {
+            std::vector<double> data(nelem);
+            dataset.read(data.data());
+            return at::from_blob(data.data(), at::makeArrayRef(dims), at::ScalarType::Double).detach().clone();
+        }
+        else if (dtype_str == "Compound64") {
+            HighFive::CompoundType ctype(std::move(dtype));
+            auto members = ctype.getMembers();
+            if (members.size() != 2)
+                throw std::runtime_error("HighFive reported an Compound64 type");
+            std::vector<std::complex<float>> data(nelem);
+            dataset.read(data.data());
+            return at::from_blob(data.data(), at::makeArrayRef(dims), at::ScalarType::ComplexFloat).detach().clone();
+        }
+        else if (dtype_str == "Compound128") {
+            HighFive::CompoundType ctype(std::move(dtype));
+            auto members = ctype.getMembers();
+            if (members.size() != 2)
+                throw std::runtime_error("HighFive reported an Compound64 type");
+            std::vector<std::complex<double>> data(nelem);
+            dataset.read(data.data());
+            return at::from_blob(data.data(), at::makeArrayRef(dims), at::ScalarType::ComplexDouble).detach().clone();
+        }
+        else {
+            throw std::runtime_error("disallowed dtype");
+        }
+
+    }
+
+}
+
 
 void hasty::export_tensor(const at::Tensor& tensor, const std::string& filepath, const std::string& dataset)
 {
@@ -96,3 +145,55 @@ void hasty::export_tensor(const at::Tensor& tensor, const std::string& filepath,
     }
 
 }
+
+auto hasty::import_tensors(const std::string& filepath, const std::optional<std::vector<std::regex>>& matchers) ->
+    std::unordered_map<std::string, std::variant<at::Tensor, std::vector<at::Tensor>>>
+{
+    HighFive::File file(filepath, HighFive::File::ReadOnly);
+    std::unordered_map<std::string, std::variant<at::Tensor, std::vector<at::Tensor>>> tensors;
+
+    std::function<void(const std::string&, const HighFive::Group&)> grouplam;
+
+    grouplam = [&](const std::string& groupname, const HighFive::Group& group) {
+        std::vector<std::string> names;
+
+        names = group.listObjectNames(HighFive::IndexType(H5_INDEX_NAME));
+        for (const auto& name : names) {
+            HighFive::ObjectType objtype = group.getObjectType(name);
+            if (objtype == HighFive::ObjectType::Dataset) {
+                auto datasetname = groupname + "/" + name;
+
+                // If matcher regexes were provided the dataset path must match at least one of them
+                if (matchers.has_value()) {
+                    bool matched = false;
+
+                    auto& matchersval = *matchers;
+                    for (auto it = matchersval.begin(); it != matchersval.end(); ++it) {
+                        if (std::regex_match(datasetname, *it)) {
+                            matched = true;
+                            break;
+                        }
+                    }
+                    // Skip this dataset if it didn't match any of the regexes
+                    if (!matched) {
+                        continue;
+                    }
+                }
+
+                // No matcher regexes were provided or the dataset path matched at least one of them, we can insert
+                tensors.insert({datasetname, import_tensors(group.getDataSet(name)) });
+
+            } else if (objtype == HighFive::ObjectType::Group) {
+                grouplam(groupname + "/" + name, group.getGroup(name));
+            } else {
+                throw std::runtime_error("unsupported object type");
+            }
+        }
+    };
+
+    grouplam("", file.getGroup("/"));
+
+    return tensors;
+}
+
+

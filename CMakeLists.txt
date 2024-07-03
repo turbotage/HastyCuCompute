@@ -4,6 +4,8 @@ project("HastyCuCompute" VERSION 0.1)
 
 enable_language(CUDA)
 
+set(CMAKE_BUILD_PARALLEL_LEVEL 8)
+
 include(cmake/CPM.cmake)
 include(FetchContent)
 
@@ -92,6 +94,9 @@ target_link_libraries(HastyCuCompute PRIVATE ${TORCH_LIBRARIES})
 
 find_package(HighFive CONFIG REQUIRED)
 target_link_libraries(HastyCuCompute PRIVATE HighFive)
+
+find_package(Matplot++ CONFIG REQUIRED)
+target_link_libraries(HastyCuCompute PRIVATE Matplot++::cimg Matplot++::matplot)
 
 if (MSVC)
   file(GLOB TORCH_DLLS "${TORCH_INSTALL_PREFIX}/lib/*.dll")

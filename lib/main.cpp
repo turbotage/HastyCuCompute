@@ -256,7 +256,6 @@ void compile_test() {
     std::cout << "Time: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms\n";
 }
 
-
 void iotest() {
 
     std::vector<std::complex<float>> data(640*640*640);
@@ -274,14 +273,22 @@ void iotest() {
 
 }
 
+void simple_invert() {
 
+    std::vector<std::regex> matchers = {std::regex("^/Kdata/.*")};
+    auto tset = hasty::import_tensors(
+        "/home/turbotage/Documents/4DRecon/other_data/MRI_Raw.h5", matchers);
+
+}
 
 
 int main() {
 
     //concept_test();
 
-    iotest();
+    //iotest();
+
+    simple_invert();
 
     //trace_test();
 
