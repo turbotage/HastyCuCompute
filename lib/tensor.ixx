@@ -222,6 +222,21 @@ namespace hasty {
             return tensor<D, TT, RANK>(_pimpl->shape, std::move(newtensor));
         }
 
+        tensor<D, TT, RANK+1> unsqueeze(int64_t dim) {
+            at::Tensor tensorview = _pimpl->underlying_tensor.unsqueeze(dim);
+            std::array<int64_t, RANK+1> new_shape;
+            for_sequence<RANK+1>([&](auto i) {
+                if (i < dim) {
+                    new_shape[i] = _pimpl->shape[i];
+                } else if (i == dim) {
+                    new_shape[i] = 1;
+                } else {
+                    new_shape[i] = _pimpl->shape[i-1];
+                }
+            });
+            return tensor<D, TT, RANK+1>(new_shape, std::move(tensorview));
+        }
+
         template<size_t R>
         tensor<D, TT, R> view(span<R> shape) {
             at::Tensor tensorview = _pimpl->underlying_tensor.view(shape.to_torch_arr());
@@ -867,6 +882,8 @@ namespace hasty {
 
 
 
+    export extern std::filesystem::path cache_dir;
+
 
     export template<is_tensor_type TT, size_t RANK>
     class cache_tensor {
@@ -877,13 +894,12 @@ namespace hasty {
 
             sptr<tensor<cpu_t,TT,RANK>> tensor_cpu;
             std::array<i64, RANK> shape;
+            size_t hashidx;
             
             std::array<sptr<tensor<cuda_t,TT,RANK>>, size_t(device_idx::MAX_CUDA_DEVICES)> cuda_tensors;
         };
         std::shared_ptr<block> _block;
 
-        size_t hashidx;
-        static std::filesystem::path cache_dir;
         
         void clean_cuda() 
         {
@@ -913,7 +929,7 @@ namespace hasty {
 
             try {
                 namespace fs = std::filesystem;
-                std::ofstream ofs(_block->_cache_dir / fs::path(std::to_string(_block->_hashidx) + ".htc"), std::ios::binary | std::ios::out);
+                std::ofstream ofs(cache_dir / fs::path(std::to_string(_block->hashidx) + ".htc"), std::ios::binary | std::ios::out);
                 if (!ofs.is_open())
                     throw std::runtime_error("cache_disk: could not open file for writing");
 
@@ -932,7 +948,7 @@ namespace hasty {
             auto tt = tensor_factory<cpu_t,TT,RANK>::make(_block->_shape, at::empty(span(_block->_shape), at::kCPU));
             
             try {
-                std::ifstream ifs(_block->_cache_dir / fs::path(std::to_string(_block->_hashidx) + ".htc"), std::ios::binary | std::ios::in);
+                std::ifstream ifs(cache_dir / fs::path(std::to_string(_block->hashidx) + ".htc"), std::ios::binary | std::ios::in);
                 if (!ifs.is_open())
                     throw std::runtime_error("load_from_disk: could not open file for reading");
                     
@@ -958,7 +974,17 @@ namespace hasty {
         }
 
     public:
-        
+
+        cache_tensor() = default;
+
+        cache_tensor(tensor<cpu_t,TT,RANK> cputen, size_t hashidx)
+        {
+            _block = std::make_shared<block>();
+            _block->tensor_cpu = std::make_shared<tensor<cpu_t,TT,RANK>>(std::move(cputen));
+            _block->shape = cputen.shape();
+            _block->hashidx = hashidx;
+        }
+
         template<is_device D>
         auto get(device_idx idx = device_idx::CPU) -> sptr<tensor<D,TT,RANK>> {
             std::unique_lock<std::mutex> lock(_block->mutex);

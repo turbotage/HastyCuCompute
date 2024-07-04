@@ -275,10 +275,80 @@ void iotest() {
 
 void simple_invert() {
 
-    std::vector<std::regex> matchers = {std::regex("^/Kdata/.*")};
-    auto tset = hasty::import_tensors(
+    using namespace hasty;
+
+    cache_dir = "/home/turbotage/Documents/hasty_cache/";
+
+    std::vector<std::regex> matchers = {
+        std::regex("^/Kdata/KData_.*"),
+        std::regex("^/Kdata/KX_.*"),
+        std::regex("^/Kdata/KY_.*"),
+        std::regex("^/Kdata/KZ_.*"),
+        std::regex("^/Kdata/KW_.*")
+    };
+    auto tset = import_tensors(
         "/home/turbotage/Documents/4DRecon/other_data/MRI_Raw.h5", matchers);
 
+    std::array<std::array<cache_tensor<f32_t,1>,3>,5> coords;
+    std::array<cache_tensor<f32_t,1>,5> weights;
+
+    std::array<cache_tensor<c64_t,2>,5> kdata;
+
+    auto shape_getter = []<size_t R>(const at::Tensor& ten) -> std::array<i64,R> {
+        if (ten.ndimension() != R) {
+            throw std::runtime_error("Invalid number of dimensions");
+        }
+        std::array<i64,R> shape;
+        for_sequence<R>([&](auto i) {
+            shape[i] = ten.size(i);
+        });
+        return shape;
+    };
+
+    for (int e = 0; e < 5; ++e) {
+
+        at::Tensor temp = std::get<at::Tensor>(tset["/Kdata/KX_E" + std::to_string(e)]);
+        coords[e][0] = cache_tensor<f32_t,1>(
+            tensor_factory<cpu_t,f32_t,1>::make(shape_getter.template operator()<1>(temp), temp),
+            std::hash<std::string>{}("KX_E" + std::to_string(e))
+        );
+        tset.erase("/Kdata/KX_E" + std::to_string(e));
+
+        temp = std::get<at::Tensor>(tset["/Kdata/KY_E" + std::to_string(e)]);
+        coords[e][1] = cache_tensor<f32_t,1>(
+            tensor_factory<cpu_t,f32_t,1>::make(shape_getter.template operator()<1>(temp), temp),
+            std::hash<std::string>{}("KY_E" + std::to_string(e))
+        );
+        tset.erase("/Kdata/KY_E" + std::to_string(e));
+
+        temp = std::get<at::Tensor>(tset["/Kdata/KZ_E" + std::to_string(e)]);
+        coords[e][2] = cache_tensor<f32_t,1>(
+            tensor_factory<cpu_t,f32_t,1>::make(shape_getter.template operator()<1>(temp), temp),
+            std::hash<std::string>{}("KZ_E" + std::to_string(e))
+        );
+        tset.erase("/Kdata/KZ_E" + std::to_string(e));
+
+        temp = std::get<at::Tensor>(tset["/Kdata/KW_E" + std::to_string(e)]);
+        weights[e] = cache_tensor<f32_t,1>(
+            tensor_factory<cpu_t,f32_t,1>::make(shape_getter.template operator()<1>(temp), temp),
+            std::hash<std::string>{}("KW_E" + std::to_string(e))
+        );
+        tset.erase("/Kdata/KW_E" + std::to_string(e));
+
+        std::vector<at::Tensor> kdata_tensors;
+        for (int c = 0; true; ++c) {
+            auto key = "/Kdata/KData_E" + std::to_string(e) + "_C" + std::to_string(c);
+            if (tset.find(key) == tset.end()) {
+                break;
+            }
+        
+            tset.erase(key);
+        }
+
+    }
+
+
+    std::cout << "Hello" << std::endl; 
 }
 
 

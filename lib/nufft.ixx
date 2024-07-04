@@ -306,6 +306,50 @@ namespace hasty {
             cufinufftf_plan, cufinufft_plan> _finufft_plan;
     };
 
+
+    export template<is_device D, is_fp_real_tensor_type TT, size_t DIM, nufft_type NT, typename... Variadic>
+    requires is_dim3<DIM>
+    struct simple_nufft {};
+
+    export template<is_fp_real_tensor_type TT, size_t DIM, nufft_type NT>
+    requires is_dim3<DIM>
+    struct simple_nufft<cuda_t,TT,DIM,NT> {
+
+        void operator()(const std::array<tensor<cuda_t,TT,1>,DIM>& coords, 
+            const tensor<cuda_t, complex_t<TT>,2>& input, tensor<cuda_t, complex_t<TT>, DIM+1>& output,
+            const std::optional<nufft_opts<cuda_t,TT,DIM>>& opts, bool loop_over_ntransf = false)
+        {
+            if (input.get_device_idx() != output.get_device_idx()) {
+                throw std::runtime_error("input and output tensors must be on the same device");
+            }
+
+            if (!opts.has_value()) {
+                opts.device_idx = input.get_device_idx();
+                std::array<int64_t, DIM> nmodes;
+                for_sequence<DIM>([&nmodes, &output](auto i) {
+                    nmodes[i] = output.template shape<i+1>();
+                });
+                if (loop_over_ntransf) {
+                    opts.ntransf = output.template shape<0>();
+                } else {
+                    opts.ntransf = 1;
+                }
+            }
+
+            auto plan = nufft_plan<cuda_t,TT,DIM,NT>::make(opts);
+            plan->setpts(coords);
+
+            if (loop_over_ntransf) {
+                for (int i = 0; i < output.template shape<0>(); i++) {
+                    plan->execute(input[i, Ellipsis{}].unsqueeze(0), output[i,Ellipsis{}].unsqueeze(0));
+                }
+            } else {
+                plan->execute(input, output);
+            }
+        }
+
+    };
+
     // TOEPLITZ KERNEL
 
     export template<is_fp_complex_tensor_type TT, size_t DIM>
