@@ -144,7 +144,7 @@ namespace hasty {
 
         template<size_t I>
         requires less_than<I,N>
-        const i64& get() {
+        const i64& get() const {
             return _data[I];
         }
 
@@ -154,9 +154,24 @@ namespace hasty {
             return _data != nullptr;
         }
 
+        template<size_t R1, size_t R2>
+        friend std::array<i64,R1+R2> operator+(const span<R1>& s1, const span<R2>& s2);
+
     private:
         const i64* _data;
     };
+
+    export template<size_t R1, size_t R2>
+    std::array<i64,R1+R2> operator+(const span<R1>& s1, const span<R2>& s2) {
+        std::array<i64,R1+R2> ret;
+        for_sequence<R1>([&](auto i) {
+            ret[i] = s1.template get<i>();
+        });
+        for_sequence<R2>([&](auto i) {
+            ret[i+R1] = s2.template get<i>();
+        });
+        return ret;
+    }
 
     export using nullspan = span<0>;
 

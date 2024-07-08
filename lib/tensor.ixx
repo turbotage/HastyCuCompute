@@ -60,6 +60,11 @@ namespace hasty {
 
     template<is_device D, is_tensor_type TT, size_t RANK>
     class tensor_impl {
+    private:
+
+        template<is_device DO1, is_tensor_type TTO1, size_t RO1>
+        friend class tensor;
+
     public:
 
         tensor_impl(const std::array<int64_t, RANK>& input_shape, at::Tensor input)
@@ -111,6 +116,9 @@ namespace hasty {
         std::shared_ptr<tensor_impl<D,TT,RANK>> _pimpl;
         friend class tensor_factory<D,TT,RANK>;
 
+        template<is_device DO1, is_tensor_type TTO1, size_t RO1>
+        friend class tensor;
+
         tensor(const std::array<int64_t, RANK>& input_shape, at::Tensor input) 
             : _pimpl(std::make_shared<tensor_impl<D,TT,RANK>>(input_shape, std::move(input)))
         {}
@@ -151,19 +159,81 @@ namespace hasty {
 
         tensor() = default;
 
+        tensor(const tensor<D, TT, RANK>& other) {
+            _pimpl = other._pimpl;
+        }
+
+        template<is_tensor_type TTN>
+        tensor(tensor<D, TTN, RANK>&& other) {
+
+            if (!_pimpl) {
+                _pimpl = std::make_shared<tensor_impl<D,TT,RANK>>(
+                        std::move(other._pimpl->shape), 
+                        std::move(other._pimpl->underlying_tensor)
+                    );
+            } else {
+                _pimpl->shape = std::move(other._pimpl->shape);
+                _pimpl->underlying_tensor = std::move(other._pimpl->underlying_tensor);
+            }
+            other._pimpl = nullptr;
+
+            if (!std::is_same_v<TT, TTN>) {
+                _pimpl->underlying_tensor = _pimpl->underlying_tensor.to(scalar_type_func<TT>());
+            }
+        }
+
         template<is_device DN, is_tensor_type TTN>
         requires (!std::is_same_v<DN, D> || !std::is_same_v<TTN, TT>)
-        tensor(tensor<DN, TTN, RANK>&& other, device_idx idx = device_idx::CPU) {
+        tensor(tensor<DN, TTN, RANK>&& other, device_idx idx) {
             if (!device_match<D>(idx))
                 throw std::runtime_error("tensor::tensor: device mismatch");
 
-            auto myother = std::move(other);
-            _pimpl = std::move(myother._pimpl);
-            if (!(std::is_same_v<D, cpu_t> && std::is_same_v<DN, cpu_t>))
-                _pimpl->underlying_tensor = _pimpl->underlying_tensor.to(get_torch_device(idx));
+            if (!_pimpl) {
+                _pimpl = std::make_shared<tensor_impl<D,TT,RANK>>(
+                        std::move(other._pimpl->shape), 
+                        std::move(other._pimpl->underlying_tensor)
+                    );
+            } else {
+                _pimpl->shape = std::move(other._pimpl->shape);
+                _pimpl->underlying_tensor = std::move(other._pimpl->underlying_tensor);
+            }
+            other._pimpl = nullptr;
 
-            if (!std::is_same_v<TT, TTN>)
+            if (!(std::is_same_v<D, cpu_t> && std::is_same_v<DN, cpu_t>)) {
+                if (get_device_idx() != idx) {
+                    _pimpl->underlying_tensor = _pimpl->underlying_tensor.to(get_torch_device(idx));
+                }
+            }
+
+            if (!std::is_same_v<TT, TTN>) {
                 _pimpl->underlying_tensor = _pimpl->underlying_tensor.to(scalar_type_func<TT>());
+            }
+        }
+
+        template<size_t R>
+        requires less_than_or_equal<R, RANK>
+        tensor<D, TT, RANK>& operator=(const tensor<D, TT, R>& other) {
+            if (!_pimpl) {
+                throw std::runtime_error("tensor::operator=: this tensor was not initialized");
+            } else {
+                _pimpl->underlying_tensor.copy_(other.get_tensor());
+            }
+            return *this;
+        }
+
+        tensor<D, TT, RANK>& operator=(const tensor<D, TT, RANK>& other) {
+            if (!_pimpl) {
+                throw std::runtime_error("tensor::operator=: this tensor was not initialized");
+            } else {
+                _pimpl->underlying_tensor.copy_(other.get_tensor());
+            }
+            return *this;
+        }
+
+        tensor<D, TT, RANK>& operator=(tensor<D, TT, RANK>&& other) {
+            _pimpl = std::move(other._pimpl);
+            other._pimpl = nullptr;
+            return *this;
         }
 
         base_t<TT> item() const requires (RANK == 0){
@@ -234,7 +304,7 @@ namespace hasty {
                     new_shape[i] = _pimpl->shape[i-1];
                 }
             });
-            return tensor<D, TT, RANK+1>(new_shape, std::move(tensorview));
+            return tensor_factory<D, TT, RANK+1>::make(new_shape, std::move(tensorview));
         }
 
         template<size_t R>
@@ -292,13 +362,13 @@ namespace hasty {
         }
 
         template<is_device DN>
-        tensor<D, TT, RANK> to(device_idx idx) {
+        tensor<DN, TT, RANK> to(device_idx idx) {
             static_assert(!(std::is_same_v<D, cpu_t> && std::is_same_v<DN, cpu_t>), "don't move from cpu to cpu");
 
             if (idx == get_device_idx())
                 throw std::runtime_error("tensor::to: tensor already on device");
 
-            return tensor<DN,TT,RANK>(_pimpl->underlying_tensor.shape, _pimpl->underlying_tensor.to(get_torch_device(idx)));
+            return tensor_factory<DN,TT,RANK>::make(_pimpl->shape, _pimpl->underlying_tensor.to(get_torch_device(idx)));
         }
 
         template<is_tensor_type TTN>
@@ -310,7 +380,7 @@ namespace hasty {
         /* must return a view */
         template<size_t N>
         requires less_than_or_equal<N, RANK> && less_than<0,RANK>
-        auto operator[](const std::array<Slice, N>& slices) -> tensor<D, TT, RANK> {
+        auto operator[](const std::array<Slice, N>& slices) const -> tensor<D, TT, RANK> {
             
             at::Tensor tensorview = _pimpl->underlying_tensor.index(tch::torchidx(std::tuple_cat(slices)));
 
@@ -326,13 +396,13 @@ namespace hasty {
             });
 
             //return tensor_factory<FPT, RANK>::make(new_shape, std::move(tensorview));
-            return tensor<D, TT, RANK>(new_shape, std::move(tensorview));
+            return tensor_factory<D, TT, RANK>::make(new_shape, std::move(tensorview));
         }
 
         /* must return a view */
         template<index_type ...Idx>
         requires less_than<0,RANK>
-        auto operator[](std::tuple<Idx...> indices) {
+        auto operator[](std::tuple<Idx...> indices) const {
             constexpr auto RETRANK = get_slice_rank<RANK, Idx...>();
 
             at::Tensor tensorview = _pimpl->underlying_tensor.index(tch::torchidx(indices));
@@ -355,7 +425,7 @@ namespace hasty {
         /* must return a view */
         template<index_type ...Idx>
         requires less_than<0,RANK>
-        auto operator[](Idx... indices) {
+        auto operator[](Idx... indices) const {
             constexpr auto RETRANK = get_slice_rank<RANK, Idx...>();
 
             at::Tensor tensorview = _pimpl->underlying_tensor.index({tch::torchidx(indices)...});
@@ -376,20 +446,10 @@ namespace hasty {
         }
 
         /* will not return a view */
-        auto operator[](const tensor<D,b8_t,RANK>& mask) -> tensor<D,TT,1> {
+        auto operator[](const tensor<D,b8_t,RANK>& mask) const -> tensor<D,TT,1> {
             at::Tensor ret = _pimpl->underlying_tensor.index(mask.get_tensor());
             std::array<int64_t, 1> new_shape = {ret.size(0)};
             return tensor<D,TT,1>(new_shape, std::move(ret));
-        }
-
-        template<size_t R>
-        requires less_than_or_equal<R, RANK>
-        void operator=(const tensor<D, TT, R>& other) {
-            _pimpl->underlying_tensor.copy_(other.get_tensor());
-        }
-
-        void operator=(const tensor<D, TT, RANK>& other) {
-            _pimpl->underlying_tensor.copy_(other.get_tensor());
         }
 
         void set_(const tensor<D, TT, RANK>& other) {
@@ -573,13 +633,13 @@ namespace hasty {
         friend auto operator+(const tensor<D1,TT1,R1>& lhs, const tensor<D1,TT2,R2>& rhs);
 
         template<is_device D1, is_tensor_type TT1, is_tensor_type TT2, size_t R1, size_t R2>
-        friend auto operator-(const tensor<D1,TT,R1>& lhs, const tensor<D1,TT,R2>& rhs);
+        friend auto operator-(const tensor<D1,TT1,R1>& lhs, const tensor<D1,TT2,R2>& rhs);
 
         template<is_device D1, is_tensor_type TT1, is_tensor_type TT2, size_t R1, size_t R2>
-        friend auto operator*(const tensor<D1,TT,R1>& lhs, const tensor<D1,TT,R2>& rhs);
+        friend auto operator*(const tensor<D1,TT1,R1>& lhs, const tensor<D1,TT2,R2>& rhs);
 
         template<is_device D1, is_tensor_type TT1, is_tensor_type TT2, size_t R1, size_t R2>
-        friend auto operator/(const tensor<D1,TT,R1>& lhs, const tensor<D1,TT,R2>& rhs);
+        friend auto operator/(const tensor<D1,TT1,R1>& lhs, const tensor<D1,TT2,R2>& rhs);
         
         template<is_device D1, is_fp_complex_tensor_type TT1, size_t R, size_t R1, size_t R2>
         requires less_than_or_equal<R1, R> && less_than_or_equal<R2, R> && equal_or_left_zero<R1, R2>
@@ -911,6 +971,15 @@ namespace hasty {
             }
         }
 
+        auto get_cpu() -> tensor<cpu_t,TT,RANK>& {
+            if (_block->tensor_cpu)
+                return *_block->tensor_cpu;
+
+            uncache_disk();
+
+            return *_block->tensor_cpu;
+        }
+
         auto get_cpu_ptr() -> sptr<tensor<cpu_t,TT,RANK>>&  {
             if (_block->tensor_cpu)
                 return _block->tensor_cpu;
@@ -945,14 +1014,14 @@ namespace hasty {
 
         void uncache_disk() {
             namespace fs = std::filesystem;
-            auto tt = tensor_factory<cpu_t,TT,RANK>::make(_block->_shape, at::empty(span(_block->_shape), at::kCPU));
+            auto tt = tensor_factory<cpu_t,TT,RANK>::make(_block->shape, at::empty(span(_block->shape).to_arr_ref(), at::kCPU));
             
             try {
                 std::ifstream ifs(cache_dir / fs::path(std::to_string(_block->hashidx) + ".htc"), std::ios::binary | std::ios::in);
                 if (!ifs.is_open())
                     throw std::runtime_error("load_from_disk: could not open file for reading");
                     
-                ifs.read(reinterpret_cast<char*>(tt->mutable_data_ptr()), tt->nelem() * sizeof(base_t<TT>));
+                ifs.read(reinterpret_cast<char*>(tt.mutable_data_ptr()), tt.numel() * sizeof(base_t<TT>));
                 ifs.close();
             } catch (std::ostream::failure e) {
                 std::cerr << "load_from_disk: Exception opening/writing/closing file\n";
@@ -961,16 +1030,25 @@ namespace hasty {
                 throw;
             }
 
-            _block->tensor_cpu = std::move(tt);
+            _block->tensor_cpu = std::make_shared<tensor<cpu_t,TT,RANK>>(std::move(tt));
+        }
+
+        auto get_cuda(device_idx didx) -> tensor<cuda_t,TT,RANK>& {
+            if (_block->cuda_tensors[i32(didx)])
+                return *_block->cuda_tensors[i32(didx)];
+
+            _block->cuda_tensors[i32(didx)] = std::make_shared<tensor<cuda_t,TT,RANK>>(get_cpu_ptr()->template to<cuda_t>(didx));
+
+            return *_block->cuda_tensors[i32(didx)];
         }
 
         auto get_cuda_ptr(device_idx didx) -> sptr<tensor<cuda_t,TT,RANK>>& {
-            if (_block->cuda_tensors[didx])
-                return _block->cuda_tensors[didx];
+            if (_block->cuda_tensors[i32(didx)])
+                return _block->cuda_tensors[i32(didx)];
 
-            _block->cuda_tensors[didx] = std::make_shared(get_cpu_ptr().template to<cuda_t>(didx));
+            _block->cuda_tensors[i32(didx)] = std::make_shared<tensor<cuda_t,TT,RANK>>(get_cpu_ptr()->template to<cuda_t>(didx));
 
-            return _block->cuda_tensors[didx];
+            return _block->cuda_tensors[i32(didx)];
         }
 
     public:
@@ -980,19 +1058,30 @@ namespace hasty {
         cache_tensor(tensor<cpu_t,TT,RANK> cputen, size_t hashidx)
         {
             _block = std::make_shared<block>();
-            _block->tensor_cpu = std::make_shared<tensor<cpu_t,TT,RANK>>(std::move(cputen));
             _block->shape = cputen.shape();
+            _block->tensor_cpu = std::make_shared<tensor<cpu_t,TT,RANK>>(std::move(cputen));
             _block->hashidx = hashidx;
         }
 
         template<is_device D>
-        auto get(device_idx idx = device_idx::CPU) -> sptr<tensor<D,TT,RANK>> {
+        auto get_ptr(device_idx idx = device_idx::CPU) -> sptr<tensor<D,TT,RANK>> {
             std::unique_lock<std::mutex> lock(_block->mutex);
 
             if constexpr(std::is_same_v<D,cpu_t>) {
                 return get_cpu_ptr();
             } else {
                 return get_cuda_ptr(idx);
+            }
+        }
+
+        template<is_device D>
+        auto get(device_idx idx = device_idx::CPU) -> tensor<D,TT,RANK> {
+            std::unique_lock<std::mutex> lock(_block->mutex);
+
+            if constexpr(std::is_same_v<D,cpu_t>) {
+                return get_cpu();
+            } else {
+                return get_cuda(idx);
             }
         }
 
@@ -1004,6 +1093,11 @@ namespace hasty {
         void free_cpu() {
             std::unique_lock<std::mutex> lock(_block->mutex);
             _block->tensor_cpu = nullptr;
+        }
+
+        void free(device_idx idx) {
+            std::unique_lock<std::mutex> lock(_block->mutex);
+            _block->cuda_tensors[idx] = nullptr;
         }
 
         void uncache() {

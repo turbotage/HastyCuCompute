@@ -311,44 +311,43 @@ namespace hasty {
     requires is_dim3<DIM>
     struct simple_nufft {};
 
-    export template<is_fp_real_tensor_type TT, size_t DIM, nufft_type NT>
+    export template<is_fp_real_tensor_type TT, size_t DIM>
     requires is_dim3<DIM>
-    struct simple_nufft<cuda_t,TT,DIM,NT> {
+    tensor<cpu_t, complex_t<TT>, DIM+1> nufft_backward_cpu_over_cuda(
+        span<DIM> dimshape,
+        const tensor<cpu_t, complex_t<TT>, 2>& input, 
+        const std::array<tensor<cuda_t,TT,1>,DIM>& coords)
+    {
+        nufft_opts<cuda_t,TT,DIM> options;
+        options.device_idx = (i32)input.get_device_idx();
+        options.nmodes = dimshape.to_arr();
+        options.ntransf = 1;
+        options.method = nufft_method_cuda::DEFAULT;
+        options.upsamp = nufft_upsamp_cuda::DEFAULT;
+        if (std::is_same_v<TT, f32_t>) {
+            options.tol = 1e-6;
+        } else {
+            options.tol = 1e-14;
+        }
+        
 
-        void operator()(const std::array<tensor<cuda_t,TT,1>,DIM>& coords, 
-            const tensor<cuda_t, complex_t<TT>,2>& input, tensor<cuda_t, complex_t<TT>, DIM+1>& output,
-            const std::optional<nufft_opts<cuda_t,TT,DIM>>& opts, bool loop_over_ntransf = false)
-        {
-            if (input.get_device_idx() != output.get_device_idx()) {
-                throw std::runtime_error("input and output tensors must be on the same device");
-            }
+        i32 ntransf = input.template shape<0>();
+        auto full_modes = span<1>({ntransf}) + dimshape;
+        auto output = make_tensor<cpu_t,c64_t,DIM+1>(span<DIM+1>(full_modes), 
+                        device_idx::CPU, tensor_make_opts::EMPTY);
 
-            if (!opts.has_value()) {
-                opts.device_idx = input.get_device_idx();
-                std::array<int64_t, DIM> nmodes;
-                for_sequence<DIM>([&nmodes, &output](auto i) {
-                    nmodes[i] = output.template shape<i+1>();
-                });
-                if (loop_over_ntransf) {
-                    opts.ntransf = output.template shape<0>();
-                } else {
-                    opts.ntransf = 1;
-                }
-            }
+        auto plan = nufft_plan<cuda_t,TT,DIM,nufft_type::BACKWARD>::make(options);
+        plan->setpts(coords);
 
-            auto plan = nufft_plan<cuda_t,TT,DIM,NT>::make(opts);
-            plan->setpts(coords);
-
-            if (loop_over_ntransf) {
-                for (int i = 0; i < output.template shape<0>(); i++) {
-                    plan->execute(input[i, Ellipsis{}].unsqueeze(0), output[i,Ellipsis{}].unsqueeze(0));
-                }
-            } else {
-                plan->execute(input, output);
-            }
+        for (int i = 0; i < output.template shape<0>(); i++) {
+            auto cuda_input = input[i, Ellipsis{}].unsqueeze(0).template to<cuda_t>(coords[0].get_device_idx());
+            auto output_slice = output[i, Ellipsis{}].unsqueeze(0);
+            auto cuda_output = output_slice.template to<cuda_t>(coords[0].get_device_idx());
+            plan->execute(cuda_input, cuda_output);
+            output_slice = cuda_output.template to<cpu_t>(device_idx::CPU);
         }
 
-    };
+    }
 
     // TOEPLITZ KERNEL
 

@@ -273,6 +273,8 @@ void iotest() {
 
 }
 
+#include <matplot/matplot.h>
+
 void simple_invert() {
 
     using namespace hasty;
@@ -294,7 +296,8 @@ void simple_invert() {
 
     std::array<cache_tensor<c64_t,2>,5> kdata;
 
-    auto shape_getter = []<size_t R>(const at::Tensor& ten) -> std::array<i64,R> {
+    auto shape_getter = []<size_t R>(const at::Tensor& ten) -> std::array<i64,R> 
+    {
         if (ten.ndimension() != R) {
             throw std::runtime_error("Invalid number of dimensions");
         }
@@ -305,30 +308,31 @@ void simple_invert() {
         return shape;
     };
 
+    int ncoil = 0;
     for (int e = 0; e < 5; ++e) {
 
-        at::Tensor temp = std::get<at::Tensor>(tset["/Kdata/KX_E" + std::to_string(e)]);
+        at::Tensor temp = std::get<at::Tensor>(tset["/Kdata/KX_E" + std::to_string(e)]).flatten();
         coords[e][0] = cache_tensor<f32_t,1>(
             tensor_factory<cpu_t,f32_t,1>::make(shape_getter.template operator()<1>(temp), temp),
             std::hash<std::string>{}("KX_E" + std::to_string(e))
         );
         tset.erase("/Kdata/KX_E" + std::to_string(e));
 
-        temp = std::get<at::Tensor>(tset["/Kdata/KY_E" + std::to_string(e)]);
+        temp = std::get<at::Tensor>(tset["/Kdata/KY_E" + std::to_string(e)]).flatten();
         coords[e][1] = cache_tensor<f32_t,1>(
             tensor_factory<cpu_t,f32_t,1>::make(shape_getter.template operator()<1>(temp), temp),
             std::hash<std::string>{}("KY_E" + std::to_string(e))
         );
         tset.erase("/Kdata/KY_E" + std::to_string(e));
 
-        temp = std::get<at::Tensor>(tset["/Kdata/KZ_E" + std::to_string(e)]);
+        temp = std::get<at::Tensor>(tset["/Kdata/KZ_E" + std::to_string(e)]).flatten();
         coords[e][2] = cache_tensor<f32_t,1>(
             tensor_factory<cpu_t,f32_t,1>::make(shape_getter.template operator()<1>(temp), temp),
             std::hash<std::string>{}("KZ_E" + std::to_string(e))
         );
         tset.erase("/Kdata/KZ_E" + std::to_string(e));
 
-        temp = std::get<at::Tensor>(tset["/Kdata/KW_E" + std::to_string(e)]);
+        temp = std::get<at::Tensor>(tset["/Kdata/KW_E" + std::to_string(e)]).flatten();
         weights[e] = cache_tensor<f32_t,1>(
             tensor_factory<cpu_t,f32_t,1>::make(shape_getter.template operator()<1>(temp), temp),
             std::hash<std::string>{}("KW_E" + std::to_string(e))
@@ -336,16 +340,49 @@ void simple_invert() {
         tset.erase("/Kdata/KW_E" + std::to_string(e));
 
         std::vector<at::Tensor> kdata_tensors;
+        kdata_tensors.reserve(48);
         for (int c = 0; true; ++c) {
             auto key = "/Kdata/KData_E" + std::to_string(e) + "_C" + std::to_string(c);
             if (tset.find(key) == tset.end()) {
                 break;
             }
+            kdata_tensors.push_back(std::get<at::Tensor>(tset[key]).flatten());
         
             tset.erase(key);
         }
 
+        auto kdata_tensor = at::stack(kdata_tensors, 0);
+        ncoil = kdata_tensor.size(0);
+        kdata[0] = cache_tensor<c64_t,2>(
+            tensor_factory<cpu_t,c64_t,2>::make(shape_getter.template operator()<2>(kdata_tensor), kdata_tensor),
+            std::hash<std::string>{}("KData_E" + std::to_string(e))
+        );
+
     }
+
+
+    for (int e = 0; e < 5; ++e) {
+
+        std::array<tensor<cuda_t,f32_t,1>,3> coords_gpu;
+        for (int i = 0; i < 3; ++i) {
+            coords_gpu[i] = coords[e][i].template get<cuda_t>(device_idx::CUDA0);
+        }
+
+        //auto weights_gpu = weights[e].template get<cuda_t>(device_idx::CUDA0);
+        //auto kdata_gpu = kdata[e].template get<cuda_t>(device_idx::CUDA0);
+
+        auto input = weights[e].template get<cpu_t>().unsqueeze(0) * kdata[e].template get<cpu_t>();
+
+        tensor<cpu_t,c64_t,4> images = make_tensor<cpu_t,c64_t,4>(
+            span<4>({ncoil, 320, 320, 320}), device_idx::CUDA0, tensor_make_opts::EMPTY);
+
+        auto output = nufft_backward_cpu_over_cuda(span<3>({320, 320, 320}), input, coords_gpu);
+
+        
+
+    }
+
+
 
 
     std::cout << "Hello" << std::endl; 

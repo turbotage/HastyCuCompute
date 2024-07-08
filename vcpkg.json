@@ -7,7 +7,7 @@
       "version>=": "2.9.0"
     },
     {
-      "name": "matplotplusplus"
+      "name": "pybind11"
     }
   ],
   "builtin-baseline": "64e15f6669480b2d2bff1e5e815c571a8213421e"
