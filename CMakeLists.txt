@@ -108,8 +108,12 @@ if (MSVC)
                      $<TARGET_FILE_DIR:example-app>)
 endif (MSVC)
 
-find_package(Python COMPONENTS Interpreter Development)
+find_package(Python COMPONENTS Interpreter Development REQUIRED)
 find_package(pybind11 CONFIG REQUIRED)
+
+message(STATUS "Python library: ${Python_LIBRARIES}")
+message(STATUS "Python include directories: ${Python_INCLUDE_DIRS}")
+
 target_link_libraries(HastyCuCompute PRIVATE pybind11::module)
 target_link_libraries(HastyCuCompute PRIVATE Python::Python)
 
@@ -128,12 +132,17 @@ target_include_directories(HastyCuCompute PUBLIC
 
 
 add_executable(HastyCuTest "test/main.cpp")
-target_link_libraries(HastyCuTest PRIVATE HastyCuCompute Python::Python)
+target_link_libraries(HastyCuTest PRIVATE HastyCuCompute pybind11::module)
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_link_libraries(HastyCuTest PRIVATE ${Python_DEBUG_LIBRARIES})
+else()
+    target_link_libraries(HastyCuTest PRIVATE ${Python_LIBRARIES})
+endif()
 
 target_include_directories(HastyCuTest PRIVATE
     $<TARGET_PROPERTY:HastyCuCompute,INTERFACE_INCLUDE_DIRECTORIES>
 )
-
+# Ensure that the Python library is linked with the correct flags
 
 #find_package(matx CONFIG REQUIRED)
 #target_link_libraries(HastyCuCompute PRIVATE matx::matx)
