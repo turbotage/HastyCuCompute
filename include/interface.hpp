@@ -12,6 +12,7 @@
 #pragma warning Unknown dynamic link import/export semantics.
 #endif
 
+#include "pch.hpp"
 #include <pybind11/pybind11.h>
 
 namespace at {

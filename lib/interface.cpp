@@ -1,5 +1,5 @@
-#include "pch.hpp"
-#include "interface.hpp"
+#include "../include/interface.hpp"
+
 
 
 void ffi::run_main() {

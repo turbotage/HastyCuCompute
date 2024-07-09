@@ -14,7 +14,7 @@ include(FetchContent)
 set(CMAKE_CXX_SCAN_FOR_MODULES ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-add_library(HastyCuCompute 
+add_library(HastyCuCompute SHARED
     "lib/interface.cpp"
     "lib/hdf5.cpp"
     "lib/tensor.cpp"
@@ -99,10 +99,6 @@ target_link_libraries(HastyCuCompute PRIVATE HighFive)
 #find_package(Matplot++ CONFIG REQUIRED)
 #target_link_libraries(HastyCuCompute PRIVATE Matplot++::cimg Matplot++::matplot)
 
-find_package(Python COMPONENTS Interpreter Development)
-find_package(pybind11 CONFIG)
-target_link_libraries(HastyCuCompute PRIVATE pybind11::module)
-
 if (MSVC)
   file(GLOB TORCH_DLLS "${TORCH_INSTALL_PREFIX}/lib/*.dll")
   add_custom_command(TARGET example-app
@@ -112,17 +108,27 @@ if (MSVC)
                      $<TARGET_FILE_DIR:example-app>)
 endif (MSVC)
 
+find_package(Python COMPONENTS Interpreter Development)
+find_package(pybind11 CONFIG REQUIRED)
+target_link_libraries(HastyCuCompute PRIVATE pybind11::module)
+target_link_libraries(HastyCuCompute PRIVATE Python::Python)
+
+
 install(FILES interface.hpp DESTINATION include/HastyCuCompute)
 
 target_include_directories(HastyCuCompute PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
+    ${pybind11_INCLUDE_DIRS}
+    ${TORCH_INCLUDE_DIRS}
+    ${CUDA_INCLUDE_DIRS}
+    ${Python_INCLUDE_DIRS}
 )
 
 
 
 add_executable(HastyCuTest "test/main.cpp")
-target_link_libraries(HastyCuTest PRIVATE HastyCuCompute)
+target_link_libraries(HastyCuTest PRIVATE HastyCuCompute Python::Python)
 
 target_include_directories(HastyCuTest PRIVATE
     $<TARGET_PROPERTY:HastyCuCompute,INTERFACE_INCLUDE_DIRECTORIES>

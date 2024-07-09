@@ -3,7 +3,7 @@ module;
 #include <ostream>
 #include <sstream>
 #include "c10/cuda/CUDAStream.h"
-#include "../pch.hpp"
+#include "pch.hpp"
 
 export module util:torch;
 
