@@ -347,6 +347,7 @@ namespace hasty {
             output_slice = cuda_output.template to<cpu_t>(device_idx::CPU);
         }
 
+        return output;
     }
 
     // TOEPLITZ KERNEL

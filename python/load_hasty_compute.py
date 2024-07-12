@@ -35,7 +35,9 @@ c = hc.add(a,b)
 
 print(c)
 
+output = hc.simple_invert()
 
+print(output.shape)
 
 if __name__ == "__main__":
 

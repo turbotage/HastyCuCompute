@@ -27,6 +27,8 @@ namespace ffi {
 
     LIB_EXPORT pybind11::array add(pybind11::buffer a, pybind11::buffer b);
 
+    LIB_EXPORT pybind11::array simple_invert();
+
     LIB_EXPORT void run_main();
 }
 
