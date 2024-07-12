@@ -3,7 +3,9 @@
 
 int main() {
 
-    ffi::run_main();
+    //ffi::run_main();
+
+    auto output = ffi::test_simple_invert();
 
     return 0;
 

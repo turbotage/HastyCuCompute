@@ -12,18 +12,12 @@
 #pragma warning Unknown dynamic link import/export semantics.
 #endif
 
-#include "pch.hpp"
+//#include "pch.hpp"
+#include <pybind11/pybind11.h>
+#include <pybind11/numpy.h>
 
-/*
-namespace at {
-    class Tensor;
-}
-*/
+namespace pyffi {
 
-
-namespace ffi {
-
-    LIB_EXPORT at::Tensor test_simple_invert();
+    LIB_EXPORT pybind11::array test_simple_invert();
 
 }
-

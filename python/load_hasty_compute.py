@@ -25,21 +25,9 @@ sys.path.insert(0, libpath)
 import libHastyCuCompute as hc
 import numpy as np
 
-a = np.random.rand(3,3)
-b = np.random.rand(3,1)
-
-print(a)
-print(b)
-
-c = hc.add(a,b)
-
-print(c)
-
-output = hc.simple_invert()
+output = hc.test_simple_invert()
 
 print(output.shape)
 
 if __name__ == "__main__":
-
-
     print('Hello')

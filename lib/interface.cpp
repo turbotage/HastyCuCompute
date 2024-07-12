@@ -1,5 +1,5 @@
 #include "interface.hpp"
-#include "pch.hpp"
+#include "py_interface.hpp"
 
 import util;
 import nufft;
@@ -9,10 +9,6 @@ import tensor;
 import min;
 
 import hdf5;
-
-void ffi::run_main() {
-    std::cout << "Running main" << std::endl;
-}
 
 namespace py = pybind11;
 
@@ -110,14 +106,8 @@ namespace {
 }
 
 
-py::array ffi::add(py::buffer a, py::buffer b) {
-    auto aten = from_buffer(a);
-    auto bten = from_buffer(b);
-    return from_tensor(aten + bten);
-}
 
-
-py::array ffi::simple_invert() {
+at::Tensor ffi::test_simple_invert() {
 
     using namespace hasty;
 
@@ -154,6 +144,7 @@ py::array ffi::simple_invert() {
     for (int e = 0; e < 5; ++e) {
 
         at::Tensor temp = std::get<at::Tensor>(tset["/Kdata/KX_E" + std::to_string(e)]).flatten();
+        temp *= (3.141592 / 160.0);
         coords[e][0] = cache_tensor<f32_t,1>(
             tensor_factory<cpu_t,f32_t,1>::make(shape_getter.template operator()<1>(temp), temp),
             std::hash<std::string>{}("KX_E" + std::to_string(e))
@@ -161,6 +152,7 @@ py::array ffi::simple_invert() {
         tset.erase("/Kdata/KX_E" + std::to_string(e));
 
         temp = std::get<at::Tensor>(tset["/Kdata/KY_E" + std::to_string(e)]).flatten();
+        temp *= (3.141592 / 160.0);
         coords[e][1] = cache_tensor<f32_t,1>(
             tensor_factory<cpu_t,f32_t,1>::make(shape_getter.template operator()<1>(temp), temp),
             std::hash<std::string>{}("KY_E" + std::to_string(e))
@@ -168,6 +160,7 @@ py::array ffi::simple_invert() {
         tset.erase("/Kdata/KY_E" + std::to_string(e));
 
         temp = std::get<at::Tensor>(tset["/Kdata/KZ_E" + std::to_string(e)]).flatten();
+        temp *= (3.141592 / 160.0);
         coords[e][2] = cache_tensor<f32_t,1>(
             tensor_factory<cpu_t,f32_t,1>::make(shape_getter.template operator()<1>(temp), temp),
             std::hash<std::string>{}("KZ_E" + std::to_string(e))
@@ -195,7 +188,7 @@ py::array ffi::simple_invert() {
 
         auto kdata_tensor = at::stack(kdata_tensors, 0);
         ncoil = kdata_tensor.size(0);
-        kdata[0] = cache_tensor<c64_t,2>(
+        kdata[e] = cache_tensor<c64_t,2>(
             tensor_factory<cpu_t,c64_t,2>::make(shape_getter.template operator()<2>(kdata_tensor), kdata_tensor),
             std::hash<std::string>{}("KData_E" + std::to_string(e))
         );
@@ -226,8 +219,11 @@ py::array ffi::simple_invert() {
 
     auto output = at::stack(output_tensors, 0);
 
-    return from_tensor(output);
+    return output;
+}
 
+py::array pyffi::test_simple_invert() {
+    return from_tensor(ffi::test_simple_invert());
 }
 
 
@@ -236,56 +232,6 @@ PYBIND11_MODULE(MODULE_NAME, m) {
     
     m.doc() = "HastyCuCompute module";
 
-    m.def("add", &ffi::add, "Add two tensors");
-
-    m.def("simple_invert", &ffi::simple_invert, "Simple invert");
+    m.def("test_simple_invert", &pyffi::test_simple_invert, "Simple invert");
 
 }
-
-/*
-    py::class_<ffi::Tensor>(m, "Tensor", py::buffer_protocol())
-        .def_buffer([](ffi::Tensor& m) -> py::buffer_info {
-
-            auto ten = m.get();
-
-            std::string format;
-            if (ten.scalar_type() == at::kFloat) {
-                format = py::format_descriptor<float>::format();
-            } else if (ten.scalar_type() == at::kDouble) {
-                format = py::format_descriptor<double>::format();
-            } else if (ten.scalar_type() == at::kInt) {
-                format = py::format_descriptor<int>::format();
-            } else if (ten.scalar_type() == at::kLong) {
-                format = py::format_descriptor<int64_t>::format();
-            } else if (ten.scalar_type() == at::kComplexFloat) {
-                format = "Zf"; //py::format_descriptor<std::complex<float>>::format();
-            } else if (ten.scalar_type() == at::kComplexDouble) {
-                format = "Zd"; //py::format_descriptor<std::complex<double>>::format();
-            } else if (ten.scalar_type() == at::kBool) {
-                format = py::format_descriptor<bool>::format();
-            } else {
-                throw std::runtime_error("Unsupported format");
-            }
-            
-            // Get the number of dimensions
-            py::ssize_t ndim = ten.ndimension();
-            py::ssize_t itemsize = ten.element_size();
-
-            // Get the shape and strides
-            std::vector<py::ssize_t> shape(ndim);
-            std::vector<py::ssize_t> strides(ndim);
-            for (int i = 0; i < ndim; ++i) {
-                shape[i] = ten.size(i);
-                strides[i] = ten.stride(i) * itemsize;
-            }
-
-            return py::buffer_info(
-                ten.data_ptr(),
-                itemsize,
-                format.c_str(),
-                ndim,
-                shape,
-                strides
-            );
-        });
-    */
