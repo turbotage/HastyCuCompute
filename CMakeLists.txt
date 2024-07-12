@@ -101,43 +101,82 @@ target_link_libraries(HastyCuCompute PRIVATE HighFive)
 
 if (MSVC)
   file(GLOB TORCH_DLLS "${TORCH_INSTALL_PREFIX}/lib/*.dll")
-  add_custom_command(TARGET example-app
+  add_custom_command(TARGET HastyCuCompute
                      POST_BUILD
                      COMMAND ${CMAKE_COMMAND} -E copy_if_different
                      ${TORCH_DLLS}
-                     $<TARGET_FILE_DIR:example-app>)
+                     $<TARGET_FILE_DIR:HastyCuCompute>)
 endif (MSVC)
 
-find_package(Python COMPONENTS Interpreter Development REQUIRED)
+#if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+#    set(Python_FIND_ABI "ON" "ANY" "ANY")
+#else()
+#    set(Python_FIND_ABI "OFF" "ANY" "ANY")
+#endif()
+
+find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
 find_package(pybind11 CONFIG REQUIRED)
 
-message(STATUS "Python library: ${Python_LIBRARIES}")
-message(STATUS "Python include directories: ${Python_INCLUDE_DIRS}")
+#message(STATUS "Python library: ${Python_LIBRARIES}")
+#message(STATUS "Python debug libraries: ${Python_DEBUG_LIBRARIES}")
+#message(STATUS "Python sabi libraries: ${Python_SABI_LIBRARIES}")
+#message(STATUS "Python link options: ${Python_LINK_OPTIONS}")
+#message(STATUS "Python debug postfix: ${Python_DEBUG_POSTFIX}")
+#message(STATUS "Python include directories: ${Python_INCLUDE_DIRS}")
 
+#message(STATUS "Python library: ${Python3_LIBRARIES}")
+#message(STATUS "Python debug libraries: ${Python3_DEBUG_LIBRARIES}")
+#message(STATUS "Python sabi libraries: ${Python3_SABI_LIBRARIES}")
+#message(STATUS "Python link options: ${Python3_LINK_OPTIONS}")
+#message(STATUS "Python debug postfix: ${Python3_DEBUG_POSTFIX}")
+#message(STATUS "Python include directories: ${Python3_INCLUDE_DIRS}")
+
+
+target_link_libraries(HastyCuCompute PRIVATE Python3::Python)
 target_link_libraries(HastyCuCompute PRIVATE pybind11::module)
-target_link_libraries(HastyCuCompute PRIVATE Python::Python)
 
+set_target_properties(HastyCuCompute PROPERTIES
+         INTERPROCEDURAL_OPTIMIZATION ON
+         CXX_VISIBILITY_PRESET "hidden"
+         VISIBILITY_INLINES_HIDDEN ON
+     )
 
-install(FILES interface.hpp DESTINATION include/HastyCuCompute)
+set_target_properties(HastyCuCompute PROPERTIES INSTALL_RPATH "$ORIGIN")
+
+#if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+#    target_link_libraries(HastyCuCompute PRIVATE ${Python_DEBUG_LIBRARIES})
+#else()
+#    target_link_libraries(HastyCuCompute PRIVATE ${Python_LIBRARIES})
+#endif()
+
+install(FILES include/interface.hpp include/pch.hpp DESTINATION include/HastyCuCompute)
 
 target_include_directories(HastyCuCompute PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
-    ${pybind11_INCLUDE_DIRS}
-    ${TORCH_INCLUDE_DIRS}
-    ${CUDA_INCLUDE_DIRS}
-    ${Python_INCLUDE_DIRS}
+    $<BUILD_INTERFACE:${pybind11_INCLUDE_DIRS}>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+    $<BUILD_INTERFACE:${TORCH_INCLUDE_DIRS}>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+    $<BUILD_INTERFACE:${CUDA_INCLUDE_DIRS}>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+    $<BUILD_INTERFACE:${Python_INCLUDE_DIRS}>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
 
 
 add_executable(HastyCuTest "test/main.cpp")
-target_link_libraries(HastyCuTest PRIVATE HastyCuCompute pybind11::module)
-if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-    target_link_libraries(HastyCuTest PRIVATE ${Python_DEBUG_LIBRARIES})
-else()
-    target_link_libraries(HastyCuTest PRIVATE ${Python_LIBRARIES})
-endif()
+target_link_libraries(HastyCuTest PRIVATE HastyCuCompute pybind11::headers)
+target_link_libraries(HastyCuTest PRIVATE ${TORCH_LIBRARIES})
+target_link_libraries(HastyCuTest PRIVATE Python3::Python)
+
+
+#if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+#    target_link_libraries(HastyCuTest PRIVATE ${Python_DEBUG_LIBRARIES})
+#else()
+#    target_link_libraries(HastyCuTest PRIVATE ${Python_LIBRARIES})
+#endif()
 
 target_include_directories(HastyCuTest PRIVATE
     $<TARGET_PROPERTY:HastyCuCompute,INTERFACE_INCLUDE_DIRECTORIES>
@@ -151,5 +190,57 @@ target_include_directories(HastyCuTest PRIVATE
 #target_link_libraries(HastyCuCompute PRIVATE mathdx::cufftdx)
 
 
+# Ensure that the Python library is linked with the correct flags
 
+#find_package(matx CONFIG REQUIRED)
+#target_link_libraries(HastyCuCompute PRIVATE matx::matx)
 
+#find_package(mathdx REQUIRED COMPONENTS cufftdx)
+#target_link_libraries(HastyCuCompute PRIVATE mathdx::cufftdx)
+
+#set(RUNTIME_DEPENDENCIES
+#)
+
+include(GNUInstallDirs)
+install(TARGETS HastyCuCompute EXPORT HastyCuComputeTargets
+    RUNTIME_DEPENDENCIES
+        PRE_EXCLUDE_REGEXES ".*libstdc\+\+.*" ".*libgcc.*" ".*libc.so.*"
+        POST_EXCLUDE_REGEXES ".*libstdc\+\+.*" ".*libgcc.*" ".*libc.so.*"
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
+    RUNTIME DESTINATION bin
+    INCLUDES DESTINATION include
+    FILE_SET HEADERS DESTINATION include/HastyCuCompute
+    FILE_SET CXX_MODULES DESTINATION include/HastyCuCompute/modules
+)
+
+# Install the export set
+install(EXPORT HastyCuComputeTargets
+    FILE HastyCuComputeTargets.cmake
+    NAMESPACE HastyCuCompute::
+    DESTINATION lib/cmake/HastyCuCompute
+)
+
+# Install the include files
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
+    DESTINATION include/HastyCuCompute
+)
+
+# Install the CMake package configuration file
+include(CMakePackageConfigHelpers)
+write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/HastyCuComputeConfigVersion.cmake"
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY AnyNewerVersion
+)
+
+configure_file(HastyCuComputeConfig.cmake.in
+    "${CMAKE_CURRENT_BINARY_DIR}/HastyCuComputeConfig.cmake"
+    @ONLY
+)
+
+install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/HastyCuComputeConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/HastyCuComputeConfigVersion.cmake"
+    DESTINATION lib/cmake/HastyCuCompute
+)
