@@ -21,6 +21,8 @@ namespace py = pybind11;
 namespace {
 
     at::Tensor from_buffer(const py::buffer& buf) {
+        c10::InferenceMode im_guard{};
+
         py::buffer_info info = buf.request();
 
         std::cout << "Format: " << info.format << std::endl;
@@ -105,28 +107,41 @@ namespace {
 
 }
 
-
+void print_memory_usage() {
+    std::ifstream file("/proc/self/status");
+    std::string line;
+    while (std::getline(file, line)) {
+        if (line.substr(0, 6) == "VmRSS:") {
+            std::cout << "Resident Set Size: " << line.substr(6) << std::endl;
+        } else if (line.substr(0, 6) == "VmSize:") {
+            std::cout << "Virtual Memory Size: " << line.substr(6) << std::endl;
+        }
+    }
+}
 
 at::Tensor ffi::test_simple_invert() {
+    c10::InferenceMode im_guard{};
 
     using namespace hasty;
+
+    print_memory_usage();
 
     cache_dir = "/home/turbotage/Documents/hasty_cache/";
 
     std::vector<std::regex> matchers = {
-        std::regex("^/Kdata/KData_.*"),
+        std::regex("^/Kdata/KData_E0_.*"),
+        std::regex("^/Kdata/KData_E1_.*"),
         std::regex("^/Kdata/KX_.*"),
         std::regex("^/Kdata/KY_.*"),
         std::regex("^/Kdata/KZ_.*"),
         std::regex("^/Kdata/KW_.*")
     };
+    
+    std::cout << "Importing tensors" << std::endl;
     auto tset = import_tensors(
         "/home/turbotage/Documents/4DRecon/other_data/MRI_Raw.h5", matchers);
 
-    std::array<std::array<cache_tensor<f32_t,1>,3>,5> coords;
-    std::array<cache_tensor<f32_t,1>,5> weights;
-
-    std::array<cache_tensor<c64_t,2>,5> kdata;
+    print_memory_usage();
 
     auto shape_getter = []<size_t R>(const at::Tensor& ten) -> std::array<i64,R> 
     {
@@ -140,12 +155,22 @@ at::Tensor ffi::test_simple_invert() {
         return shape;
     };
 
-    int ncoil = 0;
-    for (int e = 0; e < 5; ++e) {
+    std::vector<at::Tensor> output_tensors;
+    output_tensors.reserve(5);
+    for (int e = 0; e < 2; ++e) {
+        
+        
+
+        std::array<cache_tensor<f32_t,1>,3> coords;
+        cache_tensor<f32_t,1> weights;
+
+        cache_tensor<c64_t,2> kdata;
+
+        std::cout << "Starting encode " << e << std::endl;
 
         at::Tensor temp = std::get<at::Tensor>(tset["/Kdata/KX_E" + std::to_string(e)]).flatten();
         temp *= (3.141592 / 160.0);
-        coords[e][0] = cache_tensor<f32_t,1>(
+        coords[0] = cache_tensor<f32_t,1>(
             tensor_factory<cpu_t,f32_t,1>::make(shape_getter.template operator()<1>(temp), temp),
             std::hash<std::string>{}("KX_E" + std::to_string(e))
         );
@@ -153,7 +178,7 @@ at::Tensor ffi::test_simple_invert() {
 
         temp = std::get<at::Tensor>(tset["/Kdata/KY_E" + std::to_string(e)]).flatten();
         temp *= (3.141592 / 160.0);
-        coords[e][1] = cache_tensor<f32_t,1>(
+        coords[1] = cache_tensor<f32_t,1>(
             tensor_factory<cpu_t,f32_t,1>::make(shape_getter.template operator()<1>(temp), temp),
             std::hash<std::string>{}("KY_E" + std::to_string(e))
         );
@@ -161,14 +186,14 @@ at::Tensor ffi::test_simple_invert() {
 
         temp = std::get<at::Tensor>(tset["/Kdata/KZ_E" + std::to_string(e)]).flatten();
         temp *= (3.141592 / 160.0);
-        coords[e][2] = cache_tensor<f32_t,1>(
+        coords[2] = cache_tensor<f32_t,1>(
             tensor_factory<cpu_t,f32_t,1>::make(shape_getter.template operator()<1>(temp), temp),
             std::hash<std::string>{}("KZ_E" + std::to_string(e))
         );
         tset.erase("/Kdata/KZ_E" + std::to_string(e));
 
         temp = std::get<at::Tensor>(tset["/Kdata/KW_E" + std::to_string(e)]).flatten();
-        weights[e] = cache_tensor<f32_t,1>(
+        weights = cache_tensor<f32_t,1>(
             tensor_factory<cpu_t,f32_t,1>::make(shape_getter.template operator()<1>(temp), temp),
             std::hash<std::string>{}("KW_E" + std::to_string(e))
         );
@@ -181,36 +206,35 @@ at::Tensor ffi::test_simple_invert() {
             if (tset.find(key) == tset.end()) {
                 break;
             }
-            kdata_tensors.push_back(std::get<at::Tensor>(tset[key]).flatten());
+            temp = std::get<at::Tensor>(tset[key]).flatten();
+
+            kdata_tensors.push_back(temp);
         
             tset.erase(key);
         }
-
         auto kdata_tensor = at::stack(kdata_tensors, 0);
-        ncoil = kdata_tensor.size(0);
-        kdata[e] = cache_tensor<c64_t,2>(
-            tensor_factory<cpu_t,c64_t,2>::make(shape_getter.template operator()<2>(kdata_tensor), kdata_tensor),
+        kdata_tensors.clear();
+
+        kdata = cache_tensor<c64_t,2>(
+             tensor_factory<cpu_t,c64_t,2>::make(shape_getter.template operator()<2>(kdata_tensor), kdata_tensor),
             std::hash<std::string>{}("KData_E" + std::to_string(e))
         );
+        kdata_tensor = at::empty({0}, at::kFloat);
 
-    }
-
-    std::vector<at::Tensor> output_tensors;
-    output_tensors.reserve(5);
-    for (int e = 0; e < 5; ++e) {
+        std::cout << "Starting nuffts" << std::endl;
 
         std::array<tensor<cuda_t,f32_t,1>,3> coords_gpu;
         for (int i = 0; i < 3; ++i) {
-            coords_gpu[i] = coords[e][i].template get<cuda_t>(device_idx::CUDA0);
+            coords_gpu[i] = move(coords[i].template get<cuda_t>(device_idx::CUDA0));
         }
+        
+        auto input = weights.template get<cpu_t>().unsqueeze(0) * kdata.template get<cpu_t>();
 
-        //auto weights_gpu = weights[e].template get<cuda_t>(device_idx::CUDA0);
-        //auto kdata_gpu = kdata[e].template get<cuda_t>(device_idx::CUDA0);
-
-        auto input = weights[e].template get<cpu_t>().unsqueeze(0) * kdata[e].template get<cpu_t>();
-
-        tensor<cpu_t,c64_t,4> images = make_tensor<cpu_t,c64_t,4>(
-            span<4>({ncoil, 320, 320, 320}), device_idx::CUDA0, tensor_make_opts::EMPTY);
+        coords[0] = cache_tensor<f32_t,1>();
+        coords[1] = cache_tensor<f32_t,1>();
+        coords[2] = cache_tensor<f32_t,1>();
+        weights = cache_tensor<f32_t,1>();
+        kdata = cache_tensor<c64_t,2>();
 
         auto output = nufft_backward_cpu_over_cuda(span<3>({320, 320, 320}), input, coords_gpu);        
 
@@ -221,7 +245,7 @@ at::Tensor ffi::test_simple_invert() {
 
     return output;
 }
-
+ 
 py::array pyffi::test_simple_invert() {
     return from_tensor(ffi::test_simple_invert());
 }

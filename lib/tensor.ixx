@@ -211,7 +211,7 @@ namespace hasty {
         }
 
         template<size_t R>
-        requires less_than_or_equal<R, RANK>
+        requires less_than<R, RANK>
         tensor<D, TT, RANK>& operator=(const tensor<D, TT, R>& other) {
             if (!_pimpl) {
                 throw std::runtime_error("tensor::operator=: this tensor was not initialized");
@@ -230,10 +230,11 @@ namespace hasty {
             return *this;
         }
 
-        tensor<D, TT, RANK>& operator=(tensor<D, TT, RANK>&& other) {
-            _pimpl = std::move(other._pimpl);
-            other._pimpl = nullptr;
-            return *this;
+        tensor<D,TT,RANK>& operator=(move<tensor<D,TT,RANK>>&& other) {
+            auto& other_pimpl = other.get()._pimpl;
+            _pimpl = std::move(other_pimpl);
+            other_pimpl = nullptr;
+            return *this;   
         }
 
         base_t<TT> item() const requires (RANK == 0){
@@ -332,6 +333,7 @@ namespace hasty {
             _pimpl->underlying_tensor.contiguous_();
         }
 
+        /*
         void assign(at::Tensor in)
         {
             if (RANK != in.ndimension())
@@ -360,6 +362,7 @@ namespace hasty {
                 _pimpl->underlying_tensor = std::move(in);
             }
         }
+        */
 
         template<is_device DN>
         tensor<DN, TT, RANK> to(device_idx idx) {
@@ -384,8 +387,17 @@ namespace hasty {
             
             at::Tensor tensorview = _pimpl->underlying_tensor.index(tch::torchidx(std::tuple_cat(slices)));
 
-            if (!tensorview.is_view())
-                throw std::runtime_error("tensor::operator[]: tensorview is not a view");
+            // In inference views are not tracked
+            //if (!tensorview.is_view())
+            //    throw std::runtime_error("tensor::operator[]: tensorview is not a view");
+
+            auto pimpl_dptr = _pimpl->underlying_tensor.data_ptr();
+            auto byte_length = _pimpl->underlying_tensor.numel() * _pimpl->underlying_tensor.element_size();
+            auto view_dptr = tensorview.data_ptr();
+
+            if ((view_dptr < pimpl_dptr) || (view_dptr > (pimpl_dptr + byte_length))) {
+                throw std::runtime_error("tensor::operator[]: tensorview data not pointing into underlying tensor");
+            }
 
             if (tensorview.ndimension() != RANK)
                 throw std::runtime_error("tensor::operator[]: tensorview.ndimension() did not match RETRANK");
@@ -407,11 +419,21 @@ namespace hasty {
 
             at::Tensor tensorview = _pimpl->underlying_tensor.index(tch::torchidx(indices));
 
-            if (!tensorview.is_view())
-                throw std::runtime_error("tensor::operator[]: tensorview is not a view");
+            // In inference views are not tracked
+            //if (!tensorview.is_view())
+            //    throw std::runtime_error("tensor::operator[]: tensorview is not a view");
 
-            if (tensorview.ndimension() != RETRANK)
+            auto pimpl_dptr = _pimpl->underlying_tensor.data_ptr();
+            auto byte_length = _pimpl->underlying_tensor.numel() * _pimpl->underlying_tensor.element_size();
+            auto view_dptr = tensorview.data_ptr();
+
+            if ((view_dptr < pimpl_dptr) || (view_dptr > (pimpl_dptr + byte_length))) {
+                throw std::runtime_error("tensor::operator[]: tensorview data not pointing into underlying tensor");
+            }
+
+            if (tensorview.ndimension() != RETRANK) {
                 throw std::runtime_error("tensor::operator[]: tensorview.ndimension() did not match RETRANK");
+            }
 
             std::array<int64_t, RETRANK> new_shape;
             for_sequence<RETRANK>([&](auto i) {
@@ -428,13 +450,25 @@ namespace hasty {
         auto operator[](Idx... indices) const {
             constexpr auto RETRANK = get_slice_rank<RANK, Idx...>();
 
-            at::Tensor tensorview = _pimpl->underlying_tensor.index({tch::torchidx(indices)...});
+            auto torch_indices = {tch::torchidx(indices)...};
 
-            if (!tensorview.is_view())
-                throw std::runtime_error("tensor::operator[]: tensorview is not a view");
+            at::Tensor tensorview = _pimpl->underlying_tensor.index(torch_indices);
 
-            if (tensorview.ndimension() != RETRANK)
+            // In inference views are not tracked
+            //if (!tensorview.is_view())
+            //    throw std::runtime_error("tensor::operator[]: tensorview is not a view");
+
+            size_t pimpl_dptr = (size_t)_pimpl->underlying_tensor.data_ptr();
+            size_t byte_length = _pimpl->underlying_tensor.numel() * _pimpl->underlying_tensor.element_size();
+            size_t view_dptr = (size_t)tensorview.data_ptr();
+
+            if ((view_dptr < pimpl_dptr) || (view_dptr > (pimpl_dptr + byte_length))) {
+                throw std::runtime_error("tensor::operator[]: tensorview data not pointing into underlying tensor");
+            }
+
+            if (tensorview.ndimension() != RETRANK) {
                 throw std::runtime_error("tensor::operator[]: tensorview.ndimension() did not match RETRANK");
+            }
 
             std::array<int64_t, RETRANK> new_shape;
             for_sequence<RETRANK>([&](auto i) {

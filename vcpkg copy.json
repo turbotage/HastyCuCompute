@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "dependencies": [
     {
+      "name": "highfive",
+      "version>=": "2.9.0"
+    },
+    {
       "name": "pybind11"
     },
     {

@@ -2,8 +2,38 @@ module;
 
 #include "pch.hpp"
 #include <highfive/highfive.hpp>
+#include <H5Cpp.h>
 
 module hdf5;
+
+struct Complex64 {
+    float real;
+    float imag;
+};
+
+HighFive::CompoundType make_complex_float_struct() {
+	return {
+		{"real", HighFive::AtomicType<float>{}},
+		{"imag", HighFive::AtomicType<float>{}}
+	};
+}
+
+HIGHFIVE_REGISTER_TYPE(Complex64, make_complex_float_struct);
+
+struct Complex128 {
+    double real;
+    double imag;
+};
+
+HighFive::CompoundType make_complex_double_struct() {
+	return {
+		{"real", HighFive::AtomicType<double>{}},
+		{"imag", HighFive::AtomicType<double>{}}
+	};
+}
+
+HIGHFIVE_REGISTER_TYPE(Complex128, make_complex_double_struct);
+
 
 HighFive::CompoundType make_complex_float() {
 	return {
@@ -24,6 +54,8 @@ HighFive::CompoundType make_complex_double() {
 HIGHFIVE_REGISTER_TYPE(std::complex<double>, make_complex_double);
 
 
+
+/*
 at::Tensor import_tensor(const std::string& filepath, const std::string& dataset)
 {
     HighFive::File file(filepath, HighFive::File::ReadOnly);
@@ -34,15 +66,21 @@ at::Tensor import_tensor(const std::string& filepath, const std::string& dataset
     size_t dtype_size = dtype.getSize();
     std::vector<int64_t> dims = hasty::util::vector_cast<int64_t>(dset.getDimensions());
     size_t nelem = dset.getElementCount();
+    //auto flat_dset = dset.reshapeMemSpace({nelem});
+    dtype.getClass();
 
     if (dtype_str == "Float32") {
         std::vector<float> data(nelem);
-        dset.read(data.data());
+        //flat_dset.read(data);
+        //dset.read<float>(data.data());
+        dset.read_raw<float>(data.data());
         return at::from_blob(data.data(), at::makeArrayRef(dims), at::ScalarType::Float).detach().clone();
     }
     else if (dtype_str == "Float64") {
         std::vector<double> data(nelem);
-        dset.read(data.data());
+        //flat_dset.read(data);
+        //dset.read<double>(data.data());
+        dset.read_raw<double>(data.data());
         return at::from_blob(data.data(), at::makeArrayRef(dims), at::ScalarType::Double).detach().clone();
     }
     else if (dtype_str == "Compound64") {
@@ -51,7 +89,9 @@ at::Tensor import_tensor(const std::string& filepath, const std::string& dataset
         if (members.size() != 2)
             throw std::runtime_error("HighFive reported an Compound64 type");
         std::vector<std::complex<float>> data(nelem);
-        dset.read(data.data());
+        //flat_dset.read(data);
+        //dset.read<std::complex<float>>(data.data());
+        dset.read_raw<std::complex<float>>(data.data());
         return at::from_blob(data.data(), at::makeArrayRef(dims), at::ScalarType::ComplexFloat).detach().clone();
     }
     else if (dtype_str == "Compound128") {
@@ -60,7 +100,9 @@ at::Tensor import_tensor(const std::string& filepath, const std::string& dataset
         if (members.size() != 2)
             throw std::runtime_error("HighFive reported an Compound128 type");
         std::vector<std::complex<double>> data(nelem);
-        dset.read(data.data());
+        //flat_dset.read(data);
+        //dset.read<std::complex<double>>(data.data());
+        dset.read_raw<std::complex<double>>(data.data());
         return at::from_blob(data.data(), at::makeArrayRef(dims), at::ScalarType::ComplexDouble).detach().clone();
     }
     else {
@@ -68,6 +110,8 @@ at::Tensor import_tensor(const std::string& filepath, const std::string& dataset
     }
 
 }
+*/
+
 
 namespace hasty {
 
@@ -80,15 +124,21 @@ namespace hasty {
         size_t dtype_size = dtype.getSize();
         std::vector<int64_t> dims = hasty::util::vector_cast<int64_t>(dataset.getDimensions());
         size_t nelem = dataset.getElementCount();
+        auto flat_dset = dataset.reshapeMemSpace({nelem});
+        
 
         if (dtype_str == "Float32") {
             std::vector<float> data(nelem);
-            dataset.read(data.data());
+            flat_dset.read(data);
+            //dataset.read<float>(data.data());
+            //dataset.read_raw<float>(data.data());
             return at::from_blob(data.data(), at::makeArrayRef(dims), at::ScalarType::Float).detach().clone();
         }
         else if (dtype_str == "Float64") {
             std::vector<double> data(nelem);
-            dataset.read(data.data());
+            flat_dset.read(data);
+            //dataset.read<double>(data.data());
+            //dataset.read_raw<double>(data.data());
             return at::from_blob(data.data(), at::makeArrayRef(dims), at::ScalarType::Double).detach().clone();
         }
         else if (dtype_str == "Compound64") {
@@ -96,8 +146,11 @@ namespace hasty {
             auto members = ctype.getMembers();
             if (members.size() != 2)
                 throw std::runtime_error("HighFive reported an Compound64 type");
-            std::vector<std::complex<float>> data(nelem);
-            dataset.read(data.data());
+
+            std::vector<Complex64> data(nelem);
+            //flat_dset.read<Complex64>(data);
+            //dataset.read<std::complex<float>>(data.data());
+            dataset.read_raw<Complex64>(data.data());
             return at::from_blob(data.data(), at::makeArrayRef(dims), at::ScalarType::ComplexFloat).detach().clone();
         }
         else if (dtype_str == "Compound128") {
@@ -105,8 +158,10 @@ namespace hasty {
             auto members = ctype.getMembers();
             if (members.size() != 2)
                 throw std::runtime_error("HighFive reported an Compound64 type");
-            std::vector<std::complex<double>> data(nelem);
-            dataset.read(data.data());
+            std::vector<Complex128> data(nelem);
+            //flat_dset.read(data);
+            //dataset.read<std::complex<double>>(data.data());
+            dataset.read_raw<Complex128>(data.data());
             return at::from_blob(data.data(), at::makeArrayRef(dims), at::ScalarType::ComplexDouble).detach().clone();
         }
         else {

@@ -343,7 +343,9 @@ namespace hasty {
             auto cuda_input = input[i, Ellipsis{}].unsqueeze(0).template to<cuda_t>(coords[0].get_device_idx());
             auto output_slice = output[i, Ellipsis{}].unsqueeze(0);
             auto cuda_output = output_slice.template to<cuda_t>(coords[0].get_device_idx());
+            
             plan->execute(cuda_input, cuda_output);
+
             output_slice = cuda_output.template to<cpu_t>(device_idx::CPU);
         }
 
