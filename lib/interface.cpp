@@ -119,8 +119,47 @@ void print_memory_usage() {
     }
 }
 
+at::Tensor ffi::leak_test() {
+
+    c10::InferenceMode im_guard{};
+    torch::NoGradGuard no_grad_guard;
+
+    using namespace hasty;
+
+    print_memory_usage();
+
+    cache_dir = "/home/turbotage/Documents/hasty_cache/";
+
+    for (int i = 0; i < 5; ++i) {
+
+        print_memory_usage();
+
+        auto input = make_empty_tensor<cpu_t, c64_t, 2>(span<2>({44,10000000}));
+
+        //std::array<int64_t,2> kdnc_shape = kdata_noncache.shape();
+        auto output = make_empty_tensor<cpu_t, c64_t, 4>(span<4>({44,320,320,320}));
+
+        for (int i = 0; i < input.template shape<0>(); ++i) {
+            //auto cuda_input = input[i, Ellipsis{}].unsqueeze(0).template to<cuda_t>(device_idx::CUDA0);
+            //auto output_slice = output[i, Ellipsis{}].unsqueeze(0);
+            //auto cuda_output = output_slice.template to<cuda_t>(device_idx::CUDA0);
+
+            //cuda_output *= 2;
+
+            //output_slice = cuda_output.template to<cpu_t>(device_idx::CPU);
+        }
+
+        print_memory_usage();
+
+        //return output.get_tensor();
+    }
+
+    return at::empty({0}, at::kFloat); 
+}
+
 at::Tensor ffi::test_simple_invert() {
     c10::InferenceMode im_guard{};
+    torch::NoGradGuard no_grad_guard;
 
     using namespace hasty;
 
@@ -129,8 +168,8 @@ at::Tensor ffi::test_simple_invert() {
     cache_dir = "/home/turbotage/Documents/hasty_cache/";
 
     std::vector<std::regex> matchers = {
-        std::regex("^/Kdata/KData_E0_.*"),
-        std::regex("^/Kdata/KData_E1_.*"),
+        std::regex("^/Kdata/KData_.*"),
+        std::regex("^/Kdata/KData_.*"),
         std::regex("^/Kdata/KX_.*"),
         std::regex("^/Kdata/KY_.*"),
         std::regex("^/Kdata/KZ_.*"),
@@ -157,9 +196,9 @@ at::Tensor ffi::test_simple_invert() {
 
     std::vector<at::Tensor> output_tensors;
     output_tensors.reserve(5);
-    for (int e = 0; e < 2; ++e) {
+    for (int e = 0; e < 5; ++e) {
         
-        
+        print_memory_usage();
 
         std::array<cache_tensor<f32_t,1>,3> coords;
         cache_tensor<f32_t,1> weights;
@@ -239,6 +278,8 @@ at::Tensor ffi::test_simple_invert() {
         auto output = nufft_backward_cpu_over_cuda(span<3>({320, 320, 320}), input, coords_gpu);        
 
         output_tensors.push_back(output.get_tensor());
+
+        print_memory_usage();
     }
 
     auto output = at::stack(output_tensors, 0);

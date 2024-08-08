@@ -333,20 +333,32 @@ namespace hasty {
 
         i32 ntransf = input.template shape<0>();
         auto full_modes = span<1>({ntransf}) + dimshape;
-        auto output = make_tensor<cpu_t,c64_t,DIM+1>(span<DIM+1>(full_modes), 
-                        device_idx::CPU, tensor_make_opts::EMPTY);
+        //auto output = make_tensor<cpu_t,c64_t,DIM+1>(span<DIM+1>(full_modes), 
+        //                device_idx::CPU, tensor_make_opts::EMPTY);
 
-        auto plan = nufft_plan<cuda_t,TT,DIM,nufft_type::BACKWARD>::make(options);
-        plan->setpts(coords);
+        auto output = make_empty_tensor<cpu_t,c64_t,DIM+1>(full_modes);
 
-        for (int i = 0; i < output.template shape<0>(); i++) {
-            auto cuda_input = input[i, Ellipsis{}].unsqueeze(0).template to<cuda_t>(coords[0].get_device_idx());
-            auto output_slice = output[i, Ellipsis{}].unsqueeze(0);
-            auto cuda_output = output_slice.template to<cuda_t>(coords[0].get_device_idx());
-            
-            plan->execute(cuda_input, cuda_output);
 
-            output_slice = cuda_output.template to<cpu_t>(device_idx::CPU);
+        //torch::cuda::synchronize();
+        //auto plan = nufft_plan<cuda_t,TT,DIM,nufft_type::BACKWARD>::make(options);
+        //plan->setpts(coords);
+        //torch::cuda::synchronize();
+
+        for (int i = 0; i < output.template shape<0>(); ++i) {
+            //auto cuda_input = input[i, Ellipsis{}].unsqueeze(0).template to<cuda_t>(coords[0].get_device_idx());
+            //auto output_slice = output[i, Ellipsis{}].unsqueeze(0);
+            //auto cuda_output = output_slice.template to<cuda_t>(coords[0].get_device_idx());
+
+            auto output_slice = output.get_tensor().index({i, at::indexing::Ellipsis}).unsqueeze(0);
+            auto cuda_output = output_slice.to(get_torch_device(coords[0].get_device_idx()));
+
+            //torch::cuda::synchronize();
+            //plan->execute(cuda_input, cuda_output);
+            //torch::cuda::synchronize();
+
+            //output_slice = cuda_output.template to<cpu_t>(device_idx::CPU);
+            //output_slice.copy_(cuda_output.to(get_torch_device(device_idx::CPU)));
+            output_slice.copy_(cuda_output);
         }
 
         return output;

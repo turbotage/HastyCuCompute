@@ -29,7 +29,7 @@ namespace hasty {
         MAX_CUDA_DEVICES = 16
     };
 
-    at::Device get_torch_device(device_idx idx) {
+    export at::Device get_torch_device(device_idx idx) {
         if (idx == device_idx::CPU) {
             return at::Device(at::DeviceType::CPU);
         }
@@ -144,8 +144,8 @@ namespace hasty {
         auto& get_pimpl() { return _pimpl; }
         const auto& get_pimpl() const { return _pimpl; }
 
-        auto& get_tensor() { return _pimpl->underlying_tensor; }
-        const auto& get_tensor() const { return _pimpl->underlying_tensor; }
+        auto get_tensor() -> at::Tensor& { return _pimpl->underlying_tensor; }
+        auto get_tensor() const -> const at::Tensor& { return _pimpl->underlying_tensor; }
 
         auto decay_to_tensor() { 
             at::Tensor ten = std::move(_pimpl->underlying_tensor); 
@@ -252,6 +252,8 @@ namespace hasty {
             return _pimpl->shape; 
         }
 
+        
+
         constexpr int64_t ndim() const { 
             assert(RANK == _pimpl->underlying_tensor.ndimension()); 
             return RANK; 
@@ -349,7 +351,6 @@ namespace hasty {
             }
 
             std::array<int64_t, RANK> shape;
-
             for_sequence<RANK>([&](auto i) {
                 shape[i] = in.size(i);
             });
@@ -370,14 +371,16 @@ namespace hasty {
 
             if (idx == get_device_idx())
                 throw std::runtime_error("tensor::to: tensor already on device");
-
-            return tensor_factory<DN,TT,RANK>::make(_pimpl->shape, _pimpl->underlying_tensor.to(get_torch_device(idx)));
+            at::Device didx = get_torch_device(idx);
+            return tensor_factory<DN,TT,RANK>::make(_pimpl->shape, 
+                std::move(_pimpl->underlying_tensor.to(didx)));
         }
 
         template<is_tensor_type TTN>
         tensor<D,TTN,RANK> to() {
-            return tensor<D,TTN,RANK>(_pimpl->underlying_tensor.shape, 
-                _pimpl->underlying_tensor.to(scalar_type_func<TTN>()));
+            at::ScalarType stype = scalar_type_func<TTN>();
+            return tensor_factory<D,TTN,RANK>::make(_pimpl->shape, 
+                std::move(_pimpl->underlying_tensor.to(stype)));
         }
 
         /* must return a view */
