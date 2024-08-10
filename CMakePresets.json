@@ -2,32 +2,33 @@
     "version": 8,
     "cmakeMinimumRequired": {
         "major": 3,
-        "minor": 28,
+        "minor": 30,
         "patch": 0
     },
     "configurePresets": [
         {
             "name": "MainConfigClang",
-            "displayName": "Clang 19.0.6 x86_64-pc-linux-gnu",
-            "description": "Using compilers: C = /usr/bin/clang-19, CXX = /usr/bin/clang++-19",
+            "displayName": "Clang 20.0.0 x86_64-pc-linux-gnu",
+            "description": "Using compilers: C = /usr/bin/clang-20, CXX = /usr/bin/clang++-20",
             "binaryDir": "${sourceDir}/out/build/${presetName}",
             "generator": "Ninja",
             "environment": {
-                "MY_INSTALL_PATH": "/home/turbotage/install",
-                "CUDA_ROOT": "/usr/local/cuda-12.3",
+                "MY_INSTALL_PATH": "/home/turbotage/Documents/install",
+                "CUDA_ROOT": "/usr/local/cuda-12.4",
                 "VCPKG_ROOT": "/home/turbotage/Documents/GitHub/vcpkg"
             },
             "cacheVariables": {
                 "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
-                "CMAKE_C_COMPILER": "/usr/bin/clang-19",
-                "CMAKE_CXX_COMPILER": "/usr/bin/clang++-19",
+                "CMAKE_C_COMPILER": "/usr/bin/clang-20",
+                "CMAKE_CXX_COMPILER": "/usr/bin/clang++-20",
+                "CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS": "/usr/bin/clang-scan-deps-20",
                 "CMAKE_CUDA_ARCHITECTURES": "89",
                 "CMAKE_CUDA_COMPILER": "$env{CUDA_ROOT}/bin/nvcc",
                 "CUDAToolkit_ROOT": "$env{CUDA_ROOT}/bin/",
                 "finufft_ROOT": "$env{MY_INSTALL_PATH}/finufft/",
                 "CMAKE_PREFIX_PATH": {
                     "type": "FILEPATH",
-                    "value": "$env{MY_INSTALL_PATH}/LibTorch/;$env{MY_INSTALL_PATH}/nvidia/mathdx/24.01/;$env{MY_INSTALL_PATH}/HighFive/"
+                    "value": "$env{MY_INSTALL_PATH}/LibTorch/;$env{MY_INSTALL_PATH}/HighFive/"
                 },
                 "CMAKE_TOOLCHAIN_FILE": {
                     "type": "FILEPATH",

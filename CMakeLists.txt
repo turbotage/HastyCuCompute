@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.28)
+cmake_minimum_required(VERSION 3.30)
 
 project("HastyCuCompute" VERSION 0.1)
 
@@ -48,14 +48,14 @@ target_sources(HastyCuCompute
 )
 
 
-FetchContent_Declare(
-  glaze
-  GIT_REPOSITORY https://github.com/stephenberry/glaze.git
-  GIT_TAG main
-  GIT_SHALLOW TRUE
-)
-FetchContent_MakeAvailable(glaze)
-target_link_libraries(HastyCuCompute PRIVATE glaze::glaze)
+#FetchContent_Declare(
+#  glaze
+#  GIT_REPOSITORY https://github.com/stephenberry/glaze.git
+#  GIT_TAG main
+#  GIT_SHALLOW TRUE
+#)
+#FetchContent_MakeAvailable(glaze)
+#target_link_libraries(HastyCuCompute PRIVATE glaze::glaze)
 
 
 
@@ -66,6 +66,8 @@ find_package(CUDAToolkit REQUIRED)
 target_link_libraries(HastyCuCompute PRIVATE CUDA::toolkit)
 target_link_libraries(HastyCuCompute PRIVATE CUDA::nvrtc)
 target_link_libraries(HastyCuCompute PRIVATE CUDA::cudart)
+
+
 
 find_library(finufft REQUIRED 
     NAMES 

@@ -110,5 +110,6 @@
         "stack": "cpp",
         "__mutex_base": "cpp",
         "__node_handle": "cpp"
-    }
+    },
+    "cmake.cmakePath": "/snap/cmake/current/bin/cmake"
 }

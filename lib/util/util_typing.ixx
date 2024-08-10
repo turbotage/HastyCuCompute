@@ -128,40 +128,49 @@ namespace hasty {
             }
         }
 
+        template<is_tensor_type TT1, is_tensor_type TT2>
+        struct PairedTypeCheckStruct {
+
+            template<is_tensor_type IN_T1, is_tensor_type IN_T2>
+            constexpr static bool is_any_match() {
+                return  std::is_same_v<TT1, IN_T1> && std::is_same_v<TT2, IN_T2> 
+                        ||
+                        std::is_same_v<TT1, IN_T2> && std::is_same_v<TT2, IN_T1>;
+            }
+
+        };
+
 
         template<is_tensor_type F1, is_tensor_type F2>
         constexpr auto nonloss_type_func() {
 
-            auto types = []<is_tensor_type FP1, is_tensor_type FP2>() -> bool {
-                return std::is_same_v<FP1, F1> && std::is_same_v<FP2, F2> ||
-                    std::is_same_v<FP1, F2> && std::is_same_v<FP2, F1>;
-            };
+            using PTC = PairedTypeCheckStruct<F1,F2>;
 
             if constexpr(std::is_same_v<F1,F2>) {
                 return F1();
-            } else if constexpr(types.template operator()<f32_t, f64_t>()) {
+            } else if constexpr(PTC::template is_any_match<f32_t, f64_t>())  {
                 return f64_t();
-            } else if constexpr(types.template operator()<f32_t, c128_t>()) {
+            } else if constexpr(PTC::template is_any_match<f32_t, c128_t>()) {
                 return c128_t();
-            } else if constexpr(types.template operator()<f64_t, c64_t>()) {
+            } else if constexpr(PTC::template is_any_match<f64_t, c64_t>())  {
                 return c128_t();
-            } else if constexpr(types.template operator()<f64_t, c128_t>()) {
+            } else if constexpr(PTC::template is_any_match<f64_t, c128_t>()) {
                 return c128_t();
-            } else if constexpr(types.template operator()<c64_t, c128_t>()) {
+            } else if constexpr(PTC::template is_any_match<c64_t, c128_t>()) {
                 return c128_t();
-            } else if constexpr(types.template operator()<f32_t, c64_t>()) {
+            } else if constexpr(PTC::template is_any_match<f32_t, c64_t>())  {
                 return c64_t();
-            } else if constexpr(types.template operator()<i32_t, i64_t>()) {
+            } else if constexpr(PTC::template is_any_match<i32_t, i64_t>())  {
                 return i64_t();
-            } else if constexpr(types.template operator()<i32_t, i16_t>()) {
+            } else if constexpr(PTC::template is_any_match<i32_t, i16_t>())  {
                 return i32_t();
-            } else if constexpr(types.template operator()<i64_t, i16_t>()) {
+            } else if constexpr(PTC::template is_any_match<i64_t, i16_t>())  {
                 return i64_t();
-            } else if constexpr(types.template operator()<b8_t, i32_t>()) {
+            } else if constexpr(PTC::template is_any_match<b8_t,  i32_t>())  {
                 return i32_t();
-            } else if constexpr(types.template operator()<b8_t, i64_t>()) {
+            } else if constexpr(PTC::template is_any_match<b8_t,  i64_t>())  {
                 return i64_t();
-            } else if constexpr(types.template operator()<b8_t, i16_t>()) {
+            } else if constexpr(PTC::template is_any_match<b8_t,  i16_t>())  {
                 return i16_t();
             } else {
                 static_assert(false, "Invalid types");
