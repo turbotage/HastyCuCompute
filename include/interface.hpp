@@ -23,7 +23,9 @@ namespace at {
 
 namespace ffi {
 
-    LIB_EXPORT at::Tensor leak_test();
+    LIB_EXPORT at::Tensor leak_test1();
+
+    LIB_EXPORT at::Tensor leak_test2();
 
     LIB_EXPORT at::Tensor test_simple_invert();
 

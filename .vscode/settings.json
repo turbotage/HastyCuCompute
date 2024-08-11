@@ -111,5 +111,6 @@
         "__mutex_base": "cpp",
         "__node_handle": "cpp"
     },
-    "cmake.cmakePath": "/snap/cmake/current/bin/cmake"
+    "cmake.cmakePath": "/snap/cmake/current/bin/cmake",
+    "lldb-dap.executable-path": "/usr/bin/lldb-dap-20",
 }

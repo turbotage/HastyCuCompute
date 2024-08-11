@@ -62,7 +62,6 @@ namespace {
         return at::from_blob(info.ptr, shape, strides, dtype);
     }
 
-
     py::array from_tensor(const at::Tensor& ten) {
         // Determine the format string
         std::string format;
@@ -107,54 +106,88 @@ namespace {
 
 }
 
-void print_memory_usage() {
+void print_memory_usage(const std::string& prepend = "") {
     std::ifstream file("/proc/self/status");
     std::string line;
     while (std::getline(file, line)) {
         if (line.substr(0, 6) == "VmRSS:") {
-            std::cout << "Resident Set Size: " << line.substr(6) << std::endl;
+            std::cout << prepend << " Resident Set Size: " << line.substr(6) << std::endl;
         } else if (line.substr(0, 6) == "VmSize:") {
-            std::cout << "Virtual Memory Size: " << line.substr(6) << std::endl;
+            std::cout << prepend << " Virtual Memory Size: " << line.substr(6) << std::endl;
         }
     }
 }
 
-at::Tensor ffi::leak_test() {
+at::Tensor ffi::leak_test1() {
+    c10::InferenceMode im_guard{};
+
+    at::Tensor cput = at::ones({3,10,320,320,320}, at::kComplexFloat);
+    print_memory_usage();
+
+    for (int i = 0; i < cput.size(0); ++i) {
+
+        print_memory_usage(std::to_string(i) + " ");
+        at::Tensor output = cput.index({i, at::indexing::Ellipsis});
+
+        for (int j = 0; j < cput.size(1); ++j) {
+
+            print_memory_usage(std::to_string(i) + " " + std::to_string(j) + " ");
+
+            auto output_slice = output.index({j, at::indexing::Ellipsis});
+            auto cuda_output = output_slice.to(at::Device("cuda:0"));
+
+            cuda_output *= at::rand({});
+
+            auto cpu_output = cuda_output.to(at::Device("cpu"));
+
+            //output_slice.copy_(cpu_output);
+            at::copy_out(output_slice, output_slice, cpu_output);
+        }
+
+    }
+
+    return cput;
+}
+
+at::Tensor ffi::leak_test2() {
 
     c10::InferenceMode im_guard{};
     torch::NoGradGuard no_grad_guard;
 
     using namespace hasty;
 
-    print_memory_usage();
+    //print_memory_usage();
 
     cache_dir = "/home/turbotage/Documents/hasty_cache/";
 
-    for (int i = 0; i < 5; ++i) {
+    auto cput = make_empty_tensor<cpu_t, c64_t, 5>(span<5>({1,10,320,320,320}));
 
-        print_memory_usage();
+    for (int i = 0; i < cput.template shape<0>(); ++i) {
+        debug::print_memory_usage("Outer Loop Start: ");
 
-        auto input = make_empty_tensor<cpu_t, c64_t, 2>(span<2>({44,10000000}));
+        tensor<cpu_t,c64_t,4> output = cput[i, Ellipsis{}];
 
-        //std::array<int64_t,2> kdnc_shape = kdata_noncache.shape();
-        auto output = make_empty_tensor<cpu_t, c64_t, 4>(span<4>({44,320,320,320}));
-
-        for (int i = 0; i < input.template shape<0>(); ++i) {
-            //auto cuda_input = input[i, Ellipsis{}].unsqueeze(0).template to<cuda_t>(device_idx::CUDA0);
-            //auto output_slice = output[i, Ellipsis{}].unsqueeze(0);
-            //auto cuda_output = output_slice.template to<cuda_t>(device_idx::CUDA0);
-
-            //cuda_output *= 2;
-
-            //output_slice = cuda_output.template to<cpu_t>(device_idx::CPU);
+        for (int i = 0; i < output.template shape<0>(); ++i) {
+            debug::print_memory_usage("Loop Start: ");
+            auto output_slice = output[i, Ellipsis{}].unsqueeze(0);
+            debug::print_memory_usage();
+            auto cuda_output = output_slice.template to<cuda_t>(device_idx::CUDA0);
+            debug::print_memory_usage();
+            //cuda_output *= float(rand() % 100) / 300.0;
+            //print_memory_usage();
+            auto back_on_cpu = cuda_output.template to<cpu_t>(device_idx::CPU);
+            debug::print_memory_usage();
+            output_slice = back_on_cpu;
+            debug::print_memory_usage("Loop End: ");
+            /*
+            */
         }
 
-        print_memory_usage();
+       debug::print_memory_usage("Outer Loop End: ");
 
-        //return output.get_tensor();
     }
 
-    return at::empty({0}, at::kFloat); 
+    return cput.get_tensor(); 
 }
 
 at::Tensor ffi::test_simple_invert() {

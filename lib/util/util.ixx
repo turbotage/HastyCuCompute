@@ -11,6 +11,21 @@ export import :span;
 export import :torch;
 export import :typing;
 
+namespace debug {
+
+    export void print_memory_usage(const std::string& prepend = "") {
+        std::ifstream file("/proc/self/status");
+        std::string line;
+        while (std::getline(file, line)) {
+            if (line.substr(0, 6) == "VmRSS:") {
+                std::cout << prepend << " Resident Set Size: " << line.substr(6) << std::endl;
+            } else if (line.substr(0, 6) == "VmSize:") {
+                std::cout << prepend << " Virtual Memory Size: " << line.substr(6) << std::endl;
+            }
+        }
+    }
+
+}
 
 namespace hasty {
 
