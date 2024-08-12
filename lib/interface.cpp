@@ -106,97 +106,12 @@ namespace {
 
 }
 
-void print_memory_usage(const std::string& prepend = "") {
-    std::ifstream file("/proc/self/status");
-    std::string line;
-    while (std::getline(file, line)) {
-        if (line.substr(0, 6) == "VmRSS:") {
-            std::cout << prepend << " Resident Set Size: " << line.substr(6) << std::endl;
-        } else if (line.substr(0, 6) == "VmSize:") {
-            std::cout << prepend << " Virtual Memory Size: " << line.substr(6) << std::endl;
-        }
-    }
-}
-
-at::Tensor ffi::leak_test1() {
-    c10::InferenceMode im_guard{};
-
-    at::Tensor cput = at::ones({3,10,320,320,320}, at::kComplexFloat);
-    print_memory_usage();
-
-    for (int i = 0; i < cput.size(0); ++i) {
-
-        print_memory_usage(std::to_string(i) + " ");
-        at::Tensor output = cput.index({i, at::indexing::Ellipsis});
-
-        for (int j = 0; j < cput.size(1); ++j) {
-
-            print_memory_usage(std::to_string(i) + " " + std::to_string(j) + " ");
-
-            auto output_slice = output.index({j, at::indexing::Ellipsis});
-            auto cuda_output = output_slice.to(at::Device("cuda:0"));
-
-            cuda_output *= at::rand({});
-
-            auto cpu_output = cuda_output.to(at::Device("cpu"));
-
-            //output_slice.copy_(cpu_output);
-            at::copy_out(output_slice, output_slice, cpu_output);
-        }
-
-    }
-
-    return cput;
-}
-
-at::Tensor ffi::leak_test2() {
-
-    c10::InferenceMode im_guard{};
-    torch::NoGradGuard no_grad_guard;
-
-    using namespace hasty;
-
-    //print_memory_usage();
-
-    cache_dir = "/home/turbotage/Documents/hasty_cache/";
-
-    auto cput = make_empty_tensor<cpu_t, c64_t, 5>(span<5>({1,10,320,320,320}));
-
-    for (int i = 0; i < cput.template shape<0>(); ++i) {
-        debug::print_memory_usage("Outer Loop Start: ");
-
-        tensor<cpu_t,c64_t,4> output = cput[i, Ellipsis{}];
-
-        for (int i = 0; i < output.template shape<0>(); ++i) {
-            debug::print_memory_usage("Loop Start: ");
-            auto output_slice = output[i, Ellipsis{}].unsqueeze(0);
-            debug::print_memory_usage();
-            auto cuda_output = output_slice.template to<cuda_t>(device_idx::CUDA0);
-            debug::print_memory_usage();
-            //cuda_output *= float(rand() % 100) / 300.0;
-            //print_memory_usage();
-            auto back_on_cpu = cuda_output.template to<cpu_t>(device_idx::CPU);
-            debug::print_memory_usage();
-            output_slice = back_on_cpu;
-            debug::print_memory_usage("Loop End: ");
-            /*
-            */
-        }
-
-       debug::print_memory_usage("Outer Loop End: ");
-
-    }
-
-    return cput.get_tensor(); 
-}
 
 at::Tensor ffi::test_simple_invert() {
     c10::InferenceMode im_guard{};
     torch::NoGradGuard no_grad_guard;
 
     using namespace hasty;
-
-    print_memory_usage();
 
     cache_dir = "/home/turbotage/Documents/hasty_cache/";
 
@@ -213,8 +128,6 @@ at::Tensor ffi::test_simple_invert() {
     auto tset = import_tensors(
         "/home/turbotage/Documents/4DRecon/other_data/MRI_Raw.h5", matchers);
 
-    print_memory_usage();
-
     auto shape_getter = []<size_t R>(const at::Tensor& ten) -> std::array<i64,R> 
     {
         if (ten.ndimension() != R) {
@@ -230,8 +143,6 @@ at::Tensor ffi::test_simple_invert() {
     std::vector<at::Tensor> output_tensors;
     output_tensors.reserve(5);
     for (int e = 0; e < 5; ++e) {
-        
-        print_memory_usage();
 
         std::array<cache_tensor<f32_t,1>,3> coords;
         cache_tensor<f32_t,1> weights;
@@ -288,10 +199,10 @@ at::Tensor ffi::test_simple_invert() {
         kdata_tensors.clear();
 
         kdata = cache_tensor<c64_t,2>(
-             tensor_factory<cpu_t,c64_t,2>::make(shape_getter.template operator()<2>(kdata_tensor), kdata_tensor),
+             tensor_factory<cpu_t,c64_t,2>::make(shape_getter.template operator()<2>(kdata_tensor), std::move(kdata_tensor)),
             std::hash<std::string>{}("KData_E" + std::to_string(e))
         );
-        kdata_tensor = at::empty({0}, at::kFloat);
+        //kdata_tensor = at::empty({0}, at::kFloat);
 
         std::cout << "Starting nuffts" << std::endl;
 
@@ -311,8 +222,6 @@ at::Tensor ffi::test_simple_invert() {
         auto output = nufft_backward_cpu_over_cuda(span<3>({320, 320, 320}), input, coords_gpu);        
 
         output_tensors.push_back(output.get_tensor());
-
-        print_memory_usage();
     }
 
     auto output = at::stack(output_tensors, 0);

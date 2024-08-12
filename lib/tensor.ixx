@@ -58,7 +58,7 @@ namespace hasty {
     export template<is_device D, is_tensor_type TT, size_t R>
     class tensor;
 
-    template<is_device D, is_tensor_type TT, size_t RANK>
+    export template<is_device D, is_tensor_type TT, size_t RANK>
     class tensor_impl {
     private:
 
@@ -258,10 +258,7 @@ namespace hasty {
             if (!_pimpl) {
                 throw std::runtime_error("tensor::operator=: this tensor was not initialized");
             } else {
-                //_pimpl->underlying_tensor.copy_(other.get_tensor());
-                debug::print_memory_usage("Before at::copy_out: ");
-                at::copy_out(_pimpl->underlying_tensor, _pimpl->underlying_tensor, other.get_tensor());
-                debug::print_memory_usage("After at::copy_out: ");
+                _pimpl->underlying_tensor.copy_(other.get_tensor());
             }
             return *this;
         }
@@ -273,7 +270,16 @@ namespace hasty {
             return *this;   
         }
 
-        tensor<D, TT, RANK>& operator=(tensor<D,TT,RANK>&&) = delete;
+        tensor<D, TT, RANK>& operator=(tensor<D,TT,RANK>&& other) {
+            debug::print_memory_usage("Before tensor::operator=(const tensor&): ");
+            if (!_pimpl) {
+                throw std::runtime_error("tensor::operator=: this tensor was not initialized");
+            } else {
+                //_pimpl->underlying_tensor.copy_(other.get_tensor());
+                _pimpl->underlying_tensor.copy_(other.get_tensor());
+            }
+            return *this;
+        }
 
         base_t<TT> item() const requires (RANK == 0){
             return _pimpl->underlying_tensor.template item<base_t<TT>>();
