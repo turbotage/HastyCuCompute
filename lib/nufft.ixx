@@ -311,25 +311,24 @@ namespace hasty {
     requires is_dim3<DIM>
     struct simple_nufft {};
 
-    export template<is_fp_real_tensor_type TT, size_t DIM>
+    export template<is_fp_complex_tensor_type TT, is_fp_real_tensor_type TTC, size_t DIM>
     requires is_dim3<DIM>
-    tensor<cpu_t, complex_t<TT>, DIM+1> nufft_backward_cpu_over_cuda(
+    tensor<cpu_t, TT, DIM+1> nufft_backward_cpu_over_cuda(
         span<DIM> dimshape,
-        const tensor<cpu_t, complex_t<TT>, 2>& input, 
-        const std::array<tensor<cuda_t,TT,1>,DIM>& coords)
+        const tensor<cpu_t,TT,2>& input, 
+        const std::array<tensor<cuda_t,TTC,1>,DIM>& coords)
     {
-        nufft_opts<cuda_t,TT,DIM> options;
+        nufft_opts<cuda_t,TTC,DIM> options;
         options.device_idx = (i32)input.get_device_idx();
         options.nmodes = dimshape.to_arr();
         options.ntransf = 1;
         options.method = nufft_method_cuda::DEFAULT;
         options.upsamp = nufft_upsamp_cuda::DEFAULT;
-        if (std::is_same_v<TT, f32_t>) {
+        if (std::is_same_v<TTC, f32_t>) {
             options.tol = 1e-6;
         } else {
             options.tol = 1e-14;
         }
-        
 
         i32 ntransf = input.template shape<0>();
         auto full_modes = span<1>({ntransf}) + dimshape;
@@ -338,23 +337,44 @@ namespace hasty {
 
         auto output = make_empty_tensor<cpu_t,c64_t,DIM+1>(full_modes);
 
-
         torch::cuda::synchronize();
-        auto plan = nufft_plan<cuda_t,TT,DIM,nufft_type::BACKWARD>::make(options);
+        auto plan = nufft_plan<cuda_t,TTC,DIM,nufft_type::BACKWARD>::make(options);
         plan->setpts(coords);
         torch::cuda::synchronize();
 
-        for (int i = 0; i < output.template shape<0>(); ++i) {
-            auto cuda_input = input[i, Ellipsis{}].unsqueeze(0).template to<cuda_t>(coords[0].get_device_idx());
-            auto output_slice = output[i, Ellipsis{}].unsqueeze(0);
-            auto cuda_output = output_slice.template to<cuda_t>(coords[0].get_device_idx());
+        if constexpr(!std::is_same_v<TT,complex_t<TTC>>) {
 
-            torch::cuda::synchronize();
-            plan->execute(cuda_input, cuda_output);
-            torch::cuda::synchronize();
+            for (int i = 0; i < output.template shape<0>(); ++i) {
+                auto cuda_input = input[i, Ellipsis{}].unsqueeze(0).template to<cuda_t>(coords[0].get_device_idx()
+                                                ).template to<complex_t<TTC>>();
+                
+                auto output_slice = output[i, Ellipsis{}].unsqueeze(0);
+                
+                auto cuda_output = output_slice.template to<cuda_t>(coords[0].get_device_idx()
+                                                ).template to<complex_t<TTC>>();
+                torch::cuda::synchronize();
+                plan->execute(cuda_input, cuda_output);
+                torch::cuda::synchronize();
+                
+                output_slice.copy_(cuda_output.template to<TT>());
+            }
 
-            output_slice = cuda_output.template to<cpu_t>(device_idx::CPU);
+        } else {
+
+            for (int i = 0; i < output.template shape<0>(); ++i) {
+                auto cuda_input = input[i, Ellipsis{}].unsqueeze(0).template to<cuda_t>(coords[0].get_device_idx());
+                auto output_slice = output[i, Ellipsis{}].unsqueeze(0);
+                auto cuda_output = output_slice.template to<cuda_t>(coords[0].get_device_idx());
+
+                torch::cuda::synchronize();
+                plan->execute(cuda_input, cuda_output);
+                torch::cuda::synchronize();
+
+                output_slice = cuda_output.template to<cpu_t>(device_idx::CPU);
+            }
+
         }
+
 
         return output;
     }

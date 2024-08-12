@@ -30,20 +30,21 @@ sys.path.insert(0, libpath)
 
 import libHastyCuCompute as hc
 import numpy as np
+
 output = hc.test_simple_invert()
 
 print(output.shape)
 
 #import matplotlib.pyplot as plt
 
-output = np.mean(np.abs(output.astype(np.complex64)).astype(np.float32), axis=0)
 
+output = np.mean(np.abs(output.astype(np.complex64)).astype(np.float32), axis=0)
 
 viewer = napari.Viewer()
 viewer.add_image(output[0,...], name='coil=0')
-viewer.add_image(output[10,...], name='coil=10')
-viewer.add_image(output[20,...], name='coil=20')
-viewer.show()
+viewer.add_image(output[1,...], name='coil=10')
+viewer.add_image(output[2,...], name='coil=20')
+viewer.show(block=True)
 
 if __name__ == "__main__":
     print('Hello')

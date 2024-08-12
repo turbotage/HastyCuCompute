@@ -70,13 +70,13 @@ namespace hasty {
         tensor_impl(const std::array<int64_t, RANK>& input_shape, at::Tensor input)
             : shape(input_shape), underlying_tensor(std::move(input))
         {
-            debug::print_memory_usage("tensor_impl::tensor_impl: (1)");
+            //debug::print_memory_usage("tensor_impl::tensor_impl: (1)");
         }
 
         tensor_impl(span<RANK> input_shape, at::Tensor input)
             : shape(input_shape.to_arr()), underlying_tensor(std::move(input))
         {
-            debug::print_memory_usage("tensor_impl::tensor_impl: (2)");
+            //debug::print_memory_usage("tensor_impl::tensor_impl: (2)");
         }
 
         ~tensor_impl() {
@@ -130,13 +130,13 @@ namespace hasty {
         tensor(const std::array<int64_t, RANK>& input_shape, at::Tensor input) 
             : _pimpl(std::make_shared<tensor_impl<D,TT,RANK>>(input_shape, std::move(input)))
         {
-            debug::print_memory_usage("tensor::tensor(std::array, at::Tensor): ");
+            //debug::print_memory_usage("tensor::tensor(std::array, at::Tensor): ");
         }
 
         tensor(span<RANK> input_shape, at::Tensor input)
             : _pimpl(std::make_shared<tensor_impl<D,TT,RANK>>(input_shape, std::move(input)))
         {
-            debug::print_memory_usage("tensor::tensor(span, at::Tensor): ");
+            //debug::print_memory_usage("tensor::tensor(span, at::Tensor): ");
         }
 
         void assign(std::array<int64_t, RANK>& input_shape, at::Tensor input) {
@@ -170,27 +170,27 @@ namespace hasty {
         }
 
         tensor() {
-            debug::print_memory_usage("tensor::tensor(): ");
+            //debug::print_memory_usage("tensor::tensor(): ");
         }
 
         //tensor(const tensor&) = delete;
         tensor(const tensor& other) {
-            debug::print_memory_usage("Before tensor::tensor(const tensor&): ");
+            //debug::print_memory_usage("Before tensor::tensor(const tensor&): ");
             _pimpl = other._pimpl;
-            debug::print_memory_usage("After tensor::tensor(const tensor&): ");
+            //debug::print_memory_usage("After tensor::tensor(const tensor&): ");
         }
 
         //tensor(tensor&&) = delete;
         tensor(tensor&& other) {
-            debug::print_memory_usage("Before tensor::tensor(&&): ");
+            //debug::print_memory_usage("Before tensor::tensor(&&): ");
             _pimpl = std::move(other._pimpl);
-            debug::print_memory_usage("After tensor::tensor(&&): ");
+            //debug::print_memory_usage("After tensor::tensor(&&): ");
         }
 
         template<is_tensor_type TTN>
         tensor(tensor<D, TTN, RANK>&& other) {
 
-            debug::print_memory_usage("Before tensor::tensor(&&): ");
+            //debug::print_memory_usage("Before tensor::tensor(&&): ");
             if (!_pimpl) {
                 _pimpl = std::make_shared<tensor_impl<D,TT,RANK>>(
                         std::move(other._pimpl->shape), 
@@ -206,7 +206,7 @@ namespace hasty {
                 _pimpl->underlying_tensor = _pimpl->underlying_tensor.to(scalar_type_func<TT>());
             }
 
-            debug::print_memory_usage("After tensor::tensor(&&): ");
+            //debug::print_memory_usage("After tensor::tensor(&&): ");
         }
 
         template<is_device DN, is_tensor_type TTN>
@@ -238,13 +238,13 @@ namespace hasty {
         }
 
         ~tensor() {
-            debug::print_memory_usage("~tensor: ");
+            //debug::print_memory_usage("~tensor: ");
         }
 
         template<size_t R>
         requires less_than<R, RANK>
         tensor<D, TT, RANK>& operator=(const tensor<D, TT, R>& other) {
-            debug::print_memory_usage("Before tensor::operator=(const tensor&): (with smalled rank) ");
+            //debug::print_memory_usage("Before tensor::operator=(const tensor&): (with smalled rank) ");
             if (!_pimpl) {
                 throw std::runtime_error("tensor::operator=: this tensor was not initialized");
             } else {
@@ -254,7 +254,7 @@ namespace hasty {
         }
 
         tensor<D, TT, RANK>& operator=(const tensor<D, TT, RANK>& other) {
-            debug::print_memory_usage("Before tensor::operator=(const tensor&): ");
+            //debug::print_memory_usage("Before tensor::operator=(const tensor&): ");
             if (!_pimpl) {
                 throw std::runtime_error("tensor::operator=: this tensor was not initialized");
             } else {
@@ -271,13 +271,25 @@ namespace hasty {
         }
 
         tensor<D, TT, RANK>& operator=(tensor<D,TT,RANK>&& other) {
-            debug::print_memory_usage("Before tensor::operator=(const tensor&): ");
+            //debug::print_memory_usage("Before tensor::operator=(const tensor&): ");
             if (!_pimpl) {
                 throw std::runtime_error("tensor::operator=: this tensor was not initialized");
             } else {
                 //_pimpl->underlying_tensor.copy_(other.get_tensor());
                 _pimpl->underlying_tensor.copy_(other.get_tensor());
             }
+            return *this;
+        }
+
+        template<is_device DN>
+        tensor<D, TT, RANK>& copy_(tensor<DN,TT,RANK>& other, bool non_blocking=false) {
+            _pimpl->underlying_tensor.copy_(other.get_tensor(), non_blocking);
+            return *this;
+        }
+
+        template<is_device DN>
+        tensor<D, TT, RANK>& copy_(tensor<DN,TT,RANK>&& other, bool non_blocking=false) {
+            _pimpl->underlying_tensor.copy_(other.get_tensor(), non_blocking);
             return *this;
         }
 
@@ -340,7 +352,7 @@ namespace hasty {
         }
 
         tensor<D, TT, RANK+1> unsqueeze(int64_t dim) {
-            debug::print_memory_usage("Before unsqueeze(): ");
+            //debug::print_memory_usage("Before unsqueeze(): ");
 
             at::Tensor tensorview = _pimpl->underlying_tensor.unsqueeze(dim);
             if (tensorview.data_ptr() != _pimpl->underlying_tensor.data_ptr()) {
@@ -357,7 +369,7 @@ namespace hasty {
                 }
             });
 
-            debug::print_memory_usage("After unsqueeze(): ");
+            //debug::print_memory_usage("After unsqueeze(): ");
 
             return tensor_factory<D, TT, RANK+1>::make(new_shape, std::move(tensorview));
         }
@@ -440,7 +452,7 @@ namespace hasty {
         requires less_than_or_equal<N, RANK> && less_than<0,RANK>
         auto operator[](const std::array<Slice, N>& slices) const -> tensor<D, TT, RANK> {
             
-            debug::print_memory_usage("Before tensor::operator[array<Slice>]: ");
+            //debug::print_memory_usage("Before tensor::operator[array<Slice>]: ");
 
             at::Tensor tensorview = _pimpl->underlying_tensor.index(tch::torchidx(std::tuple_cat(slices)));
 
@@ -464,7 +476,7 @@ namespace hasty {
                 new_shape[i] = tensorview.size(i);
             });
 
-            debug::print_memory_usage("After tensor::operator[array<Slice>]: ");
+            //debug::print_memory_usage("After tensor::operator[array<Slice>]: ");
 
             //return tensor_factory<FPT, RANK>::make(new_shape, std::move(tensorview));
             return tensor_factory<D, TT, RANK>::make(new_shape, std::move(tensorview));
@@ -474,7 +486,7 @@ namespace hasty {
         template<index_type ...Idx>
         requires less_than<0,RANK>
         auto operator[](std::tuple<Idx...> indices) const {
-            debug::print_memory_usage("Before tensor::operator[tuple<Idx...>]: ");
+            //debug::print_memory_usage("Before tensor::operator[tuple<Idx...>]: ");
             
             constexpr auto RETRANK = get_slice_rank<RANK, Idx...>();
 
@@ -501,7 +513,7 @@ namespace hasty {
                 new_shape[i] = tensorview.size(i);
             });
 
-            debug::print_memory_usage("After tensor::operator[tuple<Idx...>]: ");
+            //debug::print_memory_usage("After tensor::operator[tuple<Idx...>]: ");
 
             //return tensor_factory<D, TT, RETRANK>::make(new_shape, std::move(tensorview));
             return tensor<D,TT,RETRANK>(new_shape, std::move(tensorview));
@@ -511,7 +523,7 @@ namespace hasty {
         template<index_type ...Idx>
         requires less_than<0,RANK>
         auto operator[](Idx... indices) const {
-            debug::print_memory_usage("Before tensor::operator[Idx...]: ");
+            //debug::print_memory_usage("Before tensor::operator[Idx...]: ");
             
             constexpr auto RETRANK = get_slice_rank<RANK, Idx...>();
 
@@ -540,7 +552,7 @@ namespace hasty {
                 new_shape[i] = tensorview.size(i);
             });
 
-            debug::print_memory_usage("After tensor::operator[Idx...]: ");
+            //debug::print_memory_usage("After tensor::operator[Idx...]: ");
 
             return tensor_factory<D, TT, RETRANK>::make(new_shape, std::move(tensorview));
             //return tensor<D,TT,RETRANK>(new_shape, std::move(tensorview));

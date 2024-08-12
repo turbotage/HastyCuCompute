@@ -116,13 +116,12 @@ at::Tensor ffi::test_simple_invert() {
     cache_dir = "/home/turbotage/Documents/hasty_cache/";
 
     std::vector<std::regex> matchers = {
-        std::regex("^/Kdata/KData_.*"),
-        std::regex("^/Kdata/KData_.*"),
-        std::regex("^/Kdata/KX_.*"),
-        std::regex("^/Kdata/KY_.*"),
-        std::regex("^/Kdata/KZ_.*"),
-        std::regex("^/Kdata/KW_.*")
-    };
+    std::regex("^/Kdata/KData_E[01].*"),
+    std::regex("^/Kdata/KX_E[01].*"),
+    std::regex("^/Kdata/KY_E[01].*"),
+    std::regex("^/Kdata/KZ_E[01].*"),
+    std::regex("^/Kdata/KW_E[01].*")
+};
     
     std::cout << "Importing tensors" << std::endl;
     auto tset = import_tensors(
@@ -142,7 +141,7 @@ at::Tensor ffi::test_simple_invert() {
 
     std::vector<at::Tensor> output_tensors;
     output_tensors.reserve(5);
-    for (int e = 0; e < 5; ++e) {
+    for (int e = 0; e < 2; ++e) {
 
         std::array<cache_tensor<f32_t,1>,3> coords;
         cache_tensor<f32_t,1> weights;
@@ -199,16 +198,16 @@ at::Tensor ffi::test_simple_invert() {
         kdata_tensors.clear();
 
         kdata = cache_tensor<c64_t,2>(
-             tensor_factory<cpu_t,c64_t,2>::make(shape_getter.template operator()<2>(kdata_tensor), std::move(kdata_tensor)),
+            tensor_factory<cpu_t,c64_t,2>::make(shape_getter.template operator()<2>(kdata_tensor), std::move(kdata_tensor)),
             std::hash<std::string>{}("KData_E" + std::to_string(e))
         );
         //kdata_tensor = at::empty({0}, at::kFloat);
 
         std::cout << "Starting nuffts" << std::endl;
 
-        std::array<tensor<cuda_t,f32_t,1>,3> coords_gpu;
+        std::array<tensor<cuda_t,f64_t,1>,3> coords_gpu;
         for (int i = 0; i < 3; ++i) {
-            coords_gpu[i] = move(coords[i].template get<cuda_t>(device_idx::CUDA0));
+            coords_gpu[i] = move(coords[i].template get<cuda_t>(device_idx::CUDA0).template to<f64_t>());
         }
         
         auto input = weights.template get<cpu_t>().unsqueeze(0) * kdata.template get<cpu_t>();
@@ -228,7 +227,7 @@ at::Tensor ffi::test_simple_invert() {
 
     return output;
 }
- 
+
 py::array pyffi::test_simple_invert() {
     return from_tensor(ffi::test_simple_invert());
 }

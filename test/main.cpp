@@ -4,6 +4,7 @@
 
 int main() {
 
+    auto ret = ffi::test_simple_invert();
 
     return 0;
 
