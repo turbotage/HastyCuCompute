@@ -115,14 +115,24 @@ at::Tensor ffi::test_simple_invert() {
 
     cache_dir = "/home/turbotage/Documents/hasty_cache/";
 
+    /*
     std::vector<std::regex> matchers = {
-    std::regex("^/Kdata/KData_E[01].*"),
-    std::regex("^/Kdata/KX_E[01].*"),
-    std::regex("^/Kdata/KY_E[01].*"),
-    std::regex("^/Kdata/KZ_E[01].*"),
-    std::regex("^/Kdata/KW_E[01].*")
-};
+        std::regex("^/Kdata/KData_E[01].*"),
+        std::regex("^/Kdata/KX_E[01].*"),
+        std::regex("^/Kdata/KY_E[01].*"),
+        std::regex("^/Kdata/KZ_E[01].*"),
+        std::regex("^/Kdata/KW_E[01].*")
+    };
+    */
     
+    std::vector<std::regex> matchers = {
+        std::regex("^/Kdata/KData_E.*"),
+        std::regex("^/Kdata/KX_E.*"),
+        std::regex("^/Kdata/KY_E.*"),
+        std::regex("^/Kdata/KZ_E.*"),
+        std::regex("^/Kdata/KW_E.*")
+    };
+
     std::cout << "Importing tensors" << std::endl;
     auto tset = import_tensors(
         "/home/turbotage/Documents/4DRecon/other_data/MRI_Raw.h5", matchers);
@@ -141,7 +151,7 @@ at::Tensor ffi::test_simple_invert() {
 
     std::vector<at::Tensor> output_tensors;
     output_tensors.reserve(5);
-    for (int e = 0; e < 2; ++e) {
+    for (int e = 0; e < 5; ++e) {
 
         std::array<cache_tensor<f32_t,1>,3> coords;
         cache_tensor<f32_t,1> weights;
@@ -204,12 +214,21 @@ at::Tensor ffi::test_simple_invert() {
         //kdata_tensor = at::empty({0}, at::kFloat);
 
         std::cout << "Starting nuffts" << std::endl;
-
+        
+        
+        
         std::array<tensor<cuda_t,f64_t,1>,3> coords_gpu;
         for (int i = 0; i < 3; ++i) {
             coords_gpu[i] = move(coords[i].template get<cuda_t>(device_idx::CUDA0).template to<f64_t>());
         }
         
+        /*
+        std::array<tensor<cuda_t,f32_t,1>,3> coords_gpu;
+        for (int i = 0; i < 3; ++i) {
+            coords_gpu[i] = move(coords[i].template get<cuda_t>(device_idx::CUDA0));
+        }
+        */
+
         auto input = weights.template get<cpu_t>().unsqueeze(0) * kdata.template get<cpu_t>();
 
         coords[0] = cache_tensor<f32_t,1>();
@@ -218,7 +237,14 @@ at::Tensor ffi::test_simple_invert() {
         weights = cache_tensor<f32_t,1>();
         kdata = cache_tensor<c64_t,2>();
 
+        auto start = std::chrono::high_resolution_clock::now();
+
         auto output = nufft_backward_cpu_over_cuda(span<3>({320, 320, 320}), input, coords_gpu);        
+
+        auto end = std::chrono::high_resolution_clock::now();
+
+        std::cout << "Encode: " << e << " Time: " << 
+                    std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
 
         output_tensors.push_back(output.get_tensor());
     }

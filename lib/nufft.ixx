@@ -342,7 +342,21 @@ namespace hasty {
         plan->setpts(coords);
         torch::cuda::synchronize();
 
-        if constexpr(!std::is_same_v<TT,complex_t<TTC>>) {
+        if constexpr(std::is_same_v<TT,complex_t<TTC>>) {
+
+            for (int i = 0; i < output.template shape<0>(); ++i) {
+                auto cuda_input = input[i, Ellipsis{}].unsqueeze(0).template to<cuda_t>(coords[0].get_device_idx());
+                auto output_slice = output[i, Ellipsis{}].unsqueeze(0);
+                auto cuda_output = output_slice.template to<cuda_t>(coords[0].get_device_idx());
+
+                torch::cuda::synchronize();
+                plan->execute(cuda_input, cuda_output);
+                torch::cuda::synchronize();
+
+                output_slice = cuda_output.template to<cpu_t>(device_idx::CPU);
+            }
+
+        } else {
 
             for (int i = 0; i < output.template shape<0>(); ++i) {
                 auto cuda_input = input[i, Ellipsis{}].unsqueeze(0).template to<cuda_t>(coords[0].get_device_idx()
@@ -357,20 +371,6 @@ namespace hasty {
                 torch::cuda::synchronize();
                 
                 output_slice.copy_(cuda_output.template to<TT>());
-            }
-
-        } else {
-
-            for (int i = 0; i < output.template shape<0>(); ++i) {
-                auto cuda_input = input[i, Ellipsis{}].unsqueeze(0).template to<cuda_t>(coords[0].get_device_idx());
-                auto output_slice = output[i, Ellipsis{}].unsqueeze(0);
-                auto cuda_output = output_slice.template to<cuda_t>(coords[0].get_device_idx());
-
-                torch::cuda::synchronize();
-                plan->execute(cuda_input, cuda_output);
-                torch::cuda::synchronize();
-
-                output_slice = cuda_output.template to<cpu_t>(device_idx::CPU);
             }
 
         }

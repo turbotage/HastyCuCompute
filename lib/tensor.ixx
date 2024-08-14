@@ -80,7 +80,7 @@ namespace hasty {
         }
 
         ~tensor_impl() {
-            debug::print_memory_usage("~tensor_impl: ");
+            //debug::print_memory_usage("~tensor_impl: ");
         }
 
         base_t<TT>* mutable_data_ptr() { 

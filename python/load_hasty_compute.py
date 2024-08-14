@@ -35,15 +35,20 @@ output = hc.test_simple_invert()
 
 print(output.shape)
 
-#import matplotlib.pyplot as plt
+outsum = np.zeros_like(output[0,0,...])
 
+frac = 1 / (output.shape[0] * output.shape[1])
 
-output = np.mean(np.abs(output.astype(np.complex64)).astype(np.float32), axis=0)
+for i in range(output.shape[0]):
+    for j in range(output.shape[1]):
+        outp = np.abs(output[i,j,...]) * frac
+        outsum += outp
+
+del outsum
+
 
 viewer = napari.Viewer()
-viewer.add_image(output[0,...], name='coil=0')
-viewer.add_image(output[1,...], name='coil=10')
-viewer.add_image(output[2,...], name='coil=20')
+viewer.add_image(outsum, name='sum')
 viewer.show(block=True)
 
 if __name__ == "__main__":
