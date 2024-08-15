@@ -31,20 +31,25 @@ sys.path.insert(0, libpath)
 import libHastyCuCompute as hc
 import numpy as np
 
-output = hc.test_simple_invert()
+#output = hc.test_simple_invert()
 
-print(output.shape)
+output = [np.load('data/enc1.npy'), 
+          np.load('data/enc2.npy'),
+          np.load('data/enc3.npy'),
+          np.load('data/enc4.npy'),
+          np.load('data/enc5.npy')]
 
-outsum = np.zeros_like(output[0,0,...])
+outsum = np.zeros(output[0][0,...].shape, dtype=np.float32)
 
-frac = 1 / (output.shape[0] * output.shape[1])
+frac = 1 / (len(output) * output[0].shape[0])
 
-for i in range(output.shape[0]):
-    for j in range(output.shape[1]):
-        outp = np.abs(output[i,j,...]) * frac
+for i in range(len(output)):
+    for j in range(output[i].shape[0]):
+        outp = np.abs(output[i][j,...]) * frac
         outsum += outp
+    output[i] = np.zeros((1,), dtype=np.float32)
 
-del outsum
+del output
 
 
 viewer = napari.Viewer()

@@ -16,8 +16,15 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 
+#include <pybind11/stl.h>
+#include <pybind11/stl_bind.h>
+#include <pybind11/complex.h>
+#include <pybind11/chrono.h>
+
+
+
 namespace pyffi {
 
-    LIB_EXPORT pybind11::array test_simple_invert();
+    LIB_EXPORT std::vector<pybind11::array> test_simple_invert();
 
 }

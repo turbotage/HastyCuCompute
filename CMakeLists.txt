@@ -16,6 +16,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_library(HastyCuCompute SHARED
     "lib/interface.cpp"
+    "lib/py_interface.cpp"
     "lib/hdf5.cpp"
     "lib/tensor.cpp"
 )

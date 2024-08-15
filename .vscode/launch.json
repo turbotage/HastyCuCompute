@@ -2,12 +2,11 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "(lldb-dab) HastyCuCompute",
-            "type": "lldb-dap",
+            "name": "Python C++ Debugger",
+            "type": "pythoncpp",
             "request": "launch",
-            "program": "${command:cmake.launchTargetPath}",
-            "args": [],
-            "stopOnEntry": false,
+            "pythonLaunchName": "Python Debugger: Current File",
+            "cppAttachName": "(lldb-dap) Attach HastyCuCompute",
         },
         {
             "name": "Python Debugger: Current File",
@@ -16,6 +15,19 @@
             "program": "${file}",
             "console": "integratedTerminal",
             "justMyCode": false
+        },
+        {
+            "name": "(lldb-dab) HastyCuTest",
+            "type": "lldb-dap",
+            "request": "launch",
+            "program": "${command:cmake.launchTargetPath}",
+            "args": [],
+            "stopOnEntry": false,
+        },
+        {
+            "name": "(lldb-dap) Attach HastyCuCompute",
+            "type": "lldb-dap",
+            "request": "attach",
         },
     ]
 }
