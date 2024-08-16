@@ -52,6 +52,7 @@ namespace hasty {
                 toeplitz_kernel(coords, upkernel, ones);
 
                 _kernel = upkernel.template to<TT>();
+
             } else {
 
                 auto ones = make_tensor<D,TT,2>({1, M}, didx, tensor_make_opts::ONES);
@@ -59,6 +60,7 @@ namespace hasty {
                 _kernel = make_tensor<D,TT,DIM>(span<DIM>(twoshape));
 
                 toeplitz_kernel(traj.coords, _kernel, ones);
+                
             }
 
             build_runner();
@@ -248,7 +250,6 @@ namespace hasty {
                 _diagonal.template get<D>(didx), _mask.template get<D>(didx));
             return std::get<0>(output_data);
         }
-
 
     protected:
 
