@@ -4,7 +4,7 @@ project("HastyCuCompute" VERSION 0.1)
 
 enable_language(CUDA)
 
-set(CMAKE_BUILD_PARALLEL_LEVEL 8)
+#set(CMAKE_BUILD_PARALLEL_LEVEL 2)
 
 include(cmake/CPM.cmake)
 include(FetchContent)

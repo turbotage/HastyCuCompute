@@ -15,7 +15,8 @@
             "environment": {
                 "MY_INSTALL_PATH": "/home/turbotage/Documents/install",
                 "CUDA_ROOT": "/usr/local/cuda-12.4",
-                "VCPKG_ROOT": "/home/turbotage/Documents/GitHub/vcpkg"
+                "VCPKG_ROOT": "/home/turbotage/Documents/GitHub/vcpkg",
+                "CMAKE_BUILD_PARALLEL_LEVEL": "4"
             },
             "cacheVariables": {
                 "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",

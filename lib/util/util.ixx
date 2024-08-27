@@ -10,6 +10,7 @@ export import :meta;
 export import :span;
 export import :torch;
 export import :typing;
+export import :io;
 
 namespace debug {
 

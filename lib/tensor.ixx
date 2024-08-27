@@ -1109,41 +1109,20 @@ namespace hasty {
 
             auto tt = _block->tensor_cpu.get_tensor().contiguous();
 
-            try {
-                namespace fs = std::filesystem;
-                std::ofstream ofs(cache_dir / fs::path(std::to_string(_block->hashidx) + ".htc"), std::ios::binary | std::ios::out);
-                if (!ofs.is_open())
-                    throw std::runtime_error("cache_disk: could not open file for writing");
-
-                ofs.write(reinterpret_cast<char*>(tt.data_ptr()), tt.numel() * sizeof(base_t<TT>));
-                ofs.close();
-            } catch (std::ifstream::failure e) {
-                std::cerr << "cache_disk: Exception opening/reading/closing file\n";
-                throw;
-            } catch (...) {
-                throw;
-            }
+            export_binary_tensor(
+                std::move(tt), 
+                cache_dir / fs::path(std::to_string(_block->hashidx)) + ".htc");
         }
 
         void uncache_disk() {
             namespace fs = std::filesystem;
-            auto tt = tensor_factory<cpu_t,TT,RANK>::make(_block->shape, at::empty(span(_block->shape).to_arr_ref(), at::kCPU));
-            
-            try {
-                std::ifstream ifs(cache_dir / fs::path(std::to_string(_block->hashidx) + ".htc"), std::ios::binary | std::ios::in);
-                if (!ifs.is_open())
-                    throw std::runtime_error("load_from_disk: could not open file for reading");
-                    
-                ifs.read(reinterpret_cast<char*>(tt.mutable_data_ptr()), tt.numel() * sizeof(base_t<TT>));
-                ifs.close();
-            } catch (std::ostream::failure e) {
-                std::cerr << "load_from_disk: Exception opening/writing/closing file\n";
-                throw;
-            } catch (...) {
-                throw;
-            }
 
-            _block->tensor_cpu = std::make_shared<tensor<cpu_t,TT,RANK>>(std::move(tt));
+            auto tt = import_binary_tensor(
+                        cache_dir / fs::path(std::to_string(_block->hashidx) + ".htc"), 
+                        span(_block->shape).to_arr_ref(), 
+                        scalar_type_func<TT>());
+
+            _block->tensor_cpu = std::make_shared<tensor<cpu_t,TT,RANK>>(_block->shape, std::move(tt));
         }
 
         auto get_cuda(device_idx didx) -> tensor<cuda_t,TT,RANK>& {

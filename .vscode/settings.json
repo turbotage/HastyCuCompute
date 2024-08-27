@@ -113,4 +113,5 @@
     },
     "cmake.cmakePath": "/snap/cmake/current/bin/cmake",
     "lldb-dap.executable-path": "/usr/bin/lldb-dap-20",
+    "cmake.parallelJobs": 4,
 }
