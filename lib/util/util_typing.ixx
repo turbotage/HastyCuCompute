@@ -252,7 +252,24 @@ namespace hasty {
         template<typename T>
         using optrefw = std::optional<std::reference_wrapper<T>>;
 
+
+        
+
     }
+
+    // Primary template
+    template <typename T>
+    struct is_std_vector : std::false_type {};
+
+    // Specialization for std::vector
+    template <typename T, typename Alloc>
+    struct is_std_vector<std::vector<T, Alloc>> : std::true_type {};
+
+    // Helper variable template
+    export template <typename T>
+    inline constexpr bool is_std_vector_v = is_std_vector<T>::value;
+
+
 
     export {
 

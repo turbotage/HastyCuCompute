@@ -147,9 +147,35 @@ namespace hasty {
         trace::trace_function<std::tuple<RETT>, std::tuple<IN1,IN2,IN1>> _runner;
     };
 
+    
+    /**
+    @brief
+    Performs the operation:
+    \f[Tx\f] where \f[T = \sum_l D_l^H \left[ \sum_s D_s^H T_l D_s \right] D_l\f]
+    
+    The ordering of the matrices emphasizes the ordering in which the looping is performed. In each iteration \f[l\f], \f[T_l\f] and \f[D_l\f] 
+    will be loaded into device memory, while all diagonal matrices \f[D_s\f] are loaded into
+    device memory before any iterations begin and stay there over all iterations. \f[\sum_s D_s^H T_l D_s \f] is run as one kernel. 
+    When the \f[l\f]'th iteration is complete, \f[T_l\f] is freed from device memory. Freeing \f[D_l\f] is optional and freeing \f[D_s\f] after the entire
+    matrix vector product is complete is also optional.
+    
+    @param kernels_kerneldiags vector of pairs of kernels and kernel diagonals \f[<T_l,D_l>\f]
+    @param stacked_diags stacked diagonals \f[\{D_s\}\f].
 
+    Example:
+    The normal operator for a common sense operator with off-resonance correction and diagonal phase modulation
+    can be written as:
+    \f[A^HA = D_\phi^H \sum_i S_i^H  \left[ \sum_l D_l^H T_l D_l \right] S_i D_\phi\f]
+    where \f[D_\phi\f] is the diagonal phase modulation matrix, \f[S_i\f] are the coil sensitivity matrices, \f[D_l\f] come from 
+    the off-resonance ratemaps and \f[T_l\f] are the kernels. This matrix vector with \f[A^HA\f] can be computed by calling this class operator()
+    with the pairs \f[<T_l, D_lD_\phi>\f] and the stacked diagonals \f[S = \{S_i\}\f].
+
+    @tparam D Device type.
+    @tparam TT Tensor type.
+    @tparam DIM Dimension.
+    */
     template<is_device D, is_fp_complex_tensor_type TT, size_t DIM>
-    class sense_normal_image_diagonal : public sense_normal_image_base<D,TT,DIM> {
+    class normal_innerlooped_diagonal_toeplitz_operator {
     public:
 
         using device_type_t = D;
@@ -158,32 +184,72 @@ namespace hasty {
         static constexpr std::integral_constant<size_t, DIM> input_rank_t = {};
         static constexpr std::integral_constant<size_t, DIM> output_rank_t = {};
 
-        sense_normal_image_diagonal(cache_tensor<TT,DIM>&& kernel, cache_tensor<TT,DIM+1>&& smaps, cache_tensor<TT,DIM>&& diagonal)
-            : sense_normal_image_base<D,TT,DIM>(std::move(kernel), std::move(smaps)), _diagonal(std::move(diagonal))
-        {}
 
-        sense_normal_image_diagonal(const trajectory<TT,DIM>& traj, cache_tensor<TT,1>&& smaps, cache_tensor<TT,DIM>&& diagonal, span<DIM> shape, bool precise)
-            : sense_normal_image_base<D,TT,DIM>(traj, std::move(smaps), shape, precise), _diagonal(std::move(diagonal))
+        /**
+        @param kernels_kerneldiags vector of pairs of kernels and kernel diagonals \f[<T_l,D_l>\f]
+        @param stacked_diags stacked diagonals \f[\{D_s\}\f].
+
+        @tparam D Device type.
+        @tparam TT Tensor type.
+        @tparam DIM Dimension.
+        */
+        sense_normal_image_offresonance_diagonal(
+            std::vector<std::pair<cache_tensor<TT,DIM>, cache_tensor<TT,DIM>>>&& kernels_kerneldiags,
+            cache_tensor<TT,DIM+1>&& stacked_diags)
+            : _kernels_kerneldiags(std::move(kernels_kerneldiags)), _stacked_diags(std::move(stacked_diags))
         {}
 
         tensor<D,TT,DIM> operator()(tensor<D,TT,DIM>&& x) {
-            auto didx = x.get_device_idx();
-            std::tuple<tensor<D,TT,DIM>> output_data = _runner.run(x, 
-                this->_smaps.template get<D>(didx), this->_kernel.template get<D>(didx), 
-                _diagonal.template get<D>(didx));
-            return std::get<0>(output_data);
+            return operator()(std::move(x), false, false);
         }
 
-    protected:
+        tensor<D,TT,DIM> operator()(tensor<D,TT,DIM>&& x, bool free_stacks = false, bool free_kerneldiags = false) {
+            auto didx = x.get_device_idx();
+
+            // The first term in the sum
+            tensor<D,TT,DIM> out =_std::get<0>(runner.run(x, 
+                this->_kernels_kerneldiags[0].first.template get<D>(didx), 
+                this->_kernels_kerneldiags[0].second.template get<D>(didx),
+                this->_stacked_diags.template get<D>(didx)
+            ));
+
+            this->_kernels_kerneldiags[0].first.free(didx);
+            if (free_kerneldiags) {
+                this->_kernels_kerneldiags[0].second.free(didx);
+            }
+            
+            // Loop over off kernels >= 1
+            for (int i = 1; i < _kernels.size(); ++i) {
+                out += std::get<0>(runner.run(
+                    x, 
+                    this->_kernels_kerneldiags[i].first.template get<D>(didx), 
+                    this->_kernels_kerneldiags[i].second.template get<D>(didx),
+                    this->_stacked_diags.template get<D>(didx)
+                ));
+
+                if (free_kerneldiags) {
+                    this->_kernels_kerneldiags[i].second.free(didx);
+                }
+            }
+
+            if (free_stacks) {
+                this->_stacked_diags.free(didx);
+            }
+
+            return out;
+        }
+
+protected:
 
         void build_runner() override {
             trace::tensor_prototype<D,TT,DIM>     input("input");
-            trace::tensor_prototype<D,TT,DIM+1>   coilmap("coilmap");
+            trace::tensor_prototype<D,TT,DIM+1>   diag("diag");
+            trace::tensor_prototype<D,TT,DIM>     stacked_diag("stacked_diag");
             trace::tensor_prototype<D,TT,DIM>     kernel("kernel");
+            
             trace::tensor_prototype<D,TT,DIM>     output("output");
-            trace::tensor_prototype<D,TT,DIM>     diag("diag");
 
-            _runner = trace::trace_function_factory<decltype(output)>::make("toeplitz", input, coilmap, kernel, diag);
+            _runner = trace::trace_function_factory<decltype(output)>::make("toeplitz", input, kernel, diag, stacked_diag);
 
             _runner.add_lines(std::format(R"ts(
     spatial_shp = input.shape #shp[1:]
@@ -194,22 +260,24 @@ namespace hasty {
     nrun = ncoil // {0}
     
     out = torch.zeros_like(input)
-    input *= diag
+
+    input = input * diag
+
     for run in range(nrun):
         bst = run*{0}
-        cmap = coilmap[bst:(bst+{0})]
-        c = cmap * input
-        c = torch.fft_fftn(c, expanded_shp, transform_dims)
-        c *= kernel
-        c = torch.fft_ifftn(c, None, transform_dims)
+        dmap = stacked_diag[bst:(bst+{0})]
+        d = dmap * input
+        d = torch.fft_fftn(d, expanded_shp, transform_dims)
+        d *= kernel
+        d = torch.fft_ifftn(d, None, transform_dims)
 
         for dim in range(len(spatial_shp)):
-            c = torch.slice(c, dim+1, spatial_shp[dim]-1, -1)
+            d = torch.slice(d, dim+1, spatial_shp[dim]-1, -1)
 
-        c *= cmap.conj()
-        out += torch.sum(c, 0)
+        d *= dmap.conj()
+        out += torch.sum(d, 0)
+
     out *= diag.conj()
-
     out *= (1 / torch.prod(torch.tensor(spatial_shp)))
     
     return out
@@ -219,7 +287,8 @@ namespace hasty {
         }
 
     private:
-        cache_tensor<TT,DIM> _diagonal;
+        std::vector<std::pair<cache_tensor<TT,DIM>, cache_tensor<TT,DIM>>> _kernels_kerneldiags;
+        cache_tensor<TT,DIM+1> _stacked_diags;
 
         using RETT = trace::tensor_prototype<D,TT,DIM>;
         using IN1 = trace::tensor_prototype<D,TT,DIM+1>;
@@ -227,96 +296,6 @@ namespace hasty {
 
         trace::trace_function<std::tuple<RETT>, std::tuple<IN1,IN2,IN1>> _runner;
     };
-
-
-    template<is_device D, is_fp_complex_tensor_type TT, size_t DIM>
-    class sense_normal_image_masked_diagonal : public sense_normal_image_base<D,TT,DIM> {
-    public:
-
-        sense_normal_image_masked_diagonal( cache_tensor<TT,DIM>&& kernel, cache_tensor<TT,DIM+1>&& smaps, 
-                                            cache_tensor<TT,1>&& diagonal, cache_tensor<b8_t,DIM>&& mask)
-            : sense_normal_image_base<D,TT,DIM>(std::move(kernel), std::move(smaps)), _diagonal(std::move(diagonal)), _mask(std::move(mask))
-        {}
-
-        sense_normal_image_masked_diagonal( const trajectory<TT,DIM>& traj, cache_tensor<TT,1>&& smaps, 
-                                            cache_tensor<TT,1>&& diagonal, cache_tensor<b8_t,DIM>&& mask, span<DIM> shape, bool precise)
-            : sense_normal_image_base<D,TT,DIM>(traj, std::move(smaps), shape, precise), _diagonal(std::move(diagonal)), _mask(std::move(mask))
-        {}
-
-        tensor<D,TT,1> operator()(tensor<D,TT,1>&& x) {
-            auto didx = x.get_device_idx();
-            std::tuple<tensor<D,TT,DIM>> output_data = _runner.run(x, 
-                this->_smaps.template get<D>(didx), this->_kernel.template get<D>(didx), 
-                _diagonal.template get<D>(didx), _mask.template get<D>(didx));
-            return std::get<0>(output_data);
-        }
-
-    protected:
-
-        void build_runner() override {
-            trace::tensor_prototype<D,TT,1>     input("input");
-            trace::tensor_prototype<D,TT,DIM+1>   coilmap("coilmap");
-            trace::tensor_prototype<D,TT,DIM>     kernel("kernel");
-            trace::tensor_prototype<D,TT,1>     output("output");
-            trace::tensor_prototype<D,TT,1>     diag("diag");
-            trace::tensor_prototype<D,b8_t,DIM>   mask("mask");
-
-            _runner = trace::trace_function_factory<decltype(output)>::make("toeplitz", input, coilmap, kernel, diag, mask);
-
-            _runner.add_lines(std::format(R"ts(
-spatial_shp = coilmap.shape[1:]
-expanded_shp = [2*s for s in spatial_shp]
-transform_dims = [i+1 for i in range(len(spatial_shp))]
-unmasked = torch.zeros(spatial_shp, dtype=input.dtype, device=input.device)
-
-unmasked[mask] = input
-
-ncoil = coilmap.shape[0]
-nrun = ncoil // {0}
-
-out = torch.zeros_like(unmasked)
-input *= diag
-for run in range(nrun):
-    bst = run*{0}
-    cmap = coilmap[bst:(bst+{0})]
-    c = cmap * unmasked
-    c = torch.fft_fftn(c, expanded_shp, transform_dims)
-    c *= kernel
-    c = torch.fft_ifftn(c, None, transform_dims)
-
-    for dim in range(len(spatial_shp)):
-        c = torch.slice(c, dim+1, spatial_shp[dim]-1, -1)
-
-    c *= cmap.conj()
-    out += torch.sum(c, 0)
-out *= diag.conj()
-
-out = out[mask]
-
-out *= (1 / torch.prod(torch.tensor(spatial_shp)))
-
-return out
-)ts", 2));
-
-            _runner.compile();
-
-        }
-
-    private:
-        cache_tensor<b8_t,DIM> _mask;
-        cache_tensor<TT,1> _diagonal;
-
-        using RETT = trace::tensor_prototype<D,TT,DIM>;
-        using IN1 = trace::tensor_prototype<D,TT,DIM+1>;
-        using IN2 = trace::tensor_prototype<D,TT,DIM>;
-
-        trace::trace_function<std::tuple<RETT>, std::tuple<IN1,IN2,IN1>> _runner;
-    };
-
-
-
-
-
 
 
 
@@ -336,9 +315,9 @@ return out
             std::vector<cache_tensor<TT,2>> data,
             std::vector<cache_tensor<TT,DIM>> fixed_img,
             std::vector<std::tuple<i32,i32,i32>> frame_indices,
-            cache_tensor<TT,DIM+1> smaps, 
-            cache_tensor<TT,1> diagonal, 
-            cache_tensor<b8_t,DIM> interior_mask, 
+            cache_tensor<TT,DIM+1> smaps,
+            cache_tensor<TT,1> diagonal,
+            cache_tensor<b8_t,DIM> interior_mask,
             cache_tensor<b8_t,1> fixed_mask,
             float lambda1,
             float lambda2,
@@ -377,8 +356,6 @@ return out
                     std::move(nufft_plan<cuda_t, f64_t, DIM, nufft_type::BACKWARD>::make(opts));
                 storages[i].template add<nufft_plan<cuda_t, f64_t, DIM, nufft_type::BACKWARD>>(
                     "backward_plan", std::move(plan));
-
-                
 
             }
 

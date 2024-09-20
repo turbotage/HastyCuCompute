@@ -155,3 +155,28 @@ std::vector<at::Tensor> ffi::test_simple_invert() {
 }
 
 
+std::vector<at::Tensor> ffi::test_offresonance_operator() {
+
+    using namespace hasty;
+
+    cache_dir = "/home/turbotage/Documents/hasty_cache/";
+
+    int xres = 64;
+    int yres = 64;
+    int zres = 64;
+    int ncoils = 8;
+    int offresonance_n = 5;
+
+    cache_tensor<c64_t, 3> diagonal = tensor_factory<cpu_t,c64_t,3>::make({xres, yres, zres}, tensor_make_opts::RAND_UNIFORM);
+    cache_tensor<c64_t, 4> smaps = tensor_factory<cpu_t,c64_t,4>::make({ncoils, xres, yres, zres}, tensor_make_opts::RAND_UNIFORM);
+    std::vector<cache_tensor<c64_t, 3>> kernels;
+    std::vector<cache_tensor<c64_t, 3>> ratemap_diagonals;
+    for (int i = 0; i < 5; ++i) {
+        kernels.push_back(tensor_factory<cpu_t,c64_t,3>::make({2*xres, 2*yres, 2*zres}, tensor_make_opts::RAND_UNIFORM));
+        ratemap_diagonals.push_back(tensor_factory<cpu_t,c64_t,3>::make({xres, yres, zres}, tensor_make_opts::RAND_UNIFORM));
+    }
+
+    sense_normal_image_offresonance_diagonal<cuda_t, c64_t, 3> sense(smaps, diagonal, kernels, ratemap_diagonals);
+
+}
+

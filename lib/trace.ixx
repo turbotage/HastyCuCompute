@@ -34,6 +34,8 @@ namespace hasty {
         concept is_tensor_prototype = requires(T t) {
             []<is_device D, is_tensor_type TT, size_t RANK>(tensor_prototype<D,TT,RANK>&){}(t);
         };
+        
+
 
         template<typename T>
         struct tensor_prototype_conversion;
@@ -52,6 +54,16 @@ namespace hasty {
 
         export template<is_tensor_prototype T>
         using tensor_prototype_conversion_t = std::invoke_result_t<tensor_prototype_conversion<T>, T>;
+
+        export struct tensor_prototype_vector {
+
+            tensor_prototype_vector(const std::string& str, std::vector<tensor_prototype_vector>&& tps)
+                : str(str), tps(std::move(tps))
+            {}
+
+            std::string str;
+            std::vector<tensor_prototype_vector> tps;
+        };
 
         export template<typename... U>
         struct trace_function;
@@ -131,11 +143,24 @@ namespace hasty {
 
                 auto ttscopy = std::tuple(Ts(std::forward<Ts>(tts))...);
 
-                auto gettensorfunc = []<typename T>(T&& t) { 
-                    if (t.ninstances() == 1) {
-                        return t.decay_to_tensor();
+                auto gettensorfunc = []<typename T>(T&& t) {
+                    if constexpr (std::is_same_v<T, tensor_prototype_vector>) {
+                        std::vector<at::Tensor> rettensors;
+                        rettensors.reserve(t.size());
+                        for (auto& tt : t.tps) {
+                            if (tt.ninstances() == 1) {
+                                rettensors.push_back(tt.decay_to_tensor());
+                            } else {
+                                rettensors.push_back(tt.get_tensor());
+                            }
+                        }
+                        return rettensors;
+                    } else {
+                        if (t.ninstances() == 1) {
+                            return t.decay_to_tensor();
+                        }
+                        return t.get_tensor();
                     }
-                    return t.get_tensor();
                 };
 
                 c10::IValue ret_ivalue;
