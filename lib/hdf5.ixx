@@ -1,9 +1,10 @@
 module;
 
-#include "pch.hpp"
+//#include "pch.hpp"
 
 export module hdf5;
 
+import pch;
 import util;
 
 namespace hasty {

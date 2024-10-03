@@ -1,9 +1,10 @@
 module;
 
-#include "pch.hpp"
+//#include "pch.hpp"
 
 export module tensor;
 
+import pch;
 import util;
 import tensor;
 

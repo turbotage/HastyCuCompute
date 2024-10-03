@@ -1,12 +1,13 @@
 module;
 
-#include "pch.hpp"
+//#include "pch.hpp"
 
 #include <cufinufft_opts.h>
 #include <cufinufft.h>
 
 export module nufft;
 
+import pch;
 import util;
 import tensor;
 

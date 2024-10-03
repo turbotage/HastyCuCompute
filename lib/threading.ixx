@@ -1,10 +1,11 @@
 module;
 
-#include "pch.hpp"
+//#include "pch.hpp"
 #include <cuda_runtime.h>
 
 export module threading;
 
+import pch;
 import util;
 import tensor;
 

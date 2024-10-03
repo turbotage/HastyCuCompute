@@ -1,8 +1,10 @@
 module;
 
-#include "pch.hpp"
+//#include "pch.hpp"
 
 export module util:io;
+
+import pch;
 
 namespace hasty {
 

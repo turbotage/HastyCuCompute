@@ -67,11 +67,7 @@ namespace hasty {
 
     public:
 
-        tensor_impl(const std::array<int64_t, RANK>& input_shape, at::Tensor input)
-            : shape(input_shape), underlying_tensor(std::move(input))
-        {
-            //debug::print_memory_usage("tensor_impl::tensor_impl: (1)");
-        }
+        tensor_impl(const std::array<int64_t, RANK>& input_shape, at::Tensor input);
 
         tensor_impl(span<RANK> input_shape, at::Tensor input)
             : shape(input_shape.to_arr()), underlying_tensor(std::move(input))
@@ -577,11 +573,56 @@ namespace hasty {
             _pimpl->underlying_tensor = std::move(other._pimpl->underlying_tensor);
         }
 
-        void masked_scatter_(const tensor<D,b8_t,RANK>& mask, const tensor<D, TT, RANK>& src) {
+        tensor<D, TT, 1> masked_select(const tensor<D,b8_t,RANK>& mask) const {
+            at::Tensor ret = _pimpl->underlying_tensor.masked_select(mask.get_tensor());
+            std::array<int64_t, 1> new_shape = {ret.size(0)};
+            return tensor<D,TT,1>(new_shape, std::move(ret));
+        }
+        
+        void masked_scatter_(const tensor<D,b8_t,RANK>& mask, const tensor<D, TT, 1>& src) {
             _pimpl->underlying_tensor.masked_scatter_(mask.get_tensor(), src.get_tensor());
         }
 
-        
+        void masked_fill_(const tensor<D,b8_t,RANK>& mask, base_t<TT> val) {
+            if constexpr(!is_fp_complex_tensor_type<TT>) {
+                _pimpl->underlying_tensor.masked_fill_(mask.get_tensor(), val);
+            }
+            else {
+                auto cten = at::complex(at::scalar_tensor(val.real()), at::scalar_tensor(val.imag())); 
+                _pimpl->underlying_tensor.masked_fill_(mask.get_tensor(), cten);
+            }
+        }
+
+        void masked_add_(const tensor<D,b8_t,RANK>& mask, base_t<TT> val) {
+            if constexpr(!is_fp_complex_tensor_type<TT>) {
+                auto adder = _pimpl->underlying_tensor.masked_select(mask.get_tensor()) + at::scalar_tensor(val);
+                _pimpl->underlying_tensor.masked_scatter_(mask.get_tensor(), adder);
+            }
+            else {
+                auto cten = at::complex(at::scalar_tensor(val.real()), at::scalar_tensor(val.imag()));
+                auto adder = _pimpl->underlying_tensor.masked_select(mask.get_tensor()) + cten;
+                _pimpl->underlying_tensor.masked_scatter_(mask.get_tensor(), adder);
+            }
+        }
+
+        void masked_add_(const tensor<D,b8_t,RANK>& mask, const tensor<D,TT,1>& src) {
+            auto adder = _pimpl->underlying_tensor.masked_select(mask.get_tensor()) + src.get_tensor();
+            _pimpl->underlying_tensor.masked_scatter_(mask.get_tensor(), adder);
+        }
+
+        void masked_add_(const tensor<D,b8_t,RANK>& mask, const tensor<D,TT,1>& src, base_t<TT> alpha) {
+            if constexpr(!is_fp_complex_tensor_type<TT>) {
+                auto adder = _pimpl->underlying_tensor.masked_select(mask.get_tensor()) + src.get_tensor() * at::scalar_tensor(alpha);
+                _pimpl->underlying_tensor.masked_scatter_(mask.get_tensor(), adder);
+            }
+            else {
+                auto cten = at::complex(at::scalar_tensor(alpha.real()), at::scalar_tensor(alpha.imag()));
+                auto adder = _pimpl->underlying_tensor.masked_select(mask.get_tensor()) + src.get_tensor() * cten;
+                _pimpl->underlying_tensor.masked_scatter_(mask.get_tensor(), adder);
+            }
+        }
+
+
         auto norm() const -> std::conditional_t<is_fp32_tensor_type<TT>, float, double> 
         requires is_fp_tensor_type<TT> 
         {

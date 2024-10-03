@@ -167,14 +167,14 @@ namespace hasty {
     can be written as:
     \f[A^HA = D_\phi^H \sum_i S_i^H  \left[ \sum_l D_l^H T_l D_l \right] S_i D_\phi\f]
     where \f[D_\phi\f] is the diagonal phase modulation matrix, \f[S_i\f] are the coil sensitivity matrices, \f[D_l\f] come from 
-    the off-resonance ratemaps and \f[T_l\f] are the kernels. This matrix vector with \f[A^HA\f] can be computed by calling this class operator()
+    the off-resonance ratemaps and \f[T_l\f] are the toeplitz matrices. This matrix vector with \f[A^HA\f] can be computed by calling this class operator()
     with the pairs \f[<T_l, D_lD_\phi>\f] and the stacked diagonals \f[S = \{S_i\}\f].
 
     @tparam D Device type.
     @tparam TT Tensor type.
     @tparam DIM Dimension.
     */
-    template<is_device D, is_fp_complex_tensor_type TT, size_t DIM>
+    export template<is_device D, is_fp_complex_tensor_type TT, size_t DIM>
     class normal_innerlooped_diagonal_toeplitz_operator {
     public:
 
@@ -298,6 +298,34 @@ protected:
     };
 
 
+    export template<is_device D, is_fp_complex_tensor_type TT, size_t DIM>
+    using NIDT_OP = normal_innerlooped_diagonal_toeplitz_operator<D,TT,DIM>;
+
+    export template<is_tensor_operator TO, is_device D, is_fp_complex_tensor_type TT, size_t DIM>
+    class mask_regularized_operator {
+    public:
+
+        mask_regularized_normal_innerlooped_diagonal_toeplitz_admm_minimizer(
+            TO&& op, 
+            std::vector<cache_tensor<b8_t,DIM>>&& masks, 
+            std::vector<float>&& lambdas)
+            : _op(std::move(op)), _masks(std::move(masks)), _lambdas(std::move(lambdas))
+        {}
+
+        tensor<D,TT,DIM> operator()(tensor<D,TT,DIM>&& x) {
+            auto didx = x.get_device_idx();
+            tensor<D,TT,DIM> out = _op(x);
+            for (int i = 0; i < _masks.size(); ++i) {
+                out += _lambdas[i] * _masks[i].template get<D>(didx);
+            }
+            return out;
+        }
+
+    private:
+        TO _op;
+        std::vector<cache_tensor<TT,DIM>> _masks;
+        std::vector<float> _lambdas;
+    };
 
 
     template<is_device D, is_fp_complex_tensor_type TT, size_t DIM>
