@@ -1,7 +1,14 @@
-#include "interface.hpp"
-#include "py_interface.hpp"
+module;
+
+#include "py_interface_includes.hpp"
+
+export module py_interface;
+
+//import pch;
 
 namespace py = pybind11;
+
+import interface;
 
 #ifdef _WIN32
 #define MODULE_NAME HastyCuCompute
@@ -104,15 +111,20 @@ namespace {
 
 }
 
-std::vector<py::array> pyffi::test_simple_invert() {
-    std::vector<py::array> output_arrays;
-    output_arrays.reserve(5);
-    auto tens = ffi::test_simple_invert();
-    for (int i = 0; i < tens.size(); ++i) {
-        output_arrays.push_back(std::move(from_tensor(std::move(tens[i]))));
+namespace pyffi {
+
+    export LIB_EXPORT std::vector<py::array> test_simple_invert() {
+        std::vector<py::array> output_arrays;
+        output_arrays.reserve(5);
+        auto tens = ffi::test_simple_invert();
+        for (int i = 0; i < tens.size(); ++i) {
+            output_arrays.push_back(std::move(from_tensor(std::move(tens[i]))));
+        }
+        return output_arrays;
     }
-    return output_arrays;
+
 }
+
 
 
 PYBIND11_MODULE(MODULE_NAME, m) {

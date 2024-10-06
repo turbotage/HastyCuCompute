@@ -4,6 +4,8 @@ module;
 
 module tensor;
 
+//import pch;
+
 namespace hasty {
     std::filesystem::path cache_dir = "/home/hasty_cache/";
 }

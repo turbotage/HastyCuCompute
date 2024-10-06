@@ -1,16 +1,14 @@
 module;
 
-//#include "pch.hpp"
+#include "pch.hpp"
 
 export module util:io;
 
-import pch;
 
 namespace hasty {
 
-    using fs = std::filesystem;
 
-    export void export_binary_tensor(at::Tensor tensor, const fs::path& path)
+    export void export_binary_tensor(at::Tensor tensor, const std::filesystem::path& path)
     {
         try {
             std::ofstream file(path, std::ios::binary);
@@ -27,7 +25,7 @@ namespace hasty {
         }
     }
 
-    export auto import_binary_tensor(const fs::path& path, at::IntArrayRef sizes, at::ScalarType dtype) 
+    export auto import_binary_tensor(const std::filesystem::path& path, at::IntArrayRef sizes, at::ScalarType dtype) 
         -> at::Tensor
     {
         at::Tensor tt = at::empty(sizes, at::TensorOptions().dtype(dtype));
@@ -46,4 +44,5 @@ namespace hasty {
         }
 
         return tt;
+    }
 }

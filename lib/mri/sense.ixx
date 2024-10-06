@@ -4,6 +4,9 @@ module;
 
 export module sense;
 
+//import pch;
+
+import op;
 import util;
 import trajectory;
 import tensor;
@@ -193,11 +196,13 @@ namespace hasty {
         @tparam TT Tensor type.
         @tparam DIM Dimension.
         */
-        sense_normal_image_offresonance_diagonal(
+        normal_innerlooped_diagonal_toeplitz_operator(
             std::vector<std::pair<cache_tensor<TT,DIM>, cache_tensor<TT,DIM>>>&& kernels_kerneldiags,
             cache_tensor<TT,DIM+1>&& stacked_diags)
             : _kernels_kerneldiags(std::move(kernels_kerneldiags)), _stacked_diags(std::move(stacked_diags))
-        {}
+        {
+            build_runner();
+        }
 
         tensor<D,TT,DIM> operator()(tensor<D,TT,DIM>&& x) {
             return operator()(std::move(x), false, false);
@@ -207,7 +212,7 @@ namespace hasty {
             auto didx = x.get_device_idx();
 
             // The first term in the sum
-            tensor<D,TT,DIM> out =_std::get<0>(runner.run(x, 
+            tensor<D,TT,DIM> out = std::get<0>(_runner.run(x, 
                 this->_kernels_kerneldiags[0].first.template get<D>(didx), 
                 this->_kernels_kerneldiags[0].second.template get<D>(didx),
                 this->_stacked_diags.template get<D>(didx)
@@ -219,8 +224,8 @@ namespace hasty {
             }
             
             // Loop over off kernels >= 1
-            for (int i = 1; i < _kernels.size(); ++i) {
-                out += std::get<0>(runner.run(
+            for (int i = 1; i < this->_kernels_kerneldiags.size(); ++i) {
+                out += std::get<0>(_runner.run(
                     x, 
                     this->_kernels_kerneldiags[i].first.template get<D>(didx), 
                     this->_kernels_kerneldiags[i].second.template get<D>(didx),
@@ -241,7 +246,7 @@ namespace hasty {
 
 protected:
 
-        void build_runner() override {
+        void build_runner() {
             trace::tensor_prototype<D,TT,DIM>     input("input");
             trace::tensor_prototype<D,TT,DIM+1>   diag("diag");
             trace::tensor_prototype<D,TT,DIM>     stacked_diag("stacked_diag");
@@ -305,7 +310,7 @@ protected:
     class mask_regularized_operator {
     public:
 
-        mask_regularized_normal_innerlooped_diagonal_toeplitz_admm_minimizer(
+        mask_regularized_operator(
             TO&& op, 
             std::vector<cache_tensor<b8_t,DIM>>&& masks, 
             std::vector<float>&& lambdas)

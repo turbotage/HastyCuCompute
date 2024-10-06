@@ -16,13 +16,19 @@
                 "MY_INSTALL_PATH": "/home/turbotage/Documents/install",
                 "CUDA_ROOT": "/usr/local/cuda-12.4",
                 "VCPKG_ROOT": "/home/turbotage/Documents/GitHub/vcpkg",
-                "CMAKE_BUILD_PARALLEL_LEVEL": "4"
+                "CMAKE_BUILD_PARALLEL_LEVEL": "4",
+                "CUDAHOSTCXX": "/usr/bin/clang++-20"
             },
             "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
                 "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
                 "CMAKE_C_COMPILER": "/usr/bin/clang-20",
                 "CMAKE_CXX_COMPILER": "/usr/bin/clang++-20",
                 "CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS": "/usr/bin/clang-scan-deps-20",
+                "CMAKE_CXX_FLAGS": "-std=c++23 -stdlib=libc++",
+                "CMAKE_CXX_EXTENSIONS": "OFF",
+                "CMAKE_INCLUDE_PATH": "/usr/lib/llvm-20/lib/clang/20/include",
+                "CMAKE_LIBRARY_PATH": "/usr/lib/llvm-20/lib",
                 "CMAKE_CUDA_ARCHITECTURES": "89",
                 "CMAKE_CUDA_COMPILER": "$env{CUDA_ROOT}/bin/nvcc",
                 "CUDAToolkit_ROOT": "$env{CUDA_ROOT}/bin/",
@@ -34,7 +40,8 @@
                 "CMAKE_TOOLCHAIN_FILE": {
                     "type": "FILEPATH",
                     "value": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
-                }
+                },
+                "CMAKE_CUDA_FLAGS": "-allow-unsupported-compiler"
             }
         },
         {

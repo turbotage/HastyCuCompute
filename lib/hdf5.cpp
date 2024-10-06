@@ -1,6 +1,6 @@
 module;
 
-//#include "pch.hpp"
+#include "pch.hpp"
 #include <highfive/highfive.hpp>
 #include <H5Cpp.h>
 
@@ -54,7 +54,7 @@ HighFive::CompoundType make_complex_double() {
 HIGHFIVE_REGISTER_TYPE(std::complex<double>, make_complex_double);
 
 
-/*
+
 at::Tensor import_tensor(const std::string& filepath, const std::string& dataset)
 {
     HighFive::File file(filepath, HighFive::File::ReadOnly);
@@ -109,19 +109,10 @@ at::Tensor import_tensor(const std::string& filepath, const std::string& dataset
     }
 
 }
-*/
+
 
 
 namespace hasty {
-
-    auto import_tensor(const std::string& filepath, const std::string& dataset) -> 
-        std::variant<at::Tensor, std::vector<at::Tensor>> 
-    {
-        HighFive::File file(filepath, HighFive::File::ReadOnly);
-        HighFive::DataSet dset = file.getDataSet(dataset);
-
-        return import_tensors(dset);
-    }
 
     auto import_tensors(const HighFive::DataSet& dataset) ->
         std::variant<at::Tensor, std::vector<at::Tensor>>
@@ -175,6 +166,15 @@ namespace hasty {
             throw std::runtime_error("disallowed dtype");
         }
 
+    }
+
+    auto import_tensor(const std::string& filepath, const std::string& dataset) -> 
+        std::variant<at::Tensor, std::vector<at::Tensor>> 
+    {
+        HighFive::File file(filepath, HighFive::File::ReadOnly);
+        HighFive::DataSet dset = file.getDataSet(dataset);
+
+        return import_tensors(dset);
     }
 
 

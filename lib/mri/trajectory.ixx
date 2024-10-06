@@ -4,6 +4,8 @@ module;
 
 export module trajectory;
 
+//import pch;
+
 import util;
 import tensor;
 
