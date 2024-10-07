@@ -8,7 +8,7 @@ project("HastyCuCompute" VERSION 0.1 LANGUAGES CXX)
 
 add_library(HastyCuCompute SHARED
     "lib/hdf5.cpp"
-    "lib/tensor/tensor.cpp"
+    "lib/tensor/mod_tensor.cpp"
 )
 target_compile_features(HastyCuCompute 
     PRIVATE cxx_std_23
@@ -29,27 +29,37 @@ include(FetchContent)
 target_sources(HastyCuCompute
     PUBLIC 
         FILE_SET CXX_MODULES FILES
-            "lib/interface/interface.ixx"
-            "lib/interface/py_interface.ixx"
-            "lib/mri/trajectory.ixx"
-            "lib/mri/sense.ixx"
-            "lib/op/op.ixx"
-            "lib/op/cg.ixx"
-            "lib/op/min.ixx"
-            "lib/tensor/tensor.ixx"
-            "lib/tensor/tensor_impl.ixx"
-            "lib/util/util_funcs.ixx"
-            "lib/util/util_idx.ixx"
-            "lib/util/util_io.ixx"
-            "lib/util/util_meta.ixx"
-            "lib/util/util_span.ixx"   
-            "lib/util/util_torch.ixx"
-            "lib/util/util_typing.ixx"
-            "lib/util/util.ixx"
-            "lib/hdf5.ixx"
-            "lib/nufft.ixx"
-            "lib/threading.ixx"
-            "lib/trace.ixx"
+            "lib/interface/interface.cppm"
+            "lib/interface/py_interface.cppm"
+            "lib/mri/trajectory.cppm"
+            "lib/mri/sense.cppm"
+            "lib/op/op.cppm"
+            "lib/op/cg.cppm"
+            "lib/op/min.cppm"
+            "lib/tensor/impl_tensor_extrinsic_math.cppm"
+            "lib/tensor/impl_tensor_extrinsic_operator.cppm"
+            "lib/tensor/impl_tensor_intrinsic_inplace.cppm"
+            "lib/tensor/impl_tensor_intrinsic_math.cppm"
+            "lib/tensor/impl_tensor_intrinsic_operator.cppm"
+            "lib/tensor/impl_tensor_intrinsic.cppm"
+            "lib/tensor/mod_tensor_base.cppm"
+            "lib/tensor/mod_tensor_caching.cppm"
+            "lib/tensor/mod_tensor_extrinsic.cppm"
+            "lib/tensor/mod_tensor_factory.cppm"
+            "lib/tensor/mod_tensor_intrinsic.cppm"
+            "lib/tensor/mod_tensor.cppm"
+            "lib/util/util_funcs.cppm"
+            "lib/util/util_idx.cppm"
+            "lib/util/util_io.cppm"
+            "lib/util/util_meta.cppm"
+            "lib/util/util_span.cppm"   
+            "lib/util/util_torch.cppm"
+            "lib/util/util_typing.cppm"
+            "lib/util/util.cppm"
+            "lib/hdf5.cppm"
+            "lib/nufft.cppm"
+            "lib/threading.cppm"
+            "lib/trace.cppm"
 )
 
 find_package(CUDAToolkit REQUIRED)

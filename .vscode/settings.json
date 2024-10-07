@@ -109,7 +109,9 @@
         "queue": "cpp",
         "stack": "cpp",
         "__mutex_base": "cpp",
-        "__node_handle": "cpp"
+        "__node_handle": "cpp",
+        "execution": "cpp",
+        "print": "cpp"
     },
     "cmake.cmakePath": "/snap/cmake/current/bin/cmake",
     "lldb-dap.executable-path": "/usr/bin/lldb-dap-20",

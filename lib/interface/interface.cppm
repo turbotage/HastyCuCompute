@@ -71,7 +71,7 @@ namespace ffi {
             at::Tensor temp = std::get<at::Tensor>(tset["/Kdata/KX_E" + std::to_string(e)]).flatten();
             temp *= (3.141592 / 160.0);
             coords[0] = cache_tensor<f32_t,1>(
-                tensor_factory<cpu_t,f32_t,1>::make(shape_getter.template operator()<1>(temp), temp),
+                tensor<cpu_t,f32_t,1>(shape_getter.template operator()<1>(temp), temp),
                 std::hash<std::string>{}("KX_E" + std::to_string(e))
             );
             tset.erase("/Kdata/KX_E" + std::to_string(e));
@@ -79,7 +79,7 @@ namespace ffi {
             temp = std::get<at::Tensor>(tset["/Kdata/KY_E" + std::to_string(e)]).flatten();
             temp *= (3.141592 / 160.0);
             coords[1] = cache_tensor<f32_t,1>(
-                tensor_factory<cpu_t,f32_t,1>::make(shape_getter.template operator()<1>(temp), temp),
+                tensor<cpu_t,f32_t,1>(shape_getter.template operator()<1>(temp), temp),
                 std::hash<std::string>{}("KY_E" + std::to_string(e))
             );
             tset.erase("/Kdata/KY_E" + std::to_string(e));
@@ -87,14 +87,14 @@ namespace ffi {
             temp = std::get<at::Tensor>(tset["/Kdata/KZ_E" + std::to_string(e)]).flatten();
             temp *= (3.141592 / 160.0);
             coords[2] = cache_tensor<f32_t,1>(
-                tensor_factory<cpu_t,f32_t,1>::make(shape_getter.template operator()<1>(temp), temp),
+                tensor<cpu_t,f32_t,1>(shape_getter.template operator()<1>(temp), temp),
                 std::hash<std::string>{}("KZ_E" + std::to_string(e))
             );
             tset.erase("/Kdata/KZ_E" + std::to_string(e));
 
             temp = std::get<at::Tensor>(tset["/Kdata/KW_E" + std::to_string(e)]).flatten();
             weights = cache_tensor<f32_t,1>(
-                tensor_factory<cpu_t,f32_t,1>::make(shape_getter.template operator()<1>(temp), temp),
+                tensor<cpu_t,f32_t,1>(shape_getter.template operator()<1>(temp), temp),
                 std::hash<std::string>{}("KW_E" + std::to_string(e))
             );
             tset.erase("/Kdata/KW_E" + std::to_string(e));
@@ -116,7 +116,7 @@ namespace ffi {
             kdata_tensors.clear();
 
             kdata = cache_tensor<c64_t,2>(
-                tensor_factory<cpu_t,c64_t,2>::make(shape_getter.template operator()<2>(kdata_tensor), std::move(kdata_tensor)),
+                tensor<cpu_t,c64_t,2>(shape_getter.template operator()<2>(kdata_tensor), std::move(kdata_tensor)),
                 std::hash<std::string>{}("KData_E" + std::to_string(e))
             );
             //kdata_tensor = at::empty({0}, at::kFloat);
@@ -173,13 +173,13 @@ namespace ffi {
         int ncoils = 8;
         int offresonance_n = 5;
 
-        cache_tensor<c64_t, 3> diagonal = tensor_factory<cpu_t,c64_t,3>::make({xres, yres, zres}, tensor_make_opts::RAND_UNIFORM);
-        cache_tensor<c64_t, 4> smaps = tensor_factory<cpu_t,c64_t,4>::make({ncoils, xres, yres, zres}, tensor_make_opts::RAND_UNIFORM);
+        cache_tensor<c64_t, 3> diagonal = make_rand_tensor<cpu_t,c64_t,3>({xres, yres, zres});
+        cache_tensor<c64_t, 4> smaps = make_rand_tensor<cpu_t,c64_t,4>({ncoils, xres, yres, zres});
         std::vector<cache_tensor<c64_t, 3>> kernels;
         std::vector<cache_tensor<c64_t, 3>> ratemap_diagonals;
         for (int i = 0; i < 5; ++i) {
-            kernels.push_back(tensor_factory<cpu_t,c64_t,3>::make({2*xres, 2*yres, 2*zres}, tensor_make_opts::RAND_UNIFORM));
-            ratemap_diagonals.push_back(tensor_factory<cpu_t,c64_t,3>::make({xres, yres, zres}, tensor_make_opts::RAND_UNIFORM));
+            kernels.push_back(make_rand_tensor<cpu_t,c64_t,3>({2*xres, 2*yres, 2*zres}));
+            ratemap_diagonals.push_back(make_rand_tensor<cpu_t,c64_t,3>({xres, yres, zres}));
         }
 
         sense_normal_image_offresonance_diagonal<cuda_t, c64_t, 3> sense(smaps, diagonal, kernels, ratemap_diagonals);
