@@ -6,9 +6,15 @@ set(CMAKE_EXPERIMENTAL_CXX_IMPORT_STD "0e5b6991-d74f-4b3d-a41c-cf096e0b2508")
 
 project("HastyCuCompute" VERSION 0.1 LANGUAGES CXX)
 
+
+# Add the unsupported compiler flag explicitly
+add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:-allow-unsupported-compiler>)
+
 add_library(HastyCuCompute SHARED
     "lib/hdf5.cpp"
     "lib/tensor/mod_tensor.cpp"
+    "lib/interface/interface.cpp"
+    "lib/interface/py_interface.cpp"
 )
 target_compile_features(HastyCuCompute 
     PRIVATE cxx_std_23
@@ -21,7 +27,7 @@ set_target_properties(HastyCuCompute PROPERTIES
     CXX_MODULE_STD ON
 )
 
-target_link_libraries(HastyCuCompute PRIVATE c++ c++abi c++fs)
+target_link_libraries(HastyCuCompute PRIVATE c++ c++abi)
 
 include(cmake/CPM.cmake)
 include(FetchContent)
@@ -29,8 +35,6 @@ include(FetchContent)
 target_sources(HastyCuCompute
     PUBLIC 
         FILE_SET CXX_MODULES FILES
-            "lib/interface/interface.cppm"
-            "lib/interface/py_interface.cppm"
             "lib/mri/trajectory.cppm"
             "lib/mri/sense.cppm"
             "lib/op/op.cppm"
@@ -117,6 +121,8 @@ set_target_properties(HastyCuCompute PROPERTIES
          CXX_VISIBILITY_PRESET "hidden"
          VISIBILITY_INLINES_HIDDEN ON
      )
+
+target_compile_definitions(HastyCuCompute PUBLIC _GLIBCXX_USE_CXX11_ABI=1)
 
 set_target_properties(HastyCuCompute PROPERTIES INSTALL_RPATH "$ORIGIN")
 
@@ -222,21 +228,26 @@ target_include_directories(HastyCuCompute PUBLIC
 ################ HASTY-CU-TEST ####################
 
 add_executable(HastyCuTest "test/main.cpp")
-target_link_libraries(HastyCuTest PRIVATE HastyCuCompute pybind11::headers)
-target_link_libraries(HastyCuTest PRIVATE ${TORCH_LIBRARIES})
-target_link_libraries(HastyCuTest PRIVATE Python3::Python)
-
-set_target_properties(HastyCuTest PROPERTIES
-    CXX_SCAN_FOR_MODULES ON
-)
-
-#set_target_properties(HastyCuTest PROPERTIES
-#    CXX_MODULE_STD ON
-#)
 
 target_compile_features(HastyCuTest 
     PRIVATE cxx_std_23
     INTERFACE cxx_std_23
+)
+
+set_target_properties(HastyCuTest PROPERTIES
+    CXX_STANDARD 23
+    CXX_STANDARD_REQUIRED ON
+    CXX_SCAN_FOR_MODULES ON
+    CXX_MODULE_STD ON
+)
+
+target_link_libraries(HastyCuTest PRIVATE
+    HastyCuCompute
+    ${TORCH_LIBRARIES}
+    pybind11::headers
+    Python3::Python
+    c++ 
+    c++abi
 )
 
 target_include_directories(HastyCuTest PRIVATE

@@ -178,7 +178,7 @@ namespace hasty {
     }
 
 
-    auto hasty::import_tensors(const std::string& filepath, const std::optional<std::vector<std::regex>>& matchers) ->
+    auto import_tensors(const std::string& filepath, const std::optional<std::vector<std::regex>>& matchers) ->
         std::unordered_map<std::string, std::variant<at::Tensor, std::vector<at::Tensor>>>
     {
         HighFive::File file(filepath, HighFive::File::ReadOnly);
@@ -229,7 +229,7 @@ namespace hasty {
     }
 
 
-    void hasty::export_tensor(const at::Tensor& tensor, const std::string& filepath, const std::string& dataset)
+    void export_tensor(const at::Tensor& tensor, const std::string& filepath, const std::string& dataset)
     {
         HighFive::File file(filepath, HighFive::File::Overwrite);
 

@@ -1,21 +1,15 @@
-module;
-
+#include "interface.hpp"
 #include "interface_includes.hpp"
 
-export module interface;
-
 import util;
-import nufft;
-import trace;
 import tensor;
-
-import min;
-
 import hdf5;
+import nufft;
 
 namespace ffi {
 
-    export LIB_EXPORT std::vector<at::Tensor> test_simple_invert() {
+
+    std::vector<at::Tensor> test_simple_invert() {
         c10::InferenceMode im_guard{};
         torch::NoGradGuard no_grad_guard;
 
@@ -161,7 +155,7 @@ namespace ffi {
     }
 
 
-    export LIB_EXPORT std::vector<at::Tensor> test_offresonance_operator() {
+    std::vector<at::Tensor> test_offresonance_operator() {
 
         using namespace hasty;
 
@@ -173,18 +167,33 @@ namespace ffi {
         int ncoils = 8;
         int offresonance_n = 5;
 
-        cache_tensor<c64_t, 3> diagonal = make_rand_tensor<cpu_t,c64_t,3>({xres, yres, zres});
-        cache_tensor<c64_t, 4> smaps = make_rand_tensor<cpu_t,c64_t,4>({ncoils, xres, yres, zres});
+        cache_tensor<c64_t, 3> diagonal{
+            make_rand_tensor<cpu_t,c64_t,3>(span<3>({xres, yres, zres})), 
+            std::hash<std::string>{}("diagonal")
+        };
+        cache_tensor<c64_t, 4> smaps{
+            make_rand_tensor<cpu_t,c64_t,4>(span<4>({ncoils, xres, yres, zres})),
+            std::hash<std::string>{}("smaps")   
+        };
         std::vector<cache_tensor<c64_t, 3>> kernels;
         std::vector<cache_tensor<c64_t, 3>> ratemap_diagonals;
         for (int i = 0; i < 5; ++i) {
-            kernels.push_back(make_rand_tensor<cpu_t,c64_t,3>({2*xres, 2*yres, 2*zres}));
-            ratemap_diagonals.push_back(make_rand_tensor<cpu_t,c64_t,3>({xres, yres, zres}));
+            kernels.push_back({
+                make_rand_tensor<cpu_t,c64_t,3>(span<3>({2*xres, 2*yres, 2*zres})),
+                std::hash<std::string>{}("kernel" + std::to_string(i))
+            });
+            ratemap_diagonals.push_back({
+                make_rand_tensor<cpu_t,c64_t,3>(span<3>({xres, yres, zres})),
+                std::hash<std::string>{}("ratemap_diagonal" + std::to_string(i))
+            });
         }
 
-        sense_normal_image_offresonance_diagonal<cuda_t, c64_t, 3> sense(smaps, diagonal, kernels, ratemap_diagonals);
+        //sense_normal_image_offresonance_diagonal<cuda_t, c64_t, 3> sense(smaps, diagonal, kernels, ratemap_diagonals);
 
+        return std::vector<at::Tensor>();
     }
 
+
 }
+
 

@@ -101,7 +101,7 @@ namespace hasty {
 
         cache_tensor() = default;
 
-        cache_tensor(tensor<cpu_t,TT,RANK> cputen, size_t hashidx)
+        cache_tensor(tensor<cpu_t,TT,RANK>&& cputen, size_t hashidx)
         {
             _block = std::make_shared<block>();
             _block->shape = cputen.shape();

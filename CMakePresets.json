@@ -14,10 +14,10 @@
             "generator": "Ninja",
             "environment": {
                 "MY_INSTALL_PATH": "/home/turbotage/Documents/install",
-                "CUDA_ROOT": "/usr/local/cuda-12.4",
+                "CUDA_ROOT": "/usr/local/cuda-12.6",
                 "VCPKG_ROOT": "/home/turbotage/Documents/GitHub/vcpkg",
-                "CMAKE_BUILD_PARALLEL_LEVEL": "4",
-                "CUDAHOSTCXX": "/usr/bin/clang++-20"
+                "CMAKE_BUILD_PARALLEL_LEVEL": "12",
+                "CUDAHOSTCXX": "/usr/bin/clang++-18"
             },
             "cacheVariables": {
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
@@ -30,7 +30,9 @@
                 "CMAKE_INCLUDE_PATH": "/usr/lib/llvm-20/lib/clang/20/include",
                 "CMAKE_LIBRARY_PATH": "/usr/lib/llvm-20/lib",
                 "CMAKE_CUDA_ARCHITECTURES": "89",
+                "CMAKE_CUDA_HOST_COMPILER": "/usr/bin/clang++-20",
                 "CMAKE_CUDA_COMPILER": "$env{CUDA_ROOT}/bin/nvcc",
+                "CMAKE_CUDA_FLAGS": "-allow-unsupported-compiler",
                 "CUDAToolkit_ROOT": "$env{CUDA_ROOT}/bin/",
                 "finufft_ROOT": "$env{MY_INSTALL_PATH}/finufft/",
                 "CMAKE_PREFIX_PATH": {
@@ -40,8 +42,7 @@
                 "CMAKE_TOOLCHAIN_FILE": {
                     "type": "FILEPATH",
                     "value": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
-                },
-                "CMAKE_CUDA_FLAGS": "-allow-unsupported-compiler"
+                }
             }
         },
         {
