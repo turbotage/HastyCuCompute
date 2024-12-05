@@ -2,7 +2,7 @@
     "version": 8,
     "cmakeMinimumRequired": {
         "major": 3,
-        "minor": 31,
+        "minor": 30,
         "patch": 0
     },
     "configurePresets": [
@@ -18,8 +18,7 @@
                 "VCPKG_ROOT": "/home/turbotage/Documents/GitHub/vcpkg",
                 "CMAKE_BUILD_PARALLEL_LEVEL": "12",
                 "CUDAHOSTCXX": "/usr/bin/clang++-18",
-                "CONDA_ENV_PATH": "/home/turbotage/miniconda3/envs/pytorch_build",
-                "CONDA_SITE_PKG_PATH": "$env{CONDA_ENV_PATH}/lib/python3.11/site-packages"
+                "CONDA_ENV_PATH": "/home/turbotage/miniconda3/envs/pytorch_build"
             },
             "cacheVariables": {
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
@@ -27,11 +26,14 @@
                 "CMAKE_C_COMPILER": "/usr/bin/clang-20",
                 "CMAKE_CXX_COMPILER": "/usr/bin/clang++-20",
                 "CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS": "/usr/bin/clang-scan-deps-20",
-                "CMAKE_CXX_FLAGS": "-std=c++23",
+                "CMAKE_CXX_FLAGS": "-std=c++23 -stdlib=libc++",
                 "CMAKE_EXE_LINKER_FLAGS": "-fuse-ld=lld-20",
                 "CMAKE_SHARED_LINKER_FLAGS": "-fuse-ld=lld-20",
                 "CMAKE_LINKER": "/usr/bin/lld-20",
+                "$comment": "-std=c++23 -stdlib=libc++",
                 "CMAKE_CXX_EXTENSIONS": "OFF",
+                "CMAKE_INCLUDE_PATH": "/usr/lib/llvm-20/lib/clang/20/include",
+                "CMAKE_LIBRARY_PATH": "/usr/lib/llvm-20/lib",
                 "CMAKE_CUDA_ARCHITECTURES": "89",
                 "CMAKE_CUDA_HOST_COMPILER": "/usr/bin/clang++-20",
                 "CMAKE_CUDA_COMPILER": "$env{CUDA_ROOT}/bin/nvcc",
@@ -40,7 +42,13 @@
                 "finufft_ROOT": "$env{MY_INSTALL_PATH}/finufft/",
                 "CMAKE_PREFIX_PATH": {
                     "type": "FILEPATH",
-                    "value": "$env{CONDA_SITE_PKG_PATH}/pybind11/;$env{MY_INSTALL_PATH}/LibTorch/;$env{MY_INSTALL_PATH}/HighFive/"
+                    "value": "$env{CONDA_ENV_PATH}/lib/python3.11/site-packages/torch/;$env{MY_INSTALL_PATH}/HighFive/"
+                },
+                "$comment": "$env{CONDA_ENV_PATH}/lib/python3.11/site-packages/torch/;$env{MY_INSTALL_PATH}/HighFive/",
+                "$comment": "$env{MY_INSTALL_PATH}/LibTorch/;$env{MY_INSTALL_PATH}/HighFive/",
+                "CMAKE_TOOLCHAIN_FILE": {
+                    "type": "FILEPATH",
+                    "value": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
                 }
             }
         },

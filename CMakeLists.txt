@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.30 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.31 FATAL_ERROR)
 
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
@@ -24,7 +24,7 @@ set_target_properties(HastyCuCompute PROPERTIES
     CXX_STANDARD 23
     CXX_STANDARD_REQUIRED ON
     CXX_SCAN_FOR_MODULES ON
-    CXX_MODULE_STD ON
+    #CXX_MODULE_STD ON
 )
 
 target_link_libraries(HastyCuCompute PRIVATE c++ c++abi)
@@ -238,7 +238,7 @@ set_target_properties(HastyCuTest PROPERTIES
     CXX_STANDARD 23
     CXX_STANDARD_REQUIRED ON
     CXX_SCAN_FOR_MODULES ON
-    CXX_MODULE_STD ON
+    #CXX_MODULE_STD ON
 )
 
 target_link_libraries(HastyCuTest PRIVATE
@@ -258,8 +258,8 @@ target_include_directories(HastyCuTest PRIVATE
 include(GNUInstallDirs)
 install(TARGETS HastyCuCompute EXPORT HastyCuComputeTargets
     RUNTIME_DEPENDENCIES
-        PRE_EXCLUDE_REGEXES ".*libstdc\+\+.*" ".*libgcc.*" ".*libc.so.*" ".*libc\+\+.*"
-        POST_EXCLUDE_REGEXES ".*libstdc\+\+.*" ".*libgcc.*" ".*libc.so.*" ".*libc\+\+.*"
+        #PRE_EXCLUDE_REGEXES ".*libstdc\+\+.*" ".*libgcc.*" ".*libc.so.*" ".*libc\+\+.*"
+        #POST_EXCLUDE_REGEXES ".*libstdc\+\+.*" ".*libgcc.*" ".*libc.so.*" ".*libc\+\+.*"
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
     RUNTIME DESTINATION bin

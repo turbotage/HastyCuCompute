@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include <memory>
 #include <functional>
+#include <regex>
 
 
 #include <ATen/core/ivalue.h>
