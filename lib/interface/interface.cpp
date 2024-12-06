@@ -6,6 +6,8 @@ import tensor;
 import hdf5;
 import nufft;
 
+import sense;
+
 namespace ffi {
 
 
@@ -155,7 +157,7 @@ namespace ffi {
     }
 
 
-    std::vector<at::Tensor> test_offresonance_operator() {
+    at::Tensor test_offresonance_operator() {
 
         using namespace hasty;
 
@@ -167,30 +169,44 @@ namespace ffi {
         int ncoils = 8;
         int offresonance_n = 5;
 
-        cache_tensor<c64_t, 3> diagonal{
+        
+        cache_tensor<c64_t, 3> phase_offset{
             make_rand_tensor<cpu_t,c64_t,3>(span<3>({xres, yres, zres})), 
-            std::hash<std::string>{}("diagonal")
+            std::hash<std::string>{}("phase_offset")
         };
+        // This is our stacked diagonals
         cache_tensor<c64_t, 4> smaps{
             make_rand_tensor<cpu_t,c64_t,4>(span<4>({ncoils, xres, yres, zres})),
             std::hash<std::string>{}("smaps")   
         };
-        std::vector<cache_tensor<c64_t, 3>> kernels;
-        std::vector<cache_tensor<c64_t, 3>> ratemap_diagonals;
-        for (int i = 0; i < 5; ++i) {
-            kernels.push_back({
+        std::vector<std::pair<cache_tensor<c64_t, 3>, cache_tensor<c64_t, 3>>> kernels_kerneldiags;
+        for (int i = 0; i < offresonance_n; ++i) {
+            // Toeplitz kernel
+            auto kernel = cache_tensor<c64_t,3>({
                 make_rand_tensor<cpu_t,c64_t,3>(span<3>({2*xres, 2*yres, 2*zres})),
-                std::hash<std::string>{}("kernel" + std::to_string(i))
+                std::hash<std::string>{}("toeplitz_kernel" + std::to_string(i))
             });
-            ratemap_diagonals.push_back({
-                make_rand_tensor<cpu_t,c64_t,3>(span<3>({xres, yres, zres})),
-                std::hash<std::string>{}("ratemap_diagonal" + std::to_string(i))
+
+            auto ratemap = make_rand_tensor<cpu_t,c64_t,3>(span<3>({xres, yres, zres}));
+
+            // Ratemap diagonal * Phase offset diagonal
+            auto kerneldiag = cache_tensor<c64_t,3>({
+                phase_offset.template get<cpu_t>() * ratemap,
+                std::hash<std::string>{}("kerneldiags" + std::to_string(i))
             });
+
+            kernels_kerneldiags.push_back({kernel, kerneldiag});
         }
 
-        //sense_normal_image_offresonance_diagonal<cuda_t, c64_t, 3> sense(smaps, diagonal, kernels, ratemap_diagonals);
+        auto input = make_rand_tensor<cuda_t,c64_t,3>(span<3>({xres, yres, zres}), device_idx::CUDA0);
 
-        return std::vector<at::Tensor>();
+        //sense_normal_image_offresonance_diagonal<cuda_t, c64_t, 3> sense(smaps, diagonal, kernels, ratemap_diagonals);
+        normal_innerlooped_diagonal_toeplitz_operator<cuda_t, c64_t, 3> normal_sense(
+            std::move(kernels_kerneldiags), std::move(smaps));
+
+        auto output = normal_sense(std::move(input));
+
+        return {output.get_tensor()};
     }
 
 

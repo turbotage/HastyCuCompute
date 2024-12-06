@@ -206,13 +206,17 @@ namespace hasty {
         struct trace_function_factory {
 
             template<is_tensor_prototype... InputTt>
-            static auto make(const std::string& funcname, InputTt&&... tts) {
+            static auto make(const std::string& funcname, InputTt&&... tts) ->
+                trace_function<std::tuple<ReturnTt...>, std::tuple<InputTt...>> 
+            {
                 return trace_function<std::tuple<ReturnTt...>, std::tuple<InputTt...>>(
                     funcname, std::forward<InputTt>(tts)...);
             }
 
             template<is_tensor_prototype... InputTt>
-            static auto make_unique(const std::string& funcname, InputTt&&... tts) {
+            static auto make_unique(const std::string& funcname, InputTt&&... tts) ->
+                uptr<trace_function<std::tuple<ReturnTt...>, std::tuple<InputTt...>>>
+            {
                 return std::make_unique<trace_function<std::tuple<ReturnTt...>, std::tuple<InputTt...>>>(
                     funcname, std::forward<InputTt>(tts)...);
             }

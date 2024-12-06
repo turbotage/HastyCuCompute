@@ -187,7 +187,6 @@ namespace hasty {
         static constexpr std::integral_constant<size_t, DIM> input_rank_t = {};
         static constexpr std::integral_constant<size_t, DIM> output_rank_t = {};
 
-
         /**
         @param kernels_kerneldiags vector of pairs of kernels and kernel diagonals \f[<T_l,D_l>\f]
         @param stacked_diags stacked diagonals \f[\{D_s\}\f].
@@ -199,14 +198,16 @@ namespace hasty {
         normal_innerlooped_diagonal_toeplitz_operator(
             std::vector<std::pair<cache_tensor<TT,DIM>, cache_tensor<TT,DIM>>>&& kernels_kerneldiags,
             cache_tensor<TT,DIM+1>&& stacked_diags)
-            : _kernels_kerneldiags(std::move(kernels_kerneldiags)), _stacked_diags(std::move(stacked_diags))
+            : _kernels_kerneldiags(std::move(kernels_kerneldiags)), _stacked_diags(std::move(stacked_diags)),
+            _runner(decltype(*this)::build_runner())
         {
-            build_runner();
         }
 
+        /*
         tensor<D,TT,DIM> operator()(tensor<D,TT,DIM>&& x) {
             return operator()(std::move(x), false, false);
         }
+        */
 
         tensor<D,TT,DIM> operator()(tensor<D,TT,DIM>&& x, bool free_stacks = false, bool free_kerneldiags = false) {
             auto didx = x.get_device_idx();
@@ -244,19 +245,31 @@ namespace hasty {
             return out;
         }
 
-protected:
+    protected:
 
-        void build_runner() {
-            trace::tensor_prototype<D,TT,DIM>     input("input");
-            trace::tensor_prototype<D,TT,DIM+1>   diag("diag");
-            trace::tensor_prototype<D,TT,DIM>     stacked_diag("stacked_diag");
-            trace::tensor_prototype<D,TT,DIM>     kernel("kernel");
+        using INPUT_PROTO_T = trace::tensor_prototype<D,TT,DIM>;
+        using KERNEL_PROTO_T = trace::tensor_prototype<D,TT,DIM>;
+        using DIAG_PROTO_T = trace::tensor_prototype<D,TT,DIM>;
+        using STACKED_DIAG_PROTO_T = trace::tensor_prototype<D,TT,DIM+1>;
+
+        using OUTPUT_PROTO_T = trace::tensor_prototype<D,TT,DIM>;
+
+        using TRACE_FUNC_T = trace::trace_function<
+            std::tuple<OUTPUT_PROTO_T>, 
+            std::tuple<INPUT_PROTO_T,KERNEL_PROTO_T,DIAG_PROTO_T,STACKED_DIAG_PROTO_T>
+        >;
+
+        static auto build_runner() -> TRACE_FUNC_T {
+            INPUT_PROTO_T             input("input");
+            KERNEL_PROTO_T            kernel("kernel");
+            DIAG_PROTO_T              diag("diag");
+            STACKED_DIAG_PROTO_T      stacked_diag("stacked_diag");
             
-            trace::tensor_prototype<D,TT,DIM>     output("output");
+            OUTPUT_PROTO_T            output("output");
 
-            _runner = trace::trace_function_factory<decltype(output)>::make("toeplitz", input, kernel, diag, stacked_diag);
+            TRACE_FUNC_T ret = trace::trace_function_factory<OUTPUT_PROTO_T>::make("toeplitz", input, kernel, diag, stacked_diag);
 
-            _runner.add_lines(std::format(R"ts(
+            ret.add_lines(std::format(R"ts(
     spatial_shp = input.shape #shp[1:]
     expanded_shp = [2*s for s in spatial_shp]
     transform_dims = [i+1 for i in range(len(spatial_shp))]
@@ -288,18 +301,16 @@ protected:
     return out
 )ts", 2));
 
-            _runner.compile();
+            ret.compile();
+
+            return ret;
         }
 
     private:
         std::vector<std::pair<cache_tensor<TT,DIM>, cache_tensor<TT,DIM>>> _kernels_kerneldiags;
         cache_tensor<TT,DIM+1> _stacked_diags;
 
-        using RETT = trace::tensor_prototype<D,TT,DIM>;
-        using IN1 = trace::tensor_prototype<D,TT,DIM+1>;
-        using IN2 = trace::tensor_prototype<D,TT,DIM>;
-
-        trace::trace_function<std::tuple<RETT>, std::tuple<IN1,IN2,IN1>> _runner;
+        TRACE_FUNC_T _runner;
     };
 
 

@@ -6,7 +6,7 @@ namespace ffi {
 
     LIB_EXPORT std::vector<at::Tensor> test_simple_invert();
 
-    LIB_EXPORT std::vector<at::Tensor> test_offresonance_operator();
+    LIB_EXPORT at::Tensor test_offresonance_operator();
 
 }
 

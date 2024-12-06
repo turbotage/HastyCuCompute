@@ -111,7 +111,8 @@
         "__mutex_base": "cpp",
         "__node_handle": "cpp",
         "execution": "cpp",
-        "print": "cpp"
+        "print": "cpp",
+        "__threading_support": "cpp"
     },
     "cmake.cmakePath": "/snap/cmake/current/bin/cmake",
     "cmake.buildArgs": ["--verbose"],
