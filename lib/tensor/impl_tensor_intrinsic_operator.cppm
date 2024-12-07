@@ -58,7 +58,7 @@ namespace hasty {
 
     template<is_device D, is_tensor_type TT, size_t RANK>
     template<size_t R>
-    requires less_than<R, RANK>
+    requires less_than_or_equal<R, RANK>
     void tensor<D,TT,RANK>::operator+=(const tensor<D,TT,R>& other) {
         _pimpl->underlying_tensor.add_(other.get_tensor());
     }
@@ -72,7 +72,7 @@ namespace hasty {
 
     template<is_device D, is_tensor_type TT, size_t RANK>
     template<size_t R>
-    requires less_than<R, RANK>
+    requires less_than_or_equal<R, RANK>
     void tensor<D,TT,RANK>::operator-=(const tensor<D,TT,R>& other) {
         _pimpl->underlying_tensor.sub_(other.get_tensor());
     }
@@ -86,7 +86,7 @@ namespace hasty {
 
     template<is_device D, is_tensor_type TT, size_t RANK>
     template<size_t R>
-    requires less_than<R, RANK>
+    requires less_than_or_equal<R, RANK>
     void tensor<D,TT,RANK>::operator*=(const tensor<D,TT,R>& other) {
         _pimpl->underlying_tensor.mul_(other.get_tensor());
     }

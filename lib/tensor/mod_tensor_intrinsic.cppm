@@ -153,7 +153,7 @@ namespace hasty {
         friend auto operator/(const tensor<D1,TT1,R1>& lhs, const tensor<D1,TT2,R2>& rhs);
 
         template<size_t R>
-        requires less_than<R, RANK>
+        requires less_than_or_equal<R, RANK>
         void operator+=(const tensor<D,TT,R>& other);
 
         template<typename T>
@@ -161,7 +161,7 @@ namespace hasty {
         void operator+=(T val);
 
         template<size_t R>
-        requires less_than<R, RANK>
+        requires less_than_or_equal<R, RANK>
         void operator-=(const tensor<D,TT,R>& other);
 
         template<typename T>
@@ -169,7 +169,7 @@ namespace hasty {
         void operator-=(T val);
 
         template<size_t R>
-        requires less_than<R, RANK>
+        requires less_than_or_equal<R, RANK>
         void operator*=(const tensor<D,TT,R>& other);
 
         template<typename T>

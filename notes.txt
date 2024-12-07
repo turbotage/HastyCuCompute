@@ -1,0 +1,36 @@
+trace_function<
+    [...], 
+    tuple<
+        hasty::trace::tensor_prototype<
+            hasty::empty_strong_typedef<hasty::cuda_>, 
+            hasty::strong_typedef<std::complex<float>, hasty::c64_>, 
+            3
+        >&
+        , 
+        hasty::trace::tensor_prototype<
+            hasty::empty_strong_typedef<hasty::cuda_>, 
+            hasty::strong_typedef<std::complex<float>, hasty::c64_>, 
+            3
+        > &, 
+        hasty::trace::tensor_prototype<
+            hasty::empty_strong_typedef<hasty::cuda_>, 
+            hasty::strong_typedef<std::complex<float>, hasty::c64_>, 
+            3
+        > &, 
+        hasty::trace::tensor_prototype<
+            hasty::empty_strong_typedef<hasty::cuda_>, 
+            hasty::strong_typedef<std::complex<float>, hasty::c64_>, 
+            4
+        > &
+    >
+>
+
+trace_function<
+    [...], 
+    tuple<
+        INPUT_PROTO_T, 
+        KERNEL_PROTO_T, 
+        DIAG_PROTO_T, 
+        STACKED_DIAG_PROTO_T
+    >
+>

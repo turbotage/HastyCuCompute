@@ -199,7 +199,7 @@ namespace hasty {
             std::vector<std::pair<cache_tensor<TT,DIM>, cache_tensor<TT,DIM>>>&& kernels_kerneldiags,
             cache_tensor<TT,DIM+1>&& stacked_diags)
             : _kernels_kerneldiags(std::move(kernels_kerneldiags)), _stacked_diags(std::move(stacked_diags)),
-            _runner(decltype(*this)::build_runner())
+            _runner(std::remove_reference_t<decltype(*this)>::build_runner())
         {
         }
 
@@ -226,12 +226,14 @@ namespace hasty {
             
             // Loop over off kernels >= 1
             for (int i = 1; i < this->_kernels_kerneldiags.size(); ++i) {
-                out += std::get<0>(_runner.run(
+                std::tuple<tensor<D,TT,DIM>> tensortup = _runner.run(
                     x, 
                     this->_kernels_kerneldiags[i].first.template get<D>(didx), 
                     this->_kernels_kerneldiags[i].second.template get<D>(didx),
                     this->_stacked_diags.template get<D>(didx)
-                ));
+                );
+
+                out += std::get<0>(tensortup);
 
                 if (free_kerneldiags) {
                     this->_kernels_kerneldiags[i].second.free(didx);
@@ -260,6 +262,7 @@ namespace hasty {
         >;
 
         static auto build_runner() -> TRACE_FUNC_T {
+
             INPUT_PROTO_T             input("input");
             KERNEL_PROTO_T            kernel("kernel");
             DIAG_PROTO_T              diag("diag");
@@ -274,7 +277,7 @@ namespace hasty {
     expanded_shp = [2*s for s in spatial_shp]
     transform_dims = [i+1 for i in range(len(spatial_shp))]
 
-    ncoil = coilmap.shape[0]
+    ncoil = stacked_diag.shape[0]
     nrun = ncoil // {0}
     
     out = torch.zeros_like(input)

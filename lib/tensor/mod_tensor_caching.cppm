@@ -143,7 +143,7 @@ namespace hasty {
 
         void free(device_idx idx) {
             std::unique_lock<std::mutex> lock(_block->mutex);
-            _block->cuda_tensors[idx] = nullptr;
+            _block->cuda_tensors[i32(idx)] = nullptr;
         }
 
         void uncache() {

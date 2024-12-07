@@ -173,7 +173,9 @@ namespace hasty {
                         throw std::runtime_error("ReturnTt indicated multiple return values, but only one was returned");
                     }
 
-                    std::get<0>(rets).assign(ret_ivalue.toTensor());
+                    TensorBackend ret_tensor = ret_ivalue.toTensor();
+                    auto& ret = std::get<0>(rets);
+                    ret.assign(span<std::remove_reference_t<decltype(ret)>::size()>(ret_tensor.sizes()), std::move(ret_tensor));
                     
                 } else if (ret_ivalue.isTuple()) {
                     auto tuple_ptr = ret_ivalue.toTuple();
@@ -186,7 +188,9 @@ namespace hasty {
                     for_sequence<sizeof...(ReturnTt)>([this, &rets, &elements](auto i) {
                         auto& element = elements[i];
                         if (element.isTensor()) {
-                            std::get<i>(rets).assign(element.toTensor());
+                            TensorBackend ret_tensor = element.toTensor();
+                            auto& ret = std::get<i>(rets);
+                            ret.assign(span<std::remove_reference_t<decltype(ret)>::size()>(ret_tensor.sizes()), std::move(ret_tensor));
                         } else {
                             throw std::runtime_error("Return type inside tuple was not a Tensor");
                         }
@@ -207,18 +211,18 @@ namespace hasty {
 
             template<is_tensor_prototype... InputTt>
             static auto make(const std::string& funcname, InputTt&&... tts) ->
-                trace_function<std::tuple<ReturnTt...>, std::tuple<InputTt...>> 
+                trace_function<std::tuple<ReturnTt...>, std::tuple<std::decay_t<InputTt>...>> 
             {
-                return trace_function<std::tuple<ReturnTt...>, std::tuple<InputTt...>>(
-                    funcname, std::forward<InputTt>(tts)...);
+                return trace_function<std::tuple<ReturnTt...>, std::tuple<std::decay_t<InputTt>...>>(
+                    funcname, std::forward<std::decay_t<InputTt>>(tts)...);
             }
 
             template<is_tensor_prototype... InputTt>
             static auto make_unique(const std::string& funcname, InputTt&&... tts) ->
-                uptr<trace_function<std::tuple<ReturnTt...>, std::tuple<InputTt...>>>
+                uptr<trace_function<std::tuple<ReturnTt...>, std::tuple<std::decay_t<InputTt>...>>>
             {
-                return std::make_unique<trace_function<std::tuple<ReturnTt...>, std::tuple<InputTt...>>>(
-                    funcname, std::forward<InputTt>(tts)...);
+                return std::make_unique<trace_function<std::tuple<ReturnTt...>, std::tuple<std::decay_t<InputTt>...>>>(
+                    funcname, std::forward<std::decay_t<InputTt>>(tts)...);
             }
 
         };

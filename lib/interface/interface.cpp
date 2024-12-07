@@ -163,11 +163,11 @@ namespace ffi {
 
         cache_dir = "/home/turbotage/Documents/hasty_cache/";
 
-        int xres = 64;
-        int yres = 64;
-        int zres = 64;
-        int ncoils = 8;
-        int offresonance_n = 5;
+        int xres = 256;
+        int yres = 256;
+        int zres = 256;
+        int ncoils = 16;
+        int offresonance_n = 4;
 
         
         cache_tensor<c64_t, 3> phase_offset{
@@ -205,6 +205,18 @@ namespace ffi {
             std::move(kernels_kerneldiags), std::move(smaps));
 
         auto output = normal_sense(std::move(input));
+
+        auto start = std::chrono::high_resolution_clock::now();
+
+        for (int i = 0; i < 100; ++i) {
+            input += output;
+            output = normal_sense(std::move(input));
+        }
+
+        auto end = std::chrono::high_resolution_clock::now();
+
+        std::chrono::duration<double> duration = end - start;
+        std::cout << "Time taken: " << duration.count() << " seconds" << std::endl;
 
         return {output.get_tensor()};
     }
