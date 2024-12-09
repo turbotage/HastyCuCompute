@@ -218,7 +218,7 @@ namespace ffi {
         std::chrono::duration<double> duration = end - start;
         std::cout << "Time taken: " << duration.count() << " seconds" << std::endl;
 
-        return {output.get_tensor()};
+        return output.get_tensor();
     }
 
 

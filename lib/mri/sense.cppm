@@ -270,7 +270,8 @@ namespace hasty {
             
             OUTPUT_PROTO_T            output("output");
 
-            TRACE_FUNC_T ret = trace::trace_function_factory<OUTPUT_PROTO_T>::make("toeplitz", input, kernel, diag, stacked_diag);
+            TRACE_FUNC_T ret = trace::trace_function_factory<OUTPUT_PROTO_T>::make("normal_innerlooped_diagonal_toeplitz_operator", 
+                                                input, kernel, diag, stacked_diag);
 
             ret.add_lines(std::format(R"ts(
     spatial_shp = input.shape #shp[1:]
@@ -316,9 +317,64 @@ namespace hasty {
         TRACE_FUNC_T _runner;
     };
 
-
     export template<is_device D, is_fp_complex_tensor_type TT, size_t DIM>
     using NIDT_OP = normal_innerlooped_diagonal_toeplitz_operator<D,TT,DIM>;
+
+    /*
+    The masks are stored in a integer mask tensor, a specific mask
+    is selected by bitwise anding the mask tensor with a mask index.
+    */
+    export template<is_device D, is_fp_complex_tensor_type TT, is_int_tensor_type TI, size_t DIM, size_t NUM_MASK>
+    class mask_regularized_operator_sum {
+    public:
+
+        mask_regularized_operator_sum(cache_tensor<TI,DIM>&& mask, 
+                        std::array<cache_tensor<TT,1>,NUM_MASK>&& bias,
+                        cache_tensor<TI,1>&& maskidxs, cache_tensor<real_t<TT>,1>&& lambdas) 
+            : _mask(std::move(mask)), _bias(std::move(bias)), _maskidxs(std::move(maskidxs)), _lambdas(std::move(lambdas))
+        {}
+        
+    protected:
+
+        using INPUT_PROTO_T = trace::tensor_prototype<D,TT,DIM>;
+        using MASK_PROTO_T = trace::tensor_prototype<D,TT,DIM>;
+        using BIAS_PROTO_T = trace::tensor_prototype<D,TT,DIM+1>;
+        using MASK_INDICES_PROTO_T = trace::tensor_prototype<D,TI,1>;
+
+        using OUTPUT_PROTO_T = trace::tensor_prototype<D,TT,DIM>;
+
+        static auto build_runner() -> TRACE_FUNC_T {
+
+            INPUT_PROTO_T             input("input");
+
+            MASK_PROTO_T              mask("mask");
+            BIAS_PROTO_T              bias("bias");
+            MASK_INDICES_PROTO_T      mask_indices("mask_indices");
+            
+            OUTPUT_PROTO_T            output("output");
+
+            TRACE_FUNC_T ret = trace::trace_function_factory<OUTPUT_PROTO_T>::make("mask_regularized_operator_sum", 
+                                        input, mask, bias, mask_indices);
+        
+            ret.add_lines(std::format(R"ts(
+    output = torch.empty_like(input)
+    for i in range({0}):
+        tmask = torch.bitwise_and(mask, mask_indices[i])
+        
+
+            
+            )ts", NUM_MASK));
+
+        }
+
+    private:
+        cache_tensor<TT,DIM> _mask;
+        std::array<cache_tensor<TT,DIM>, NUM_MASK> _bias;
+        cache_tensor<TI,1> _maskidxs;
+        cache_tensor<real_t<TT>,1> _lambdas;
+
+        TRACE_FUNC_T _runner;
+    };
 
     export template<is_tensor_operator TO, is_device D, is_fp_complex_tensor_type TT, size_t DIM>
     class mask_regularized_operator {
