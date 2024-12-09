@@ -222,6 +222,45 @@ namespace ffi {
     }
 
 
+    void test_prototype_stuff() {
+
+        using namespace hasty;
+
+        using T1 = trace::tensor_prototype<cpu_t, f32_t, 1>;
+        using T2 = trace::tensor_prototype<cuda_t, c64_t, 2>;
+
+        using OUT_T = std::tuple<
+                        tensor<cuda_t, f32_t,1>, 
+                        std::vector<tensor<cpu_t,c64_t,2>>,
+                        std::tuple<tensor<cuda_t, f32_t, 1>, tensor<cpu_t, f64_t, 2>>>;
+
+
+
+        auto func = trace::trace_function_factory<OUT_T>::make("func", T1("t1"), T2("t2"));
+
+        func.add_lines(R"ts(
+    a = []
+    for i in range(5):
+        a.append(torch.rand((10, 10), dtype=torch.complex64))
+
+    return (
+        torch.rand((10,), device='cuda:0'),
+        a,
+        (torch.rand((10,), device='cuda:0'), torch.rand((10, 10), dtype=torch.float64)))
+        
+        )ts");
+
+        func.compile();
+
+        auto a = func.run(
+            make_rand_tensor<cpu_t,c64_t,1>(span<1>({10})), 
+            make_rand_tensor<cuda_t,c64_t,2>(span<3>({10,10}))
+        );
+
+        std::cout << std::get<0>(a).sizes() << std::endl;
+    }
+
+
 }
 
 

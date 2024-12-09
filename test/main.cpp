@@ -10,7 +10,9 @@ int main() {
 
     std::cout << "Hello, World!" << std::endl;
 
-    auto ret = ffi::test_offresonance_operator();
+    //auto ret = ffi::test_offresonance_operator();
+
+    ffi::test_prototype_stuff();
 
     return 0;
 

@@ -8,5 +8,7 @@ namespace ffi {
 
     LIB_EXPORT at::Tensor test_offresonance_operator();
 
+    LIB_EXPORT void test_prototype_stuff();
+
 }
 

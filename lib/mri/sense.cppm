@@ -331,7 +331,9 @@ namespace hasty {
         mask_regularized_operator_sum(cache_tensor<TI,DIM>&& mask, 
                         std::array<cache_tensor<TT,1>,NUM_MASK>&& bias,
                         cache_tensor<TI,1>&& maskidxs, cache_tensor<real_t<TT>,1>&& lambdas) 
-            : _mask(std::move(mask)), _bias(std::move(bias)), _maskidxs(std::move(maskidxs)), _lambdas(std::move(lambdas))
+            : _mask(std::move(mask)), _bias(std::move(bias)), 
+            _maskidxs(std::move(maskidxs)), _lambdas(std::move(lambdas)),
+            _runner(std::remove_reference_t<decltype(*this)>::build_runner())
         {}
         
     protected:
@@ -342,6 +344,11 @@ namespace hasty {
         using MASK_INDICES_PROTO_T = trace::tensor_prototype<D,TI,1>;
 
         using OUTPUT_PROTO_T = trace::tensor_prototype<D,TT,DIM>;
+
+        using TRACE_FUNC_T = trace::trace_function<
+            std::tuple<OUTPUT_PROTO_T>, 
+            std::tuple<INPUT_PROTO_T,MASK_PROTO_T,BIAS_PROTO_T,MASK_INDICES_PROTO_T>
+        >;
 
         static auto build_runner() -> TRACE_FUNC_T {
 
@@ -360,7 +367,7 @@ namespace hasty {
     output = torch.empty_like(input)
     for i in range({0}):
         tmask = torch.bitwise_and(mask, mask_indices[i])
-        
+
 
             
             )ts", NUM_MASK));

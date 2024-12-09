@@ -263,15 +263,31 @@ namespace hasty {
     // Primary template
     template <typename T>
     struct is_std_vector : std::false_type {};
-
     // Specialization for std::vector
     template <typename T, typename Alloc>
     struct is_std_vector<std::vector<T, Alloc>> : std::true_type {};
-
     // Helper variable template
     export template <typename T>
     inline constexpr bool is_std_vector_v = is_std_vector<T>::value;
 
+
+    // Primary template
+    template <typename T>
+    struct is_std_array : std::false_type {};
+    // Specialization for std::array
+    template <typename T, std::size_t N>
+    struct is_std_array<std::array<T, N>> : std::true_type {};
+    // Helper variable template
+    export template <typename T>
+    inline constexpr bool is_std_array_v = is_std_array<T>::value;
+
+    // Primary template
+    template <typename> struct is_std_tuple: std::false_type {};
+    // Specialization for std::tuple
+    template <typename ...T> struct is_std_tuple<std::tuple<T...>>: std::true_type {};
+    // Helper variable template
+    export template <typename T>
+    inline constexpr bool is_std_tuple_v = is_std_tuple<T>::value;
 
 
     export {
