@@ -53,7 +53,9 @@ namespace hasty {
 
         auto decay_to_tensor();
 
-        auto ninstances() const;
+        size_t ninstances() const;
+
+        std::string str() const;
 
         base_t<TT> item() const requires (RANK == 0);
 
@@ -296,6 +298,18 @@ namespace hasty {
         []<is_device D2, is_tensor_type TT2, size_t RANK2>(tensor<D2,TT2,RANK2>&){}(t);
     };
 
+    /*
+    export template<typename T>
+    concept is_tensor = requires(T t) {
+        typename T::device_type_t;
+        typename T::tensor_type_t;
+        { T::size() } -> std::convertible_to<size_t>;
+        requires std::is_same_v<T,
+            tensor<typename T::device_type_t, typename T::tensor_type_t, T::size()>
+        >;
+    };
+    */
+
     export template<is_tensor_type TT>
     class scalar {
     public:
@@ -311,6 +325,16 @@ namespace hasty {
         base_t<TT> _val;
     };
  
+    // Define the is_vector_of_tensors concept
+    export template<typename T>
+    concept is_vector_of_tensors = requires(T t) {
+        typename T::value_type;
+        requires is_std_vector_v<T>;
+        requires is_tensor<typename T::value_type>;
+    };
+
+    export template<typename T>
+    concept is_tensor_or_vector_of_tensors = is_tensor<T> || is_vector_of_tensors<T>;
 
 
 }

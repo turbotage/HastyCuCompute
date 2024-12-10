@@ -32,11 +32,22 @@ namespace hasty {
             std::string _tracestr;
         };
 
+        
         export template<typename T>
         concept is_tensor_prototype = requires(T t) {
             []<is_device D, is_tensor_type TT, size_t RANK>(tensor_prototype<D,TT,RANK>&){}(t);
         };
-        
+        /*
+        export template<typename T>
+        concept is_tensor_prototype = requires(T t) {
+            typename T::device_type_t;
+            typename T::tensor_type_t;
+            { T::size() } -> std::convertible_to<size_t>;
+            requires std::is_same_v<T,
+                tensor_prototype<typename T::device_type_t, typename T::tensor_type_t, T::size()>
+            >;
+        };
+        */
 
 
         template<typename T>
@@ -66,6 +77,10 @@ namespace hasty {
             using tensor_type_t = TT;
             static constexpr std::integral_constant<size_t, RANK> size = {};
 
+            tensor_prototype_vector(const std::string& str)
+                : _str(str)
+            {}
+
             tensor_prototype_vector(const std::string& str, std::vector<tensor_prototype<D,TT,RANK>>&& tps)
                 : _str(str), _tps(std::move(tps))
             {}
@@ -80,10 +95,22 @@ namespace hasty {
             using value_type = tensor_prototype<D,TT,RANK>;
         };
 
+        
         export template<typename T>
         concept is_tensor_prototype_vector = requires(T t) {
             []<is_device D, is_tensor_type TT, size_t RANK>(tensor_prototype_vector<D,TT,RANK>&){}(t);
         };
+        /*
+        export template<typename T>
+        concept is_tensor_prototype_vector = requires(T t) {
+            typename T::device_type_t;
+            typename T::tensor_type_t;
+            { T::size() } -> std::convertible_to<size_t>;
+            requires std::is_same_v<T,
+                tensor_prototype_vector<typename T::device_type_t, typename T::tensor_type_t, T::size()>
+            >;
+        };
+        */
 
         template <typename T>
         struct tensor_prototype_vector_conversion;
@@ -107,9 +134,22 @@ namespace hasty {
         export template<typename T>
         concept is_any_tensor_prototype = is_tensor_prototype<T> || is_tensor_prototype_vector<T>;
 
+        template<typename T, typename = void>
+        struct any_tensor_prototype_conversion;
+
+        template<typename T>
+        struct any_tensor_prototype_conversion<T, std::enable_if_t<is_tensor_prototype<T>>> {
+            using type = tensor_prototype_conversion_t<T>;
+        };
+
+        template<typename T>
+        struct any_tensor_prototype_conversion<T, std::enable_if_t<is_tensor_prototype_vector<T>>> {
+            using type = tensor_prototype_vector_conversion_t<T>;
+        };
+
         export template<is_any_tensor_prototype T>
-        using any_tensor_prototype_conversion_t = std::conditional_t<is_tensor_prototype<T>, 
-            tensor_prototype_conversion_t<T>, tensor_prototype_vector_conversion_t<T>>;
+        using any_tensor_prototype_conversion_t = typename any_tensor_prototype_conversion<T>::type;
+
 
 
 
@@ -170,9 +210,11 @@ namespace hasty {
                     throw std::runtime_error("CompilationUnit already exists");
                 }
                 _cu = torch::jit::compile(_tracestr);
+                //torch::jit::optimize_for_inference(_cu);
+                //torch::jit::setGraphExecutorOptimize(true);
             }
 
-            template<is_tensor ...Ts>
+            template<is_tensor_or_vector_of_tensors ...Ts>
             auto run(Ts&&... tts) const -> std::tuple<any_tensor_prototype_conversion_t<ReturnTt>...> {
                 
                 //auto ttstup = std::make_tuple(tts...);
@@ -186,20 +228,19 @@ namespace hasty {
                     using INPUT_TENSOR_T = typename INPUT_TN::tensor_type_t;
                     
                     if constexpr (is_tensor_prototype<INPUT_TN>) {
-                        static_assert(is_tensor<INPUT_TN>, "Input must be a tensor");
+                        static_assert(is_tensor<TS_TN>, "Input must be a tensor");
                         using TS_DEVICE_T = typename TS_TN::device_type_t;
                         using TS_TENSOR_T = typename TS_TN::tensor_type_t;
                         static_assert(std::is_same_v<TS_DEVICE_T, INPUT_DEVICE_T>, "device_types must be the same");
-                        static_assert(std::is_same_v<TS_TENSOR_T, INPUT_TN>, "tensor_types must be the same");
+                        static_assert(std::is_same_v<TS_TENSOR_T, INPUT_TENSOR_T>, "tensor_types must be the same");
                         static_assert(TS_TN::size() == INPUT_TN::size(), "Sizes must be the same");
                     } else if constexpr (is_tensor_prototype_vector<INPUT_TN>) {
-                        static_assert(is_std_vector_v<TS_TN>, "Input must be a vector");
-                        static_assert(is_tensor<typename TS_TN::value_type>, "Input must be a vector of tensors");
+                        static_assert(is_vector_of_tensors<TS_TN>, "Input must be a vector of tensors");
                         using TS_VALUE_T = typename TS_TN::value_type;
                         using TS_DEVICE_T = typename TS_VALUE_T::device_type_t;
                         using TS_TENSOR_T = typename TS_VALUE_T::tensor_type_t;
                         static_assert(std::is_same_v<TS_DEVICE_T, INPUT_DEVICE_T>, "device_types must be the same");
-                        static_assert(std::is_same_v<TS_TENSOR_T, INPUT_TN>, "tensor_types must be the same");
+                        static_assert(std::is_same_v<TS_TENSOR_T, INPUT_TENSOR_T>, "tensor_types must be the same");
                         static_assert(TS_VALUE_T::size() == INPUT_TN::size(), "Sizes must be the same");
                     } else {
                         static_assert(false, "Invalid type");
@@ -212,10 +253,10 @@ namespace hasty {
                 auto ttscopy = std::tuple(Ts(std::forward<Ts>(tts))...);
 
                 auto gettensorfunc = []<typename T>(T&& t) {
-                    if constexpr (is_tensor_prototype_vector<T>) {
+                    if constexpr (is_vector_of_tensors<T>) {
                         std::vector<at::Tensor> rettensors;
                         rettensors.reserve(t.size());
-                        for (auto& tt : t.tps) {
+                        for (auto& tt : t) {
                             if (tt.ninstances() == 1) {
                                 rettensors.emplace_back(tt.decay_to_tensor());
                             } else {
@@ -223,11 +264,14 @@ namespace hasty {
                             }
                         }
                         return rettensors;
-                    } else {
+                    }
+                    if constexpr (is_tensor<T>) {
                         if (t.ninstances() == 1) {
                             return t.decay_to_tensor();
                         }
                         return t.get_tensor();
+                    } else {
+                        static_assert(false, "Invalid type"); // This should never happen...
                     }
                 };
 
@@ -263,7 +307,7 @@ namespace hasty {
 
                         auto& tup_ret = elements[i];
 
-                        if constexpr(is_tensor_prototype_vector<RET_T>) {
+                        if constexpr(is_vector_of_tensors<RET_T>) {
                             if (!tup_ret.isTensorList()) {
                                 throw std::runtime_error("Expected list, got something else");
                             }
@@ -274,7 +318,7 @@ namespace hasty {
                                 TensorBackend ret_tensor = std::move(tensor_list[j]);
                                 ret[j].assign(span<RET_T::size()>(ret_tensor.sizes()), std::move(ret_tensor));
                             }
-                        } else if constexpr(is_tensor_prototype<RET_T>) {
+                        } else if constexpr(is_tensor<RET_T>) {
                             if (!tup_ret.isTensor()) {
                                 throw std::runtime_error("Expected tensor, got something else");
                             }
@@ -299,10 +343,10 @@ namespace hasty {
         };
 
 
-        export template<is_tensor_prototype... ReturnTt>
+        export template<is_any_tensor_prototype... ReturnTt>
         struct trace_function_factory {
 
-            template<is_tensor_prototype... InputTt>
+            template<is_any_tensor_prototype... InputTt>
             static auto make(const std::string& funcname, InputTt&&... tts) ->
                 trace_function<std::tuple<ReturnTt...>, std::tuple<std::decay_t<InputTt>...>> 
             {
@@ -310,7 +354,7 @@ namespace hasty {
                     funcname, std::forward<std::decay_t<InputTt>>(tts)...);
             }
 
-            template<is_tensor_prototype... InputTt>
+            template<is_any_tensor_prototype... InputTt>
             static auto make_unique(const std::string& funcname, InputTt&&... tts) ->
                 uptr<trace_function<std::tuple<ReturnTt...>, std::tuple<std::decay_t<InputTt>...>>>
             {
@@ -321,5 +365,6 @@ namespace hasty {
         };
 
     }
+
 
 }

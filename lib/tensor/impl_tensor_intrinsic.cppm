@@ -63,7 +63,10 @@ namespace hasty {
     }
 
     template<is_device D, is_tensor_type TT, size_t RANK>
-    auto tensor<D,TT,RANK>::ninstances() const { return _pimpl.use_count(); }
+    size_t tensor<D,TT,RANK>::ninstances() const { return _pimpl.use_count(); }
+
+    template<is_device D, is_tensor_type TT, size_t RANK>
+    std::string tensor<D,TT,RANK>::str() const { return _pimpl->underlying_tensor.toString(); }
 
     template<is_device D, is_tensor_type TT, size_t RANK>
     base_t<TT> tensor<D,TT,RANK>::item() const requires (RANK == 0) {

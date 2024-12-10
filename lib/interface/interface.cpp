@@ -7,6 +7,7 @@ import hdf5;
 import nufft;
 
 import sense;
+import trace;
 
 namespace ffi {
 
@@ -228,36 +229,45 @@ namespace ffi {
 
         using T1 = trace::tensor_prototype<cpu_t, f32_t, 1>;
         using T2 = trace::tensor_prototype<cuda_t, c64_t, 2>;
+        using T3 = trace::tensor_prototype_vector<cuda_t, f64_t, 3>;
 
-        using OUT_T = std::tuple<
-                        tensor<cuda_t, f32_t,1>, 
-                        std::vector<tensor<cpu_t,c64_t,2>>,
-                        std::tuple<tensor<cuda_t, f32_t, 1>, tensor<cpu_t, f64_t, 2>>>;
+        using OUT_T1 = trace::tensor_prototype<cuda_t, f32_t,1>;
+        using OUT_T2 = trace::tensor_prototype_vector<cpu_t, c64_t, 2>;
 
-
-
-        auto func = trace::trace_function_factory<OUT_T>::make("func", T1("t1"), T2("t2"));
+        auto func = trace::trace_function_factory<OUT_T1, OUT_T2>::make(
+                            "func", T1("t1"), T2("t2"), T3("t3"));
 
         func.add_lines(R"ts(
     a = []
-    for i in range(5):
-        a.append(torch.rand((10, 10), dtype=torch.complex64))
+    for t in t3:
+        temp = (t[:,:,0] + t2).cpu() + t1[:,None]
+        a.append(temp)
 
-    return (
-        torch.rand((10,), device='cuda:0'),
-        a,
-        (torch.rand((10,), device='cuda:0'), torch.rand((10, 10), dtype=torch.float64)))
-        
+    return (a[0][:,0],a)   
         )ts");
 
         func.compile();
 
-        auto a = func.run(
-            make_rand_tensor<cpu_t,c64_t,1>(span<1>({10})), 
-            make_rand_tensor<cuda_t,c64_t,2>(span<3>({10,10}))
-        );
+        auto in1 = make_rand_tensor<cpu_t,c64_t,1>(span<1>({10}));
+        auto in2 = make_rand_tensor<cuda_t,f32_t,2>(span<2>({10,10}));
+        auto in3 = std::vector<tensor<cuda_t,f64_t,3>>{
+            make_rand_tensor<cuda_t,f64_t,3>(span<3>({10,10,10})),
+            make_rand_tensor<cuda_t,f64_t,3>(span<3>({10,10,10})),
+            make_rand_tensor<cuda_t,f64_t,3>(span<3>({10,10,10}))
+        };
 
-        std::cout << std::get<0>(a).sizes() << std::endl;
+        std::cout << in1.str() << std::endl;
+        std::cout << in2.str() << std::endl;
+        std::cout << in3[0].str() << std::endl;
+        std::cout << in3[1].str() << std::endl;
+        std::cout << in3[2].str() << std::endl;
+
+        auto a = func.run(std::move(in1), std::move(in2), std::move(in3));
+
+        std::cout << std::get<0>(a).str() << std::endl;
+        std::cout << std::get<1>(a)[0].str() << std::endl;
+        std::cout << std::get<1>(a)[1].str() << std::endl;
+        std::cout << std::get<1>(a)[2].str() << std::endl;
     }
 
 
