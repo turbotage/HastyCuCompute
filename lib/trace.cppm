@@ -183,13 +183,56 @@ namespace hasty {
                 _cu = nullptr;
 
                 std::string variables = for_sequence<sizeof...(InputTt)>([this](auto i, std::string& currentstr){
-                    currentstr += std::get<i>(_trace_tensors).str();
+                    auto& itt = std::get<i>(_trace_tensors);
+
+                    currentstr += itt.str() + ": ";
+
+                    if constexpr(is_tensor_prototype<decltype(itt)>) {
+                        currentstr += "Tensor";
+                    } else if constexpr(is_tensor_prototype_vector<decltype(itt)>) {
+                        currentstr += "List[Tensor]";
+                    } else if constexpr(!is_any_tensor_prototype<decltype(itt)>) {
+                        static_assert(false, "Invalid type");
+                    }
+
                     if constexpr(i < sizeof...(InputTt) - 1) {
                         currentstr += ",";
                     }
                 }, std::string(""));
 
-                _tracestr = std::format("def {}({}):", _funcname, variables);
+                if constexpr(sizeof...(ReturnTt) == 0) {
+                    _tracestr = std::format("def {}({}):", _funcname, variables);
+                    return;
+                }
+
+                std::string returnvars = "";
+                if constexpr(sizeof...(ReturnTt) >= 1) {
+
+                    returnvars += " -> Tuple[";
+
+                    returnvars += for_sequence<sizeof...(ReturnTt)>([this](auto i, std::string& currentstr){
+                        
+                        using RET_T = typename ReturnTraits::template Nth<i>;
+
+                        if constexpr(is_tensor_prototype<RET_T>) {
+                            currentstr += "Tensor";
+                        } else if constexpr(is_tensor_prototype_vector<RET_T>) {
+                            currentstr += "List[Tensor]";
+                        } else if constexpr(!is_any_tensor_prototype<RET_T>) {
+                            static_assert(false, "Invalid type");
+                        }
+
+                        if constexpr((i < sizeof...(ReturnTt) - 1) || (sizeof...(ReturnTt) == 1)) {
+                            currentstr += ",";
+                        }
+                    }, std::string(""));
+
+                    returnvars += "]";
+
+                }
+
+                _tracestr = std::format("def {}({}){}:", _funcname, variables, returnvars);
+
             }
 
             void add_line(const std::string& line)
@@ -199,7 +242,8 @@ namespace hasty {
 
             void add_lines(const std::string& lines)
             {
-                _tracestr += "\n" + lines;
+                //_tracestr += "\n" + lines;
+                _tracestr += lines;
             }
 
             const std::string& str() const {
