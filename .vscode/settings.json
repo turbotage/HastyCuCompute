@@ -112,7 +112,8 @@
         "__node_handle": "cpp",
         "execution": "cpp",
         "print": "cpp",
-        "__threading_support": "cpp"
+        "__threading_support": "cpp",
+        "text_encoding": "cpp"
     },
     "cmake.cmakePath": "/snap/cmake/current/bin/cmake",
     "cmake.buildArgs": ["--verbose"],

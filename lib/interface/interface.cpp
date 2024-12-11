@@ -229,7 +229,7 @@ namespace ffi {
 
         using T1 = trace::tensor_prototype<cpu_t, f32_t, 1>;
         using T2 = trace::tensor_prototype<cuda_t, c64_t, 2>;
-        using T3 = trace::tensor_prototype_vector<cuda_t, f64_t, 3>;
+        using T3 = trace::tensor_prototype_vector<cuda_t, f32_t, 3>;
 
         using OUT_T1 = trace::tensor_prototype<cuda_t, f32_t,1>;
         using OUT_T2 = trace::tensor_prototype_vector<cpu_t, c64_t, 2>;
@@ -248,12 +248,17 @@ namespace ffi {
 
         func.compile();
 
-        auto in1 = make_rand_tensor<cpu_t,c64_t,1>(span<1>({10}));
-        auto in2 = make_rand_tensor<cuda_t,f32_t,2>(span<2>({10,10}));
-        auto in3 = std::vector<tensor<cuda_t,f64_t,3>>{
-            make_rand_tensor<cuda_t,f64_t,3>(span<3>({10,10,10})),
-            make_rand_tensor<cuda_t,f64_t,3>(span<3>({10,10,10})),
-            make_rand_tensor<cuda_t,f64_t,3>(span<3>({10,10,10}))
+
+        //std::vector<hasty::tensor<hasty::empty_strong_typedef<hasty::cuda_>, hasty::strong_typedef<float, hasty::f32_>, 3>> &
+        //
+
+
+        auto in1 = make_rand_tensor<cpu_t,f32_t,1>(span<1>({10}));
+        auto in2 = make_rand_tensor<cuda_t,c64_t,2>(span<2>({10,10}));
+        auto in3 = std::vector<tensor<cuda_t,f32_t,3>>{
+            make_rand_tensor<cuda_t,f32_t,3>(span<3>({10,10,10})),
+            make_rand_tensor<cuda_t,f32_t,3>(span<3>({10,10,10})),
+            make_rand_tensor<cuda_t,f32_t,3>(span<3>({10,10,10}))
         };
 
         std::cout << in1.str() << std::endl;

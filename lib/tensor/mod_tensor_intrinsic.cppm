@@ -328,13 +328,114 @@ namespace hasty {
     // Define the is_vector_of_tensors concept
     export template<typename T>
     concept is_vector_of_tensors = requires(T t) {
-        typename T::value_type;
-        requires is_std_vector_v<T>;
-        requires is_tensor<typename T::value_type>;
+        []<is_device D2, is_tensor_type TT2, size_t RANK2>(std::vector<tensor<D2,TT2,RANK2>>&){}(t);
     };
 
     export template<typename T>
     concept is_tensor_or_vector_of_tensors = is_tensor<T> || is_vector_of_tensors<T>;
+
+
+
+
+
+
+
+
+
+
+
+
+
+    // Explicit instantiations
+
+    // f32_t
+    template class tensor<cpu_t, f32_t, 1>;
+    template class tensor<cpu_t, f32_t, 2>;
+    template class tensor<cpu_t, f32_t, 3>;
+    template class tensor<cpu_t, f32_t, 4>;
+
+    template class tensor<cuda_t, f32_t, 1>;
+    template class tensor<cuda_t, f32_t, 2>;
+    template class tensor<cuda_t, f32_t, 3>;
+    template class tensor<cuda_t, f32_t, 4>;
+
+    // f64_t
+    template class tensor<cpu_t, f64_t, 1>;
+    template class tensor<cpu_t, f64_t, 2>;
+    template class tensor<cpu_t, f64_t, 3>;
+    template class tensor<cpu_t, f64_t, 4>;
+
+    template class tensor<cuda_t, f64_t, 1>;
+    template class tensor<cuda_t, f64_t, 2>;
+    template class tensor<cuda_t, f64_t, 3>;
+    template class tensor<cuda_t, f64_t, 4>;
+
+    // c64_t
+    template class tensor<cpu_t, c64_t, 1>;
+    template class tensor<cpu_t, c64_t, 2>;
+    template class tensor<cpu_t, c64_t, 3>;
+    template class tensor<cpu_t, c64_t, 4>;
+
+    template class tensor<cuda_t, c64_t, 1>;
+    template class tensor<cuda_t, c64_t, 2>;
+    template class tensor<cuda_t, c64_t, 3>;
+    template class tensor<cuda_t, c64_t, 4>;
+
+    // c128_t
+    template class tensor<cpu_t, c128_t, 1>;
+    template class tensor<cpu_t, c128_t, 2>;
+    template class tensor<cpu_t, c128_t, 3>;
+    template class tensor<cpu_t, c128_t, 4>;
+
+    template class tensor<cuda_t, c128_t, 1>;
+    template class tensor<cuda_t, c128_t, 2>;
+    template class tensor<cuda_t, c128_t, 3>;
+    template class tensor<cuda_t, c128_t, 4>;
+
+    // i16_t
+    template class tensor<cpu_t, i16_t, 1>;
+    template class tensor<cpu_t, i16_t, 2>;
+    template class tensor<cpu_t, i16_t, 3>;
+    template class tensor<cpu_t, i16_t, 4>;
+
+    template class tensor<cuda_t, i16_t, 1>;
+    template class tensor<cuda_t, i16_t, 2>;
+    template class tensor<cuda_t, i16_t, 3>;
+    template class tensor<cuda_t, i16_t, 4>;
+
+    // i32_t
+    template class tensor<cpu_t, i32_t, 1>;
+    template class tensor<cpu_t, i32_t, 2>;
+    template class tensor<cpu_t, i32_t, 3>;
+    template class tensor<cpu_t, i32_t, 4>;
+
+    template class tensor<cuda_t, i32_t, 1>;
+    template class tensor<cuda_t, i32_t, 2>;
+    template class tensor<cuda_t, i32_t, 3>;
+    template class tensor<cuda_t, i32_t, 4>;
+
+    // i64_t
+    template class tensor<cpu_t, i64_t, 1>;
+    template class tensor<cpu_t, i64_t, 2>;
+    template class tensor<cpu_t, i64_t, 3>;
+    template class tensor<cpu_t, i64_t, 4>;
+
+    template class tensor<cuda_t, i64_t, 1>;
+    template class tensor<cuda_t, i64_t, 2>;
+    template class tensor<cuda_t, i64_t, 3>;
+    template class tensor<cuda_t, i64_t, 4>;
+
+    // b8_t
+    template class tensor<cpu_t, b8_t, 1>;
+    template class tensor<cpu_t, b8_t, 2>;
+    template class tensor<cpu_t, b8_t, 3>;
+    template class tensor<cpu_t, b8_t, 4>;
+
+    template class tensor<cuda_t, b8_t, 1>;
+    template class tensor<cuda_t, b8_t, 2>;
+    template class tensor<cuda_t, b8_t, 3>;
+    template class tensor<cuda_t, b8_t, 4>;
+
 
 
 }

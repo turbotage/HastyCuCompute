@@ -93,6 +93,7 @@ namespace hasty {
             std::vector<tensor_prototype<D,TT,RANK>> _tps;
 
             using value_type = tensor_prototype<D,TT,RANK>;
+            using non_prototype_value_type = tensor<D,TT,RANK>;
         };
 
         
@@ -117,7 +118,7 @@ namespace hasty {
 
         template<is_tensor_prototype_vector T>
         struct tensor_prototype_vector_conversion<T> {
-            std::vector<typename T::value_type> operator()(T t);
+            std::vector<typename T::non_prototype_value_type> operator()(T t);
         };
 
         template<is_tensor T>
@@ -265,13 +266,13 @@ namespace hasty {
                         }
                         return rettensors;
                     }
-                    if constexpr (is_tensor<T>) {
+                    else if constexpr (is_tensor<T>) {
                         if (t.ninstances() == 1) {
                             return t.decay_to_tensor();
                         }
                         return t.get_tensor();
-                    } else {
-                        static_assert(false, "Invalid type"); // This should never happen...
+                    } else if constexpr (!is_tensor_or_vector_of_tensors<T>) {
+                        static_assert(false, ""); // Why do this trigger?
                     }
                 };
 
@@ -316,16 +317,23 @@ namespace hasty {
 
                             for (int j = 0; j < tensor_list.size(); ++j) {
                                 TensorBackend ret_tensor = std::move(tensor_list[j]);
-                                ret[j].assign(span<RET_T::size()>(ret_tensor.sizes()), std::move(ret_tensor));
+                                ret[j].assign(span<RET_T::value_type::size()>(ret_tensor.sizes()), std::move(ret_tensor));
                             }
                         } else if constexpr(is_tensor<RET_T>) {
                             if (!tup_ret.isTensor()) {
                                 throw std::runtime_error("Expected tensor, got something else");
                             }
+
                             TensorBackend ret_tensor = std::move(tup_ret.toTensor());
                             ret.assign(span<RET_T::size()>(ret_tensor.sizes()), std::move(ret_tensor));
-                        } else {
-                            static_assert(false, "Invalid return type"); // This should never happen...
+                        } else if constexpr(!is_tensor_or_vector_of_tensors<RET_T>) {
+                            /*
+                            using TP = tensor_prototype_vector<cuda_t, f32_t, 2>;
+                            using TR = any_tensor_prototype_conversion_t<TP>;
+                            using H0 = TR::something;
+                            using H = RET_T::something;
+                            */
+                            static_assert(false, ""); // This should never happen...
                         }
                     });
                 } else if (ret_ivalue.isNone()) {

@@ -31,7 +31,8 @@ namespace hasty {
         {
             for (auto& ct : _block->cuda_tensors) {
                 // Only the cache tensor is holding the cuda tensor so it's unecessary to keep it
-                if (ct->use_count() == 1) {
+
+                if (ct.use_count() == 1) {
                     ct = nullptr;
                 }
             }
@@ -60,7 +61,7 @@ namespace hasty {
             if (_block->tensor_cpu == nullptr)
                 throw std::runtime_error("cache_disk: no tensor to cache");
 
-            auto tt = _block->tensor_cpu.get_tensor().contiguous();
+            auto tt = _block->tensor_cpu->get_tensor().contiguous();
 
             export_binary_tensor(
                 std::move(tt), 
@@ -152,6 +153,48 @@ namespace hasty {
         }
 
     };
+
+
+    // Explicit instantiations
+    template class cache_tensor<f32_t,1>;
+    template class cache_tensor<f32_t,2>;
+    template class cache_tensor<f32_t,3>;
+    template class cache_tensor<f32_t,4>;
+
+    template class cache_tensor<f64_t,1>;
+    template class cache_tensor<f64_t,2>;
+    template class cache_tensor<f64_t,3>;
+    template class cache_tensor<f64_t,4>;
+
+    template class cache_tensor<c64_t,1>;
+    template class cache_tensor<c64_t,2>;
+    template class cache_tensor<c64_t,3>;
+    template class cache_tensor<c64_t,4>;
+
+    template class cache_tensor<c128_t,1>;
+    template class cache_tensor<c128_t,2>;
+    template class cache_tensor<c128_t,3>;
+    template class cache_tensor<c128_t,4>;
+
+    template class cache_tensor<i16_t,1>;
+    template class cache_tensor<i16_t,2>;
+    template class cache_tensor<i16_t,3>;
+    template class cache_tensor<i16_t,4>;
+
+    template class cache_tensor<i32_t,1>;
+    template class cache_tensor<i32_t,2>;
+    template class cache_tensor<i32_t,3>;
+    template class cache_tensor<i32_t,4>;
+
+    template class cache_tensor<i64_t,1>;
+    template class cache_tensor<i64_t,2>;
+    template class cache_tensor<i64_t,3>;
+    template class cache_tensor<i64_t,4>;
+
+    template class cache_tensor<b8_t,1>;
+    template class cache_tensor<b8_t,2>;
+    template class cache_tensor<b8_t,3>;
+    template class cache_tensor<b8_t,4>;
 
 
 }
