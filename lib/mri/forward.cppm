@@ -2,9 +2,7 @@ module;
 
 #include "pch.hpp"
 
-export module tensor;
-
-//import pch;
+export module forward;
 
 import util;
 import tensor;
@@ -12,4 +10,6 @@ import tensor;
 namespace hasty {
 
 
+
 }
+

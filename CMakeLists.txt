@@ -36,7 +36,9 @@ target_sources(HastyCuCompute
     PUBLIC 
         FILE_SET CXX_MODULES FILES
             "lib/mri/trajectory.cppm"
-            "lib/mri/sense.cppm"
+            "lib/mri/normal.cppm"
+            "lib/mri/forward.cppm"
+            "lib/mri/adjoint.cppm"
             "lib/op/op.cppm"
             "lib/op/cg.cppm"
             "lib/op/min.cppm"

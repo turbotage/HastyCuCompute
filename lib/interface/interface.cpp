@@ -6,7 +6,7 @@ import tensor;
 import hdf5;
 import nufft;
 
-import sense;
+import normal;
 import trace;
 
 namespace ffi {

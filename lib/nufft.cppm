@@ -339,10 +339,10 @@ namespace hasty {
 
         auto output = make_empty_tensor<cpu_t,c64_t,DIM+1>(full_modes);
 
-        torch::cuda::synchronize();
+        hasty::synchronize();
         auto plan = nufft_plan<cuda_t,TTC,DIM,nufft_type::BACKWARD>::make(options);
         plan->setpts(coords);
-        torch::cuda::synchronize();
+        hasty::synchronize();
 
         if constexpr(std::is_same_v<TT,complex_t<TTC>>) {
 
@@ -351,9 +351,9 @@ namespace hasty {
                 auto output_slice = output[i, Ellipsis{}].unsqueeze(0);
                 auto cuda_output = output_slice.template to<cuda_t>(coords[0].get_device_idx());
 
-                torch::cuda::synchronize();
+                hasty::synchronize();
                 plan->execute(cuda_input, cuda_output);
-                torch::cuda::synchronize();
+                hasty::synchronize();
 
                 output_slice = cuda_output.template to<cpu_t>(device_idx::CPU);
             }
@@ -368,9 +368,9 @@ namespace hasty {
                 
                 auto cuda_output = output_slice.template to<cuda_t>(coords[0].get_device_idx()
                                                 ).template to<complex_t<TTC>>();
-                torch::cuda::synchronize();
+                hasty::synchronize();
                 plan->execute(cuda_input, cuda_output);
-                torch::cuda::synchronize();
+                hasty::synchronize();
                 
                 output_slice.copy_(cuda_output.template to<TT>());
             }

@@ -26,11 +26,11 @@ namespace hasty {
             : _coords(std::move(coords)), _time(time)
         {}
 
-        std::array<cache_tensor<TT,1>,DIM>& coords() {
+        std::array<cache_tensor<TT,1>,2>& coords() {
             return _coords;
         }
 
-        const std::array<cache_tensor<TT,1>,DIM>& coords() const {
+        const std::array<cache_tensor<TT,1>,2>& coords() const {
             return _coords;
         }
 
@@ -51,7 +51,7 @@ namespace hasty {
         }
 
     private:
-        std::array<cache_tensor<TT,1>,DIM> _coords;
+        std::array<cache_tensor<TT,1>,2> _coords;
         std::optional<cache_tensor<TT,1>> _time;
         std::optional<TT> _echo;
     };

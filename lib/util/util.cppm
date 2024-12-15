@@ -54,4 +54,8 @@ namespace hasty {
         T&& _obj;
     };
     
+    void synchronize() {
+        torch::cuda::synchronize();
+    }
+
 }

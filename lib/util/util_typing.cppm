@@ -198,7 +198,7 @@ namespace hasty {
         using complex_t = decltype(complex_type_func<TT>());
 
         template<is_fp_tensor_type TT>
-        constexpr auto real_Type_func() {
+        constexpr auto real_type_func() {
             if constexpr(std::is_same_v<TT, c64_t>) {
                 return f32_t();
             } else if constexpr(std::is_same_v<TT, c128_t>) {
@@ -209,7 +209,7 @@ namespace hasty {
         }
 
         template<is_fp_tensor_type TT>
-        using real_t = decltype(real_Type_func<TT>());
+        using real_t = decltype(real_type_func<TT>());
 
         template<is_tensor_type TT>
         constexpr auto up_precision_func() {

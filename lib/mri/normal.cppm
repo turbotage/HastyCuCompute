@@ -2,7 +2,7 @@ module;
 
 #include "pch.hpp"
 
-export module sense;
+export module normal;
 
 //import pch;
 
@@ -197,19 +197,18 @@ namespace hasty {
 		*/
 		normal_innerlooped_diagonal_toeplitz_operator(
 			std::vector<std::pair<cache_tensor<TT,DIM>, cache_tensor<TT,DIM>>>&& kernels_kerneldiags,
-			cache_tensor<TT,DIM+1>&& stacked_diags)
+			cache_tensor<TT,DIM+1>&& stacked_diags, i32 fft_batch_size = 4)
 			: _kernels_kerneldiags(std::move(kernels_kerneldiags)), _stacked_diags(std::move(stacked_diags)),
-			_runner(std::remove_reference_t<decltype(*this)>::build_runner())
+			_runner(std::remove_reference_t<decltype(*this)>::build_runner()),
+			_fft_batch_size(fft_batch_size)
 		{
 		}
 
-		/*
-		tensor<D,TT,DIM> operator()(tensor<D,TT,DIM>&& x) {
-			return operator()(std::move(x), false, false);
-		}
-		*/
-
-		tensor<D,TT,DIM> operator()(tensor<D,TT,DIM>&& x, bool free_stacks = false, bool free_kerneldiags = false) {
+		tensor<D,TT,DIM> operator()(
+			tensor<D,TT,DIM>&& x,
+			bool free_stacks = false, bool free_kerneldiags = false) 
+		{
+			
 			auto didx = x.get_device_idx();
 
 			// The first term in the sum
@@ -230,7 +229,8 @@ namespace hasty {
 					x, 
 					this->_kernels_kerneldiags[i].first.template get<D>(didx), 
 					this->_kernels_kerneldiags[i].second.template get<D>(didx),
-					this->_stacked_diags.template get<D>(didx)
+					this->_stacked_diags.template get<D>(didx),
+					output
 				);
 
 				out += std::get<0>(tensortup);
@@ -258,7 +258,10 @@ namespace hasty {
 
 		using TRACE_FUNC_T = trace::trace_function<
 			std::tuple<OUTPUT_PROTO_T>, 
-			std::tuple<INPUT_PROTO_T,KERNEL_PROTO_T,DIAG_PROTO_T,STACKED_DIAG_PROTO_T>
+			std::tuple<	INPUT_PROTO_T,
+						KERNEL_PROTO_T,
+						DIAG_PROTO_T,
+						STACKED_DIAG_PROTO_T>
 		>;
 
 		static auto build_runner() -> TRACE_FUNC_T {
@@ -280,7 +283,7 @@ namespace hasty {
 
 	ncoil = stacked_diag.shape[0]
 	nrun = ncoil // {0}
-	
+
 	out = torch.zeros_like(input)
 
 	input = input * diag
@@ -303,7 +306,7 @@ namespace hasty {
 	out *= (1 / torch.prod(torch.tensor(spatial_shp)))
 	
 	return out
-)ts", 2));
+)ts", _fft_batch_size));
 
 			ret.compile();
 
@@ -313,6 +316,7 @@ namespace hasty {
 	private:
 		std::vector<std::pair<cache_tensor<TT,DIM>, cache_tensor<TT,DIM>>> _kernels_kerneldiags;
 		cache_tensor<TT,DIM+1> _stacked_diags;
+		i32 _fft_batch_size;
 
 		TRACE_FUNC_T _runner;
 	};
@@ -329,10 +333,9 @@ namespace hasty {
 	public:
 
 		mask_regularized_operator_sum(cache_tensor<TI,DIM>&& mask, 
-						std::array<cache_tensor<TT,1>,NUM_MASK>&& bias,
-						cache_tensor<TI,1>&& maskidxs, cache_tensor<real_t<TT>,1>&& lambdas) 
-			: _mask(std::move(mask)), _bias(std::move(bias)), 
-			_maskidxs(std::move(maskidxs)), _lambdas(std::move(lambdas)),
+				cache_tensor<TI,1>&& maskidxs, cache_tensor<real_t<TT>,1>&& lambdas) 
+			: _mask(std::move(mask)), _maskidxs(std::move(maskidxs)),
+			_lambdas(std::move(lambdas)),
 			_runner(std::remove_reference_t<decltype(*this)>::build_runner())
 		{}
 		
@@ -340,43 +343,46 @@ namespace hasty {
 
 		using INPUT_PROTO_T = trace::tensor_prototype<D,TT,DIM>;
 		using MASK_PROTO_T = trace::tensor_prototype<D,TT,DIM>;
-		using BIAS_PROTO_T = trace::tensor_prototype<D,TT,DIM+1>;
+		using BIAS_PROTO_T = trace::tensor_prototype_vector<D,TT,1>;
 		using MASK_INDICES_PROTO_T = trace::tensor_prototype<D,TI,1>;
+		using LAMBDAS_PROTO_T = trace::tensor_prototype<D,real_t<TT>,1>;
 
 		using OUTPUT_PROTO_T = trace::tensor_prototype<D,TT,DIM>;
 
 		using TRACE_FUNC_T = trace::trace_function<
 			std::tuple<OUTPUT_PROTO_T>, 
-			std::tuple<INPUT_PROTO_T,MASK_PROTO_T,BIAS_PROTO_T,MASK_INDICES_PROTO_T>
+			std::tuple<	INPUT_PROTO_T,
+						MASK_PROTO_T,
+						BIAS_PROTO_T,
+						MASK_INDICES_PROTO_T>
 		>;
 
 		static auto build_runner() -> TRACE_FUNC_T {
 
-			INPUT_PROTO_T             input("input");
+			INPUT_PROTO_T             	input("input");
 
-			MASK_PROTO_T              mask("mask");
-			BIAS_PROTO_T              bias("bias");
-			MASK_INDICES_PROTO_T      mask_indices("mask_indices");
+			MASK_PROTO_T              	mask("mask");
+			MASK_INDICES_PROTO_T      	mask_indices("mask_indices");
+			LAMBDAS_PROTO_T		   		lambdas("lambdas");
 			
-			OUTPUT_PROTO_T            output("output");
+			OUTPUT_PROTO_T            	output("output");
 
 			TRACE_FUNC_T ret = trace::trace_function_factory<OUTPUT_PROTO_T>::make("mask_regularized_operator_sum", 
-										input, mask, bias, mask_indices);
+										input, mask, mask_indices, lambdas);
 		
 			ret.add_lines(std::format(R"ts(
-	output = torch.empty_like(input)
+	out = torch.zeros_like(input)
 	for i in range({0}):
 		tmask = torch.bitwise_and(mask, mask_indices[i])
+		out[tmask] += lambdas[i] * input[tmask]
 
-
-			
-			)ts", NUM_MASK));
+	return out
+)ts", NUM_MASK));
 
 		}
 
 	private:
 		cache_tensor<TT,DIM> _mask;
-		std::array<cache_tensor<TT,DIM>, NUM_MASK> _bias;
 		cache_tensor<TI,1> _maskidxs;
 		cache_tensor<real_t<TT>,1> _lambdas;
 
