@@ -107,6 +107,10 @@ namespace hasty {
             : _data(arr.data())
         {}
 
+        span(const std::array<i64, N>& arr, i32 offset)
+            : _data(arr.data() + offset)
+        {}
+
         std::array<i64,N> operator*(i64 m) const {
             std::array<i64, N> arr;
             for_sequence<N>([&](auto i) {

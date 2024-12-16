@@ -75,6 +75,17 @@ namespace hasty {
         }
 
         template<typename T>
+        auto get_ref_throw(const std::string& name) -> T& {
+            key k = {name, typeid(T)};
+            auto it = _storage.find(k);
+            if (it != _storage.end()) {
+                return *(T*)it->second.get();
+            } else {
+                throw std::runtime_error("Storage does not contain key: " + name);
+            }
+        }
+
+        template<typename T>
         auto get_ptr(const std::string& name) -> std::shared_ptr<T> {
             key k = {name, typeid(T)};
             auto it = _storage.find(k);

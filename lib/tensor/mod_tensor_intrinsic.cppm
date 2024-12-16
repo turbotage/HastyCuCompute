@@ -216,6 +216,8 @@ namespace hasty {
 
 		void fill_(base_t<TT> val);
 
+		void zero_();
+
 		void contiguous_();
 
 		void set_(const tensor<D, TT, RANK>& other);
@@ -263,6 +265,8 @@ namespace hasty {
 		template<typename T>
 		requires std::integral<T> || std::floating_point<T>
 		tensor<D,TT,RANK>& div_(T val);
+
+		tensor<D,TT,RANK>& exp_();
 		
 		// <================= MATH OPERATIONS ===============>
 

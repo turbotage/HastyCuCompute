@@ -79,4 +79,11 @@ namespace hasty {
         return tensor<D1,TT1,0>({}, std::move(newtensor));
     }
 
+    export template<is_device D1, is_tensor_type TT1, size_t R>
+    tensor<D1,TT1,R> exp(const tensor<D1,TT1,R>& t)
+    {
+        at::Tensor newtensor = torch::exp(t._pimpl->underlying_tensor);
+        return tensor<D1,TT1,R>(span<R>(newtensor.sizes()), std::move(newtensor));
+    }
+
 }

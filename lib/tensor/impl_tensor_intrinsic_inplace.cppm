@@ -35,6 +35,11 @@ namespace hasty {
     }
 
     template<is_device D, is_tensor_type TT, size_t RANK>
+    void tensor<D,TT,RANK>::zero_() {
+        _pimpl->underlying_tensor.zero_();
+    }
+
+    template<is_device D, is_tensor_type TT, size_t RANK>
     void tensor<D,TT,RANK>::contiguous_() {
         _pimpl->underlying_tensor.contiguous_();
     }
@@ -164,6 +169,13 @@ namespace hasty {
         _pimpl->underlying_tensor.div_(val);
         return *this;
     }
+
+    template<is_device D, is_tensor_type TT, size_t RANK>
+    tensor<D,TT,RANK>& tensor<D,TT,RANK>::exp_() {
+        _pimpl->underlying_tensor.exp_();
+        return *this;
+    }
+
 
 }
 

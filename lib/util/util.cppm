@@ -58,4 +58,8 @@ namespace hasty {
         torch::cuda::synchronize();
     }
 
+    void synchronize(device_idx idx) {
+        torch::cuda::synchronize(i32(idx));
+    }
+
 }
