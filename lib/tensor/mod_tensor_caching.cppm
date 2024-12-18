@@ -24,7 +24,7 @@ namespace hasty {
             
             std::array<sptr<tensor<cuda_t,TT,RANK>>, size_t(device_idx::MAX_CUDA_DEVICES)> cuda_tensors;
         };
-        std::shared_ptr<block> _block;
+        sptr<block> _block;
 
         
         void clean_cuda() 

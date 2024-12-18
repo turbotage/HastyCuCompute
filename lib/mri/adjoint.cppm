@@ -29,16 +29,16 @@ namespace hasty {
 			auto temp = offrensonance;
 			temp *= interpt_interpcoeff[i].first;
 			temp.exp_();
-			temp *= interpt_interpcoeff[i].second;
+			temp *= std::conj(interpt_interpcoeff[i].second);
 
 			offres += temp;
 		}
 
-		auto run_lambda = [&coords, &kdata, &smaps, &offres](storage& store, i32 data_idx) 
+		auto output = make_empty_like(smaps);
+
+		auto run_lambda = [&output, &coords, &kdata, &smaps, &offres](storage& store, i32 data_idx) 
 		{
 			device_idx didx = store.get_ref_throw<device_idx>("device_idx");
-
-			i32 interp_steps = interpt_interpcoeff.size();
 
 			if (!store.exists("nufft_plan")) {
 				nufft_opts<cuda_t,TTC,DIM> options;
@@ -66,7 +66,8 @@ namespace hasty {
 				store.add<nufft_plan<cuda_t,TTC,DIM,nufft_type::BACKWARD>>("nufft_plan", std::make_shared(nufft_plan));
 			}
 
-			auto cuda_smap = smaps.get(device_idx::CPU)[data_idx,Ellipsis{}].template to<cuda_t>(didx);
+			auto mul = smaps.get(device_idx::CPU)[data_idx,Ellipsis{}].template to<cuda_t>(didx).conj();
+			mul *= offres.get(device_idx::CPU).template to<cuda_t>(didx);
 
 			auto cuda_nufft_output = make_empty_tensor<cuda_t,complex_t<TTC>,DIM>(spatial_dim);
 
@@ -76,22 +77,42 @@ namespace hasty {
 				auto cuda_kdata = kdata[data_idx, Ellipsis{}].unsqueeze(0).template to<cuda_t>(didx);
 
 				hasty::synchronize(didx);
-				plan->execute(cuda_kdata, cuda_nufft_output);
+				nufft_plan->execute(cuda_kdata, cuda_nufft_output);
+				hasty::synchronize(didx);
+				cuda_nufft_output *= mul;
+
+				output[data_idx, Ellipsis{}] = cuda_nufft_output.template to<cpu_t>(didx);
 			} else {
 				auto cuda_kdata = input[cuda_kdata, Ellipsis{}].unsqueeze(0).template to<cuda_t>(
 					coords[0].get_device_idx()).template to<complex_t<TTC>>();
 
 				hasty::synchronize(didx);
-				plan->execute(cuda_kdata, cuda_nufft_output);
+				nufft_plan->execute(cuda_kdata, cuda_nufft_output);
+				hasty::synchronize(didx);
+				cuda_nufft_output *= mul;
+
+				output[data_idx, Ellipsis{}] = cuda_nufft_output.template to<TT>().template to<cpu_t>(didx);
 			}
-
-
-
+			
 		};
 
+		
+		std::vector<std::future<void>> futures;
+		futures.reserve(smaps.shape<0>());
 
-		if (data.)
+		for (int i = 0; i < smaps.shape<0>(); ++i) {
+			auto runner = [i, &run_lambda](storage& store) {
+				run_lambda(store, i);
+			};
+
+			auto fut = thread_pool.enqueue(runner, {});
+		}
+		
+		for (auto& fut : futures) {
+			util::future_catcher(fut);
+		}
 
 	}
+
 
 }

@@ -65,6 +65,7 @@ namespace hasty {
 
 		std::array<int64_t, RANK> shape() const;
 
+		// Don't use this, use ::size() instead
 		constexpr int64_t ndim() const;
 
 		int64_t numel() const;
