@@ -1,5 +1,4 @@
-import sigpy as sp
-import sigpy.mri as spmri
+
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -7,11 +6,16 @@ import ants
 import os
 
 
-homepath = "/home/turbotage/Documents/GlymphData/export/GLYMP-01/SCAN_20210920_199846/"
-fieldmap = ants.image_read(os.path.join(homepath, "FieldMap_B0.nii")).numpy()
+homepath = "/home/turbotage/Documents/test_data/"
+fieldmap = ants.image_read(os.path.join(homepath, "B0_Fieldmap.nii")).numpy()
+
+
 
 b0 = fieldmap[:,:,0]
-T = 1.0
+b0 /= np.max(b0)
+t0 = 5
+t1 = 10
+
 dt = 0.001
 lseg = 3
 bins = 256
@@ -52,18 +56,26 @@ hist_wt, bin_edges = np.histogram(
 bin_centers = bin_edges[1:] - bin_edges[1] / 2
 zk = 0 + 1j * bin_centers
 tl = np.linspace(0, lseg, lseg) / lseg * T / 1000  # time seg centers
+tl = np.l
 # calculate off-resonance phase @ each time seg, for hist bins
-ch = np.exp(-np.expand_dims(tl, axis=1) @ np.expand_dims(zk, axis=0))
+ch = np.exp(-tl[:, None] @ zk[None, :])
 w = np.diag(np.sqrt(hist_wt))
 p = np.linalg.pinv(w @ np.transpose(ch)) @ w
 b = p @ np.exp(
-    -np.expand_dims(zk, axis=1) @ np.expand_dims(t, axis=0) / 1000
+    -np.expand_dims(zk, axis=1) @ np.expand_dims(t, axis=0)
 )
 b = np.transpose(b)
-b0_v = np.expand_dims(2j * np.pi * np.concatenate(b0), axis=0)
-ct = np.transpose(np.exp(-np.expand_dims(tl, axis=1) @ b0_v))
+
+#ct = np.exp(-np.expand_dims(tl, axis=1) @ wt)
+ct = np.exp(-tl[:,None] * (wt[None,:] + wt.conj()[None,:]))
+
+approx = b @ ct
+
+true = np.exp(wtz[None,:] * t[:,None])
 
 
+rel_err = np.linalg.norm(approx - true) / np.linalg.norm(true)
 
+print(f'Relative error: {rel_err}')
 
 print('Done')
