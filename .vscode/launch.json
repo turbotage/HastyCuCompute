@@ -7,6 +7,7 @@
             "request": "launch",
             "pythonLaunchName": "Python Debugger: Current File",
             "cppAttachName": "(lldb-dap) Attach HastyCuCompute",
+            "justMyCode": false
         },
         {
             "name": "Python Debugger: Current File",
