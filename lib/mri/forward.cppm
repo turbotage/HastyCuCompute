@@ -10,16 +10,13 @@ import tensor;
 namespace hasty {
 
 	template<is_deice D, is_fp_complex_tensor_type TT, is_fp_real_tensor_type TTC, size_t DIM>
-	tensor<cpu_t,TT,2> sense_forward_offresonance(
+	auto sense_forward_offresonance(
 		std::array<cache_tensor<TTC,1>,DIM>& coords,
 		cache_tensor<TT,DIM>& image,
 		cache_tensor<TT,DIM+1>& smaps,
-		tensor<cpu_t,TT,DIM>& offresonance,
-		std::vector<std::pair<
-			base_t<real_t<TT>>,
-			base_t<TT>
-		>>&& interpt_interpcoeff,
-		storage_thread_pool& thread_pool)
+		cache_tensor<TT,2>& bil,
+		cache_tensor<TT,DIM+1>& cjl,
+		storage_thread_pool& thread_pool) -> tensor<cpu_t,TT,2>
 	{
 		auto spatial_dim = image.shape();
 
@@ -58,22 +55,22 @@ namespace hasty {
 				store.add<nufft_plan<cuda_t,TTC,DIM,nufft_type::FORWARD>>("nufft_plan", std::make_shared(plan));
 			}
 
+			if (!store.exists("image")) {
+				auto cuda_image = image.get(device_idx::CPU).template to<cuda_t>(didx);
+				store.add<tensor<cuda_t,TT,DIM>>("image", cuda_image);
+			}
+
 			auto smap = smaps.get(device_idx::CPU)[data_idx,Ellipsis{}].template to<cuda_t>(didx);
-			auto offres = offresonance.get(device_idx::CPU).template to<cuda_t>(didx);
-			auto input = image.get(device_idx::CPU).template to<cuda_t>(didx);
 			
 			auto output_slice = make_zero_tensor<cuda_t,TT,2>(span<2>{1, number_of_datapts});
 			auto temp_output = make_empty_tensor<cuda_t,complex_t<TTC>,2>(span<2>{1, number_of_datapts});
 
 			auto& nufft_plan = store.get_ref_throw<nufft_plan<cuda_t,TTC,DIM,nufft_type::BACKWARD>>("nufft_plan");
 
+
+
+
 			for (int i = 0; i < interp_steps; ++i) {
-				auto temp = offres;
-				temp *= -interpt_interpcoeff[i].first;
-				temp.exp_();
-				temp *= interpt_interpcoeff[i].second;
-				temp *= smap;
-				temp *= input;
 				
 				hasty::synchronize(didx);
 				if constexpr(std::is_same_v<TT, complex_t<TTC>>) {

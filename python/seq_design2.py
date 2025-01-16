@@ -7,6 +7,9 @@ import mrinufft as mn
 
 import scipy as sp
 from scipy.interpolate import CubicSpline
+import scipy.special as sps
+
+
 
 from traj_utils import show_trajectory, show_trajectories
 
@@ -48,38 +51,50 @@ def create_traj_grad_slew(nshots, resolution, fov, system):
         traj *= (0.5 * resolution * delta_k / np.abs(traj).max())
 
         tmax = nsamp * system.grad_raster_time
-        t = np.linspace(0, tmax, nsamp)
 
-        CS = CubicSpline(t, traj, axis=1)
+        CS = CubicSpline(np.linspace(0, tmax, nsamp), traj, axis=1)
 
-        ac = -np.log(1.0 - (0.99**0.25)) / (0.5*tmax)
-        #ac = -np.log(0.01) / (tmax)
+        type = 'myhuber'
+        oversampling = 4
+        if type == 'exp':
+            ac = -np.log(1.0 - (0.99**0.25)) / (0.5*tmax)
+            tinterp = np.linspace(0, tmax, nsamp*oversampling)
+            tinterp = tinterp * ((1.0 - np.exp(-ac*tinterp))**4)
+        elif type == 'huber':
+            delta = 1e-6
+            tinterp = np.linspace(0, tmax, nsamp*oversampling)
+            tinterp = sps.pseudo_huber(delta, tinterp)
+        elif type == 'myhuber':
+            doffset = 0.2
+            doffset_inv = 0.95 * (1.0 + doffset)
+            tinterp = np.linspace(0, tmax * doffset_inv, int(nsamp * doffset_inv * oversampling))
+            delta = doffset * tmax
+            coef = 3.0
+            tinterp = delta * ((1.0 + (tinterp / delta)**coef)**(1.0/coef) - 1.0)
+        elif type == 'none':
+            tinterp = np.linspace(0, tmax, nsamp*oversampling)
 
-        tinterp = np.linspace(0, tmax, nsamp)
-        tinterp = tinterp * ((1.0 - np.exp(-ac*tinterp))**4)
+        plot_tinterp = False
+        if plot_tinterp:
+            plt.figure()
+            plt.plot(np.linspace(0, tmax, nsamp), 'r-')
+            plt.plot(tinterp, 'b-')
+            plt.show()
 
-        plt.figure()
-        plt.plot(tinterp)
-        plt.show()
-
-        traj = CS(tinterp)
-
-        grad = np.empty((ns, 3, traj.shape[1]-1))
-        slew = np.empty((ns, 3, traj.shape[1]-1))
-
-        print('TMax: ', tmax * 1000.0, ' ms')
-
+        traj = CS(tinterp)[:,::oversampling,:].transpose(0,2,1)
+        new_nsamp = traj.shape[-1]
+        grad = np.zeros((ns, 3, new_nsamp-1))
+        slew = np.zeros((ns, 3, new_nsamp-1))
 
         for i in range(ns):
-            t = np.transpose(traj[i, ...])
 
-            g, s =  pp.traj_to_grad(t, raster_time=system.grad_raster_time)
+            g, s = pp.traj_to_grad(traj[i,...], raster_time=system.grad_raster_time)
 
             plot_sgt = True
             if plot_sgt:
                 plot31(s, 'Slew Rate')
                 plot31(g, 'Gradient')
-                plot31(t, 'Trajectory')
+                plot31(traj[i,...], 'Trajectory')
 
                 v = np.sqrt(np.sum(np.square(g), axis=0))
 
@@ -91,17 +106,10 @@ def create_traj_grad_slew(nshots, resolution, fov, system):
             grad[i, ...] = g
             slew[i, ...] = s
 
+        print('TMax: ', tmax * 1000.0, ' ms')
+
         return traj, grad, slew
-
-
-    #traj, grad, slew = run_one(10, 1500)
-    #print('Current Slew Rate: ', np.max(np.abs(slew)), 'System Max: ', system.max_slew)
-    #show_trajectory(traj * 0.5 / np.abs(traj).max(), figure_size=figure_size, one_shot=0)
-
-    #traj, grad, slew = run_one(10, 15000)
-    #print('Current Slew Rate: ', np.max(np.abs(slew)), 'System Max: ', system.max_slew)
-    #show_trajectory(traj * 0.5 / np.abs(traj).max(), figure_size=figure_size, one_shot=0)
-
+    
 
     traj, grad, slew = run_one(10, 1500)
     print('Current Slew Rate: ', np.max(np.abs(slew)), 'System Max: ', system.max_slew)
