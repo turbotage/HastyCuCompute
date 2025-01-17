@@ -11,7 +11,8 @@ namespace hasty {
 
 	/**
 	@brief
-	Performs the operation:
+	Performs the operation
+	\f[ A^Hb \f] with the offresonance approximation
 	\f[ e^{z_jt_i} \approx \sum_{l=1}^L b_{il}c_{lj} \f]
 	
 	@param coords 
@@ -87,7 +88,7 @@ namespace hasty {
 			auto cuda_output = make_zeros_tensor_like(cuda_nufft_output);
 
 			auto& nufft_plan = store.get_ref_throw<nufft_plan<cuda_t,TTC,DIM,nufft_type::BACKWARD>>("nufft_plan");
-			auto& cuda_bil = store.get_ref_throw<tensor<cuda_t,TT,DIM>>("bil");
+			auto& cuda_bil = store.get_ref_throw<tensor<cuda_t,TT,2>>("bil");
 			auto& cuda_cjl = store.get_ref_throw<tensor<cuda_t,TT,DIM+1>>("cjl");
 
 			if constexpr(std::is_same_v<TT,complex_t<TTC>>) {
@@ -113,13 +114,13 @@ namespace hasty {
 				auto temp = make_empty_tensor_like(cuda_kdata);
 
 				for (int i = 0; i < L; ++i) {
-					temp = cuda_kdata * cuda_bil[i, Ellipsis{}]
+					temp = cuda_kdata * cuda_bil[i, Ellipsis{}].conj();
 
 					hasty::synchronize(didx);
 					nufft_plan->execute(temp, cuda_nufft_output);
 					hasty::synchronize(didx);
 
-					cuda_nufft_output *= cuda_cjl[i, Ellipsis{}];
+					cuda_nufft_output *= cuda_cjl[i, Ellipsis{}].conj();
 					cuda_output += cuda_nufft_output;
 				}
 
@@ -139,6 +140,7 @@ namespace hasty {
 			};
 
 			auto fut = thread_pool.enqueue(runner, {});
+			futures.push_back(std::move(fut));
 		}
 		
 		for (auto& fut : futures) {
