@@ -34,7 +34,8 @@ namespace hasty {
 		cache_tensor<TT,DIM+1>& smaps, 
 		cache_tensor<TT,2>& bil,
 		cache_tensor<TT,DIM+1>& cjl,
-		storage_thread_pool& thread_pool) 
+		storage_thread_pool& thread_pool,
+		bool free_nufft_plan = true) 
 	{
 		auto spatial_dim = span<DIM>(smaps.shape(), 1).to_arr();
 
@@ -145,6 +146,16 @@ namespace hasty {
 		
 		for (auto& fut : futures) {
 			util::future_catcher(fut);
+		}
+
+		const auto& storages = thread_pool.get_storages();
+		for (auto& store : storages) {
+			store.clear("image");
+			store.clear("bil");
+			store.clear("cjl");
+			if (free_nufft_plan) {
+				store.clear("nufft_plan");
+			}
 		}
 
 	}

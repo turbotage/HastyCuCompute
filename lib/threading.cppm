@@ -201,6 +201,10 @@ namespace hasty {
             return res;
         }
 
+        const std::vector<storage>& storages() const {
+            return _storages;
+        }
+
     private:
 
         void work(size_t index) {

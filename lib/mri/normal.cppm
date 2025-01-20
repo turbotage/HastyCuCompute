@@ -111,31 +111,32 @@ namespace hasty {
 			_runner = trace::trace_function_factory<decltype(output)>::make("toeplitz", input, coilmap, kernel);
 
 			_runner.add_lines(std::format(R"ts(
-	spatial_shp = input.shape #shp[1:]
-	expanded_shp = [2*s for s in spatial_shp]
-	transform_dims = [i+1 for i in range(len(spatial_shp))]
+	with torch.inference_mode():
+		spatial_shp = input.shape #shp[1:]
+		expanded_shp = [2*s for s in spatial_shp]
+		transform_dims = [i+1 for i in range(len(spatial_shp))]
 
-	ncoil = coilmap.shape[0]
-	nrun = ncoil // {0}
-	
-	out = torch.zeros_like(input)
-	for run in range(nrun):
-		bst = run*{0}
-		cmap = coilmap[bst:(bst+{0})]
-		c = cmap * input
-		c = torch.fft_fftn(c, expanded_shp, transform_dims)
-		c *= kernel
-		c = torch.fft_ifftn(c, None, transform_dims)
+		ncoil = coilmap.shape[0]
+		nrun = ncoil // {0}
+		
+		out = torch.zeros_like(input)
+		for run in range(nrun):
+			bst = run*{0}
+			cmap = coilmap[bst:(bst+{0})]
+			c = cmap * input
+			c = torch.fft_fftn(c, expanded_shp, transform_dims)
+			c *= kernel
+			c = torch.fft_ifftn(c, None, transform_dims)
 
-		for dim in range(len(spatial_shp)):
-			c = torch.slice(c, dim+1, spatial_shp[dim]-1, -1)
+			for dim in range(len(spatial_shp)):
+				c = torch.slice(c, dim+1, spatial_shp[dim]-1, -1)
 
-		c *= cmap.conj()
-		out += torch.sum(c, 0)
+			c *= cmap.conj()
+			out += torch.sum(c, 0)
 
-	out *= (1 / torch.prod(torch.tensor(spatial_shp)))
-	
-	return out
+		out *= (1 / torch.prod(torch.tensor(spatial_shp)))
+		
+		return out
 )ts", 2));
 
 			_runner.compile();
@@ -277,35 +278,36 @@ namespace hasty {
 												input, kernel, diag, stacked_diag);
 
 			ret.add_lines(std::format(R"ts(
-	spatial_shp = input.shape #shp[1:]
-	expanded_shp = [2*s for s in spatial_shp]
-	transform_dims = [i+1 for i in range(len(spatial_shp))]
+	with torch.inference_mode():
+		spatial_shp = input.shape #shp[1:]
+		expanded_shp = [2*s for s in spatial_shp]
+		transform_dims = [i+1 for i in range(len(spatial_shp))]
 
-	ncoil = stacked_diag.shape[0]
-	nrun = ncoil // {0}
+		ncoil = stacked_diag.shape[0]
+		nrun = ncoil // {0}
 
-	out = torch.zeros_like(input)
+		out = torch.zeros_like(input)
 
-	input = input * diag
+		input = input * diag
 
-	for run in range(nrun):
-		bst = run*{0}
-		dmap = stacked_diag[bst:(bst+{0})]
-		d = dmap * input
-		d = torch.fft_fftn(d, expanded_shp, transform_dims)
-		d *= kernel
-		d = torch.fft_ifftn(d, None, transform_dims)
+		for run in range(nrun):
+			bst = run*{0}
+			dmap = stacked_diag[bst:(bst+{0})]
+			d = dmap * input
+			d = torch.fft_fftn(d, expanded_shp, transform_dims)
+			d *= kernel
+			d = torch.fft_ifftn(d, None, transform_dims)
 
-		for dim in range(len(spatial_shp)):
-			d = torch.slice(d, dim+1, spatial_shp[dim]-1, -1)
+			for dim in range(len(spatial_shp)):
+				d = torch.slice(d, dim+1, spatial_shp[dim]-1, -1)
 
-		d *= dmap.conj()
-		out += torch.sum(d, 0)
+			d *= dmap.conj()
+			out += torch.sum(d, 0)
 
-	out *= diag.conj()
-	out *= (1 / torch.prod(torch.tensor(spatial_shp)))
-	
-	return out
+		out *= diag.conj()
+		out *= (1 / torch.prod(torch.tensor(spatial_shp)))
+		
+		return out
 )ts", _fft_batch_size));
 
 			ret.compile();
@@ -371,12 +373,13 @@ namespace hasty {
 										input, mask, mask_indices, lambdas);
 		
 			ret.add_lines(std::format(R"ts(
-	out = torch.zeros_like(input)
-	for i in range({0}):
-		tmask = torch.bitwise_and(mask, mask_indices[i])
-		out[tmask] += lambdas[i] * input[tmask]
+	with torch.inference_mode():
+		out = torch.zeros_like(input)
+		for i in range({0}):
+			tmask = torch.bitwise_and(mask, mask_indices[i])
+			out[tmask] += lambdas[i] * input[tmask]
 
-	return out
+		return out
 )ts", NUM_MASK));
 
 		}

@@ -35,13 +35,14 @@ include(FetchContent)
 target_sources(HastyCuCompute
     PUBLIC 
         FILE_SET CXX_MODULES FILES
-            "lib/mri/trajectory.cppm"
-            "lib/mri/normal.cppm"
-            "lib/mri/forward.cppm"
             "lib/mri/adjoint.cppm"
+            "lib/mri/forward.cppm"
+            "lib/mri/misc.cppm"
+            "lib/mri/normal.cppm"
+            "lib/mri/trajectory.cppm"
             "lib/op/op.cppm"
-            "lib/op/cg.cppm"
             "lib/op/min.cppm"
+            "lib/op/cg.cppm"
             "lib/tensor/impl_tensor_extrinsic_math.cppm"
             "lib/tensor/impl_tensor_extrinsic_operator.cppm"
             "lib/tensor/impl_tensor_intrinsic_inplace.cppm"

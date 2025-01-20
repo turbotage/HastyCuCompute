@@ -9,6 +9,7 @@ import tensor;
 
 namespace hasty {
 
+
 	/**
 	@brief
 	Performs the operation
@@ -34,7 +35,8 @@ namespace hasty {
 		cache_tensor<TT,DIM+1>& smaps,
 		cache_tensor<TT,2>& bil,
 		cache_tensor<TT,DIM+1>& cjl,
-		storage_thread_pool& thread_pool) -> tensor<cpu_t,TT,2>
+		storage_thread_pool& thread_pool,
+		bool free_nufft_plan = true) -> tensor<cpu_t,TT,2>
 	{
 		auto spatial_dim = image.shape();
 
@@ -89,10 +91,10 @@ namespace hasty {
 			}
 
 			auto smap = smaps.get(device_idx::CPU)[data_idx,Ellipsis{}].template to<cuda_t>(didx);
+			smap *= store.get_ref_throw<tensor<cuda_t,TT,DIM>>("image");
+			
 			auto temp_img = make_empty_tensor_like(smap);
 			
-			smap *= store.get_ref_throw<tensor<cuda_t,TT,DIM>>("image");
-
 			auto output_slice = make_zero_tensor<cuda_t,TT,2>(span<2>{1, number_of_datapts});
 			auto temp_output = make_empty_tensor<cuda_t,complex_t<TTC>,2>(span<2>{1, number_of_datapts});
 
@@ -133,6 +135,16 @@ namespace hasty {
 
 		for (auto& fut : futures) {
 			util::future_catcher(fut);
+		}
+
+		const auto& storages = thread_pool.get_storages();
+		for (auto& store : storages) {
+			store.clear("image");
+			store.clear("bil");
+			store.clear("cjl");
+			if (free_nufft_plan) {
+				store.clear("nufft_plan");
+			}
 		}
 
 	}

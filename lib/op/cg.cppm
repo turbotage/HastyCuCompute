@@ -55,8 +55,9 @@ std::format(R"ts(
 
         cg2.compile();
 
-        auto cgl = [cg1 = std::move(cg1), cg2 = std::move(cg2), A = std::move(A), P = std::move(P),
-                            max_iter, tol](tensor<D,TT,R>& x, const tensor<D,TT,R>& b) {
+        auto cgl = [cg1=std::move(cg1), cg2=std::move(cg2), A=std::move(A), P=std::move(P), max_iter, tol]
+                        (tensor<D,TT,R>& x, const tensor<D,TT,R>& b) 
+        {
 
             auto r = b - A(x);
             auto z = P(r);
@@ -80,7 +81,6 @@ std::format(R"ts(
                 std::tie(p,rzold) = cg2.run(std::move(z), r, std::move(p), std::move(rzold));
 
                 resid = std::sqrt(rzold.item());
-
             }
 
             return x;
@@ -122,9 +122,9 @@ std::format(R"ts(
 
         cg.compile();
 
-        auto cgl = [cg = std::move(cg), A = std::move(A),
-                            max_iter, tol](tensor<D,TT,R>& x, const tensor<D,TT,R>& b) {
-
+        auto cgl = [cg = std::move(cg), A = std::move(A), max_iter, tol]
+                        (tensor<D,TT,R>& x, const tensor<D,TT,R>& b) 
+        {
             auto r = b - A(x);
             auto p = r.clone();
 
@@ -152,6 +152,7 @@ std::format(R"ts(
     }
 
 
+    
 
 }
 
