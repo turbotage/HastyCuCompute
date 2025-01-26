@@ -10,7 +10,7 @@ import :intrinsic;
 namespace hasty {
 
     template<is_device D, is_tensor_type TT, size_t RANK>
-    auto tensor<D,TT,RANK>::norm() const -> std::conditional_t<is_fp32_tensor_type<TT>, float, double> 
+    auto tensor<D,TT,RANK>::norm() const -> std::conditional_t<is_fp32_tensor_type<TT>, f32, f64> 
     requires is_fp_tensor_type<TT> 
     {
         if constexpr(is_fp32_tensor_type<TT>) {

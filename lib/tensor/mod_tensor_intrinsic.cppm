@@ -146,14 +146,42 @@ namespace hasty {
 		template<is_device D1, is_tensor_type TT1, is_tensor_type TT2, size_t R1, size_t R2>
 		friend auto operator+(const tensor<D1,TT1,R1>& lhs, const tensor<D1,TT2,R2>& rhs);
 
+		template<is_device D, is_tensor_type TT, size_t R>
+		friend auto operator+(const tensor<D,TT,R>& lhs, base_t<TT> rhs) -> tensor<D,TT,R>;
+
+		template<is_device D, is_tensor_type TT, size_t R>
+		friend auto operator+(base_t<TT> lhs, const tensor<D,TT,R>& rhs) -> tensor<D,TT,R>;
+
+
 		template<is_device D1, is_tensor_type TT1, is_tensor_type TT2, size_t R1, size_t R2>
 		friend auto operator-(const tensor<D1,TT1,R1>& lhs, const tensor<D1,TT2,R2>& rhs);
+
+		template<is_device D, is_tensor_type TT, size_t R>
+		friend auto operator-(const tensor<D,TT,R>& lhs, base_t<TT> rhs) -> tensor<D,TT,R>;
+
+		template<is_device D, is_tensor_type TT, size_t R>
+		friend auto operator-(base_t<TT> lhs, const tensor<D,TT,R>& rhs) -> tensor<D,TT,R>;
+
 
 		template<is_device D1, is_tensor_type TT1, is_tensor_type TT2, size_t R1, size_t R2>
 		friend auto operator*(const tensor<D1,TT1,R1>& lhs, const tensor<D1,TT2,R2>& rhs);
 
+		template<is_device D, is_tensor_type TT, size_t R>
+		friend auto operator*(const tensor<D,TT,R>& lhs, base_t<TT> rhs) -> tensor<D,TT,R>;
+
+		template<is_device D, is_tensor_type TT, size_t R>
+		friend auto operator*(base_t<TT> lhs, const tensor<D,TT,R>& rhs) -> tensor<D,TT,R>;
+
+
 		template<is_device D1, is_tensor_type TT1, is_tensor_type TT2, size_t R1, size_t R2>
 		friend auto operator/(const tensor<D1,TT1,R1>& lhs, const tensor<D1,TT2,R2>& rhs);
+
+		template<is_device D, is_tensor_type TT, size_t R>
+		friend auto operator/(const tensor<D,TT,R>& lhs, base_t<TT> rhs) -> tensor<D,TT,R>;
+
+		template<is_device D, is_tensor_type TT, size_t R>
+		friend auto operator/(base_t<TT> lhs, const tensor<D,TT,R>& rhs) -> tensor<D,TT,R>;
+		
 
 		template<size_t R>
 		requires less_than_or_equal<R, RANK>

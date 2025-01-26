@@ -209,8 +209,6 @@ namespace hasty {
     };
 
 
-
-
     export template<typename T>
     concept is_anytensor = is_tensor<T> || is_optensor<T>;
 
@@ -228,6 +226,14 @@ namespace hasty {
 
     export template<typename T>
     concept is_nom_square_anytensor_operator = is_hom_square_tensor_operator<T> || is_hom_square_optensor_operator<T>;
+
+
+
+    export template<is_tensor_operator Op>
+    using tensor_matching_input_op_t = tensor<Op::device_type_t, typename Op::input_tensor_type_t, Op::input_rank_t()>;
+
+    export template<is_tensor_operator Op>
+    using tensor_matching_output_op_t = tensor<Op::device_type_t, typename Op::output_tensor_type_t, Op::output_rank_t()>;
 
 
 

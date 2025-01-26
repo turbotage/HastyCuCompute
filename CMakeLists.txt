@@ -35,11 +35,14 @@ include(FetchContent)
 target_sources(HastyCuCompute
     PUBLIC 
         FILE_SET CXX_MODULES FILES
+            "lib/fft/nufft.cppm"
+            "lib/fft/fft.cppm"
             "lib/mri/adjoint.cppm"
             "lib/mri/forward.cppm"
             "lib/mri/misc.cppm"
             "lib/mri/normal.cppm"
             "lib/mri/trajectory.cppm"
+            "lib/op/alg.cppm"
             "lib/op/op.cppm"
             "lib/op/min.cppm"
             "lib/op/cg.cppm"
@@ -64,7 +67,6 @@ target_sources(HastyCuCompute
             "lib/util/util_typing.cppm"
             "lib/util/util.cppm"
             "lib/hdf5.cppm"
-            "lib/nufft.cppm"
             "lib/threading.cppm"
             "lib/trace.cppm"
 )

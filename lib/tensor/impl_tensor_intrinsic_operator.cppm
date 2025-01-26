@@ -64,9 +64,7 @@ namespace hasty {
     }
 
     template<is_device D, is_tensor_type TT, size_t RANK>
-    template<typename T>
-    requires std::integral<T> || std::floating_point<T>
-    void tensor<D,TT,RANK>::operator+=(T val) {
+    void tensor<D,TT,RANK>::operator+=(base_t<TT> val) {
         _pimpl->underlying_tensor.add_(val);
     }
 
@@ -78,9 +76,7 @@ namespace hasty {
     }
 
     template<is_device D, is_tensor_type TT, size_t RANK>
-    template<typename T>
-    requires std::integral<T> || std::floating_point<T>
-    void tensor<D,TT,RANK>::operator-=(T val) {
+    void tensor<D,TT,RANK>::operator-=(base_t<TT> val) {
         _pimpl->underlying_tensor.sub_(val);
     }
 
@@ -92,9 +88,7 @@ namespace hasty {
     }
 
     template<is_device D, is_tensor_type TT, size_t RANK>
-    template<typename T>
-    requires std::integral<T> || std::floating_point<T>
-    void tensor<D,TT,RANK>::operator*=(T val) {
+    void tensor<D,TT,RANK>::operator*=(base_t<TT> val) {
         _pimpl->underlying_tensor.mul_(val);
     }
 
@@ -106,15 +100,8 @@ namespace hasty {
     }
 
     template<is_device D, is_tensor_type TT, size_t RANK>
-    template<typename T>
-    requires std::integral<T> || std::floating_point<T>
-    void tensor<D,TT,RANK>::operator/=(T val) {
-        auto utype = _pimpl->underlying_tensor.scalar_type();
+    void tensor<D,TT,RANK>::operator/=(base_t<TT> val) {
         _pimpl->underlying_tensor.div_(val);
-        auto after_utype = _pimpl->underlying_tensor.scalar_type();
-        if (utype != after_utype)
-            throw std::runtime_error("tensor::operator/=: scalar type changed");
-            //_pimpl->underlying_tensor = _pimpl->underlying_tensor.to(utype);
     }
 
     template<is_device D, is_tensor_type TT, size_t RANK>

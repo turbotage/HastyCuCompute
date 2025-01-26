@@ -90,7 +90,7 @@ def create_traj_grad_slew(nshots, resolution, fov, system):
 
             g, s = pp.traj_to_grad(traj[i,...], raster_time=system.grad_raster_time)
 
-            plot_sgt = True
+            plot_sgt = False
             if plot_sgt:
                 plot31(s, 'Slew Rate')
                 plot31(g, 'Gradient')
@@ -111,30 +111,32 @@ def create_traj_grad_slew(nshots, resolution, fov, system):
         return traj, grad, slew
     
 
-    traj, grad, slew = run_one(10, 1500)
+    traj, grad, slew = run_one(nshots, 400)
+    traj = traj.transpose(0, 2, 1)
     print('Current Slew Rate: ', np.max(np.abs(slew)), 'System Max: ', system.max_slew)
-    show_trajectory(traj * 0.5 / np.abs(traj).max(), figure_size=figure_size, one_shot=0)
+    #traj_plot = traj * 0.5 / np.abs(traj).max()
+    #show_trajectory(traj_plot, figure_size=figure_size, one_shot=one_shot)
+
+    return traj, grad, slew
 
 
-    return grad, slew
+if False:
+    system = pp.Opts(max_grad=80, grad_unit='mT/m', max_slew=200, slew_unit='T/m/s', B0=3.0)
+    seq = pp.Sequence(system=system)
 
+    FOV = 220e-3
+    delta_k = 1.0 / FOV
+    resolution = 256
 
-system = pp.Opts(max_grad=80, grad_unit='mT/m', max_slew=200, slew_unit='T/m/s', B0=3.0)
-seq = pp.Sequence(system=system)
+    ktraj = np.zeros((3, int(3e-3 / system.grad_raster_time)), dtype=np.float32)
+    ktraj[0, :] = np.linspace(0, 0.5 * delta_k * resolution, ktraj.shape[1])
 
-FOV = 220e-3
-delta_k = 1.0 / FOV
-resolution = 256
-
-ktraj = np.zeros((3, int(3e-3 / system.grad_raster_time)), dtype=np.float32)
-ktraj[0, :] = np.linspace(0, 0.5 * delta_k * resolution, ktraj.shape[1])
-
-g, s = pp.traj_to_grad(ktraj, raster_time=system.grad_raster_time)
-print('Current Slew Rate: ', np.max(np.abs(s)), 'System Max: ', system.max_slew)
+    g, s = pp.traj_to_grad(ktraj, raster_time=system.grad_raster_time)
+    print('Current Slew Rate: ', np.max(np.abs(s)), 'System Max: ', system.max_slew)
 
 
 
 
-create_traj_grad_slew(120, resolution, FOV, system)
+    create_traj_grad_slew(120, resolution, FOV, system)
 
 
