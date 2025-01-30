@@ -29,6 +29,10 @@ namespace hasty {
             return std::make_unique<tensor<D,TT,RANK>>(input_shape, std::move(input));
         }
 
+        static tensor<D,TT,0> make_scalar(base_t<TT> val) requires (RANK == 0) {
+            return tensor<D,TT,0>({}, at::scalar_tensor(val));
+        }
+
     };
 
     export enum struct tensor_make_opts {

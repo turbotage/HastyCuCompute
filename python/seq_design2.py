@@ -111,7 +111,7 @@ def create_traj_grad_slew(nshots, resolution, fov, system):
         return traj, grad, slew
     
 
-    traj, grad, slew = run_one(nshots, 400)
+    traj, grad, slew = run_one(nshots, 1200)
     traj = traj.transpose(0, 2, 1)
     print('Current Slew Rate: ', np.max(np.abs(slew)), 'System Max: ', system.max_slew)
     #traj_plot = traj * 0.5 / np.abs(traj).max()
