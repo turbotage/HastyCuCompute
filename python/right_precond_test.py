@@ -12,7 +12,7 @@ import torch
 import pywt
 import ptwt
 
-import seq_design2 as sd2
+import python.seq_design.seq_design2 as sd2
 import pypulseq as pp
 import h5py
 import math

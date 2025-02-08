@@ -1,3 +1,6 @@
+import os
+import sys
+
 import numpy as np
 import matplotlib.pyplot as plt
 import math
@@ -10,7 +13,7 @@ from scipy.interpolate import CubicSpline
 import scipy.special as sps
 
 
-
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from traj_utils import show_trajectory, show_trajectories
 
 
@@ -90,7 +93,7 @@ def create_traj_grad_slew(nshots, resolution, fov, system):
 
             g, s = pp.traj_to_grad(traj[i,...], raster_time=system.grad_raster_time)
 
-            plot_sgt = False
+            plot_sgt = True
             if plot_sgt:
                 plot31(s, 'Slew Rate')
                 plot31(g, 'Gradient')
@@ -114,13 +117,13 @@ def create_traj_grad_slew(nshots, resolution, fov, system):
     traj, grad, slew = run_one(nshots, 1200)
     traj = traj.transpose(0, 2, 1)
     print('Current Slew Rate: ', np.max(np.abs(slew)), 'System Max: ', system.max_slew)
-    #traj_plot = traj * 0.5 / np.abs(traj).max()
-    #show_trajectory(traj_plot, figure_size=figure_size, one_shot=one_shot)
+    traj_plot = traj * 0.5 / np.abs(traj).max()
+    show_trajectory(traj_plot, figure_size=figure_size, one_shot=one_shot)
 
     return traj, grad, slew
 
 
-if False:
+if True:
     system = pp.Opts(max_grad=80, grad_unit='mT/m', max_slew=200, slew_unit='T/m/s', B0=3.0)
     seq = pp.Sequence(system=system)
 
