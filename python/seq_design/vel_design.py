@@ -93,7 +93,7 @@ class VelocityEncodingFactory:
 
 		if print_calc:
 			plt.figure()
-			plt.plot(t, grad_oversamp, 'r-')
+			plt.plot(t, convert(grad_oversamp), 'r-')
 			plt.plot(t_corr, grad_corr, 'b-')
 			plt.title('Velocity Gradient waveforms')
 			plt.show()
