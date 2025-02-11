@@ -2,6 +2,11 @@ import mrinufft as mn
 
 import numpy as np
 
+class ImageProperties:
+    def __init__(self, shape, fov, resolution):
+        self.shape = shape
+        self.fov = fov
+        self.resolution = resolution
 
 class SafetyLimits:
     def __init__(self, slew_ratio=0.9, grad_ratio=0.9):

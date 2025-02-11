@@ -9,159 +9,190 @@ import pypulseq as pp
 from pypulseq.convert import convert
 
 import scipy as sp
-from scipy.interpolate import CubicSpline, PchipInterpolator
+from scipy.interpolate import CubicSpline, PchipInterpolator, interp1d
 import scipy.special as sps
 
+from sequtil import SafetyLimits, LTIGradientKernels
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import traj_utils as tu
 
+def first_moment(T, DT, slew_rate):
+	return DT*slew_rate*(2*np.square(DT) + 3*T*DT + np.square(T))
+
+# max_grad [mT/m], slew_rate [T/m/s]
+def calc_T_DT(venc, max_grad, slew_rate, gamma, tot_T=None):
+	max_grad_T = max_grad * 1e-3
+	
+	DM = np.pi/(gamma*venc)
+	#DM = first_moment(0.005, max_grad/slew_rate, slew_rate)
+
+	if tot_T is None:
+		# T=0 gradients =>
+		DT = (DM / (2 * slew_rate)) ** (1.0 / 3.0)
+
+		if DT * slew_rate > max_grad_T:
+			DT = max_grad_T / slew_rate
+
+			root = 0.25 * np.square(DT) + DM/(slew_rate*DT)
+			T = -(3/2)*DT + np.sqrt(root)
+			#DM_back = first_moment(T, DT, slew_rate)
+			return T, DT
+		else:
+			return 0.0, DT
+	else:
+		# For solutions see the SymPy script at vel_maths.ipynb
+
+		L = float(tot_T)
+
+		#DT = (1/4)*(L**2*slew_rate + math.sqrt(L*slew_rate*(-32*DM + L**3*slew_rate)))/(L*slew_rate)
+		#T = (L - 4*DT) / 2
+
+		T = (1/2)*math.sqrt(-32*DM/(L*slew_rate) + L**2)
+		DT = (L - 2*T) / 4
+
+		if slew_rate * DT > max_grad:
+			raise RuntimeError("Can't calculate T,DT from total time given this slew \
+					  max gradient is exceeded, increase total time, slew_rate or max_grad")
+		
+		if abs(L - (2*T + 4*DT)) / abs(L) > 1e-9:
+			raise RuntimeError("Large difference between total time and calculated T,DT")
+
+		return T, DT
+
+
 
 class VelocityEncodingFactory:
-	def __init__(self, system, LTI_kernels, kernel_oversampling=100, print_calc = False):
-		self.system = system
-		self.LTI_kernels = LTI_kernels
-		self.kernel_oversampling = kernel_oversampling
-		self.kernel_delays = np.array([kernel.shape[0] for kernel in LTI_kernels.values()]) * self.system.grad_raster_time / self.kernel_oversampling
+	def __init__(self, ltik: LTIGradientKernels, sl: SafetyLimits, print_calc=False):
+		self.system = ltik.system
+		self.ltik = ltik
+		self.sl = sl
 
-		self.venc_t_list = np.linspace(0.2, 10.0, 100)*1e-3
-		venc_list_x = np.array([self._calculate_moments(t, 'x', False)[1] for t in self.venc_t_list])
-		venc_list_y = np.array([self._calculate_moments(t, 'y', False)[1] for t in self.venc_t_list])
-		venc_list_z = np.array([self._calculate_moments(t, 'z', False)[1] for t in self.venc_t_list])
+		self.print_calc = print_calc
 
-		venc_x_interp = PchipInterpolator(np.flip(venc_list_x), np.flip(self.venc_t_list))
-		venc_y_interp = PchipInterpolator(np.flip(venc_list_y), np.flip(self.venc_t_list))
-		venc_z_interp = PchipInterpolator(np.flip(venc_list_z), np.flip(self.venc_t_list))
-		self.venc_interpers = {'x': venc_x_interp, 'y': venc_y_interp, 'z': venc_z_interp}
+		ko = self.ltik.kernel_oversampling
+		self.longest_kernel = max([math.ceil(kernel.shape[0]/ko) for kernel in ltik.kernels.values()])
+	
+	def ltik_corrected_upsamp_grad(self, grad_wave, channel):
+		ko = self.ltik.kernel_oversampling
+		GRT = self.system.grad_raster_time
 
-		if print_calc:
-			plt.figure()
-			plt.plot(venc_list_x, self.venc_t_list, 'r-')
-			vencinterp = np.linspace(venc_list_x[0], venc_list_x[-1], 1000)
-			plt.plot(vencinterp, venc_x_interp(vencinterp), 'b-')
-			plt.title('Grad X Venc vs input_area_time')
-			plt.show()
+		tup = np.linspace(0, grad_wave.shape[0]*GRT, grad_wave.shape[0]*ko)
+		upsamp_grad_wave = interp1d(
+			np.linspace(0, grad_wave.shape[0]*GRT, grad_wave.shape[0]), 
+			grad_wave, 
+			kind='linear'
+		)(tup)
+		grad_wave = np.convolve(grad_wave, self.ltik.kernels[channel], mode='full')
 
-			plt.figure()
-			plt.plot(venc_list_y, self.venc_t_list, 'r-')
-			vencinterp = np.linspace(venc_list_y[0], venc_list_y[-1], 1000)
-			plt.plot(vencinterp, venc_y_interp(vencinterp), 'b-')
-			plt.title('Grad Y Venc vs input_area_time')
-			plt.show()
+		return upsamp_grad_wave, tup
 
-			plt.figure()
-			plt.plot(venc_list_z, self.venc_t_list, 'r-')
-			vencinterp = np.linspace(venc_list_z[0], venc_list_z[-1], 1000)
-			plt.plot(vencinterp, venc_z_interp(vencinterp), 'b-')
-			plt.title('Grad Z Venc vs input_area_time')
-			plt.show()
+	def calculate_moments_and_venc(self, grad_wave, t):
+		dt = t[1]-t[0]
+		grad_wave = 1e-3*convert(grad_wave, from_unit='Hz/m', to_unit='mT/m')
+		DM_0 = np.trapz(grad_wave, dx=dt)
+		DM_1 = np.trapz(t*grad_wave, dx=dt)
+		DM_2 = np.trapz(t*t*grad_wave, dx=dt)
+		venc = np.pi / (self.system.gamma * DM_1)
+		return DM_0, DM_1, DM_2, venc
 
-	def _calculate_moments(self, input_area_time, channel, print_calc=False):
-		input_area = input_area_time * (system.max_grad)
+	def get_gradients(self, velocity_vector, channels=['x', 'y', 'z']):
+		
+		GRT = self.system.grad_raster_time
 
-		# Backwards phasing
-		trap1 = pp.make_trapezoid(channel=channel, system=self.system, area=-input_area)
-		temp_wave = pp.points_to_waveform(
-			np.array([0.0, trap1.amplitude, trap1.amplitude, 0.0]),
-			self.system.grad_raster_time, 
-			np.array([0.0, trap1.rise_time, trap1.flat_time + trap1.rise_time, trap1.flat_time + trap1.rise_time + trap1.fall_time])
-		)
-		trap1_wave = np.zeros((1 + temp_wave.shape[0],))
-		trap1_wave[1:] = temp_wave
-		# Forwards phasing
-		trap2 = pp.make_trapezoid(channel=channel, system=self.system, area=input_area)
-		temp_wave = pp.points_to_waveform(
-			np.array([0.0, trap2.amplitude, trap2.amplitude, 0.0]), 
-			self.system.grad_raster_time, 
-			np.array([0.0, trap2.rise_time, trap2.flat_time + trap2.rise_time, trap2.flat_time + trap2.rise_time + trap2.fall_time])
-		)
-		trap2_wave = np.zeros((1 + temp_wave.shape[0],))
-		trap2_wave[:-1] = temp_wave
+		max_grad = self.system.max_grad * self.sl.grad_ratio
+		max_slew = self.system.max_slew * self.sl.slew_ratio
 
+		# We need to find which gradient will take the longset time, and how long that time is
+		grad_lengths = [
+							(0.0, 0.0) if vel is None else
+							calc_T_DT(
+								abs(vel), 
+								convert(max_grad, from_unit='Hz/m', to_unit='mT/m'), 
+								convert(max_slew, from_unit='Hz/m/s', to_unit='T/m/s'), 
+								self.system.gamma
+							)
+							for vel in velocity_vector
+						]   
 
-		grad = np.concatenate([trap1_wave, trap2_wave])
+		max_grad_length = max([gradlen[0] + 2*gradlen[1] for gradlen in grad_lengths])
+		
+		L = 2 * max_grad_length
+		t = np.arange(0, math.ceil(L/GRT)+1)*GRT
 
+		grad_waves = []
+		grad_properties = []
 
-		# Oversample the gradient waveform for convolution with LTI kernels
-		grad_oversamp = mn.oversample(grad[None,:], grad.shape[0]*self.kernel_oversampling, kind='linear')[0,:]
-		t = np.linspace(0, grad_oversamp.shape[0]*self.system.grad_raster_time / self.kernel_oversampling, grad_oversamp.shape[0])
+		for i in range(len(velocity_vector)):
+			
+			if velocity_vector[i] is None or velocity_vector[i] > 1e4:
 
-		# Actual waveform
-		grad_corr = np.convolve(grad_oversamp, self.LTI_kernels[channel], mode='full')
-		t_corr = np.linspace(0, (t[1]-t[0])*grad_corr.shape[0], grad_corr.shape[0])
+				grad_wave = np.zeros((t.shape[0] + self.longest_kernel,))
 
-		if print_calc:
-			plt.figure()
-			plt.plot(t, convert(grad_oversamp), 'r-')
-			plt.plot(t_corr, grad_corr, 'b-')
-			plt.title('Velocity Gradient waveforms')
-			plt.show()
+				if self.print_calc:
+					print('Velocity is None or too high, setting to zero')
+					print('Zeroth order moment: ', 0, ' First order moment: ', 0, 'Second order moment: ', 0, ' Venc: infty')
 
-		grad_oversamp = convert(grad_oversamp, from_unit='Hz/m', to_unit='mT/m')
-		grad_corr = convert(grad_corr, from_unit='Hz/m', to_unit='mT/m')
-
-		dt = t[1] - t[0]
-		DM_0_perf = np.trapz(grad_oversamp, dx=dt)
-		DM_0_corr = np.trapz(grad_corr, dx=dt)
-
-		DM_1_perf = np.trapz(t*grad_oversamp, dx=dt)
-		DM_1_corr = np.trapz(t_corr*grad_corr, dx=dt)
-
-		# Corrected Venc
-		#venc_perf = 1e3*np.pi / (system.gamma * DM_1_perf)
-		venc_corr = 1e3*np.pi / (system.gamma * DM_1_corr)
-
-		venc_per_T = venc_corr / input_area_time
-
-		if print_calc:
-			print('Zeroth order moment: perf: ', DM_0_perf, ' corr: ', DM_0_corr, ' ratio: ', DM_0_corr / DM_0_perf)
-			print('First order moment: perf: ', DM_1_perf, ' corr: ', DM_1_corr, ' ratio: ', DM_1_corr / DM_1_perf)
-			print('Venc is: ', venc_corr, ' m/s')
-
-		return [trap1, trap2, self.LTI_delay], float(venc_corr)
-
-	def get_velocity_encoding_gradients(self, venc_vector, print_calc=False):
-		grad_out = []
-		durations = []
-		venc_vector_out = []
-		channels = ['x', 'y', 'z']
-		for i in range(3):
-			channel = channels[i]
-			if venc_vector[i] is None:
-				grad_out.append(None)
+				grad_waves.append(grad_wave)
+				grad_properties.append((0.0, 0.0, math.inf))
 			else:
-				wanted_venc = venc_vector[i]
-				ret = self._calculate_moments(self.venc_interpers[channel](wanted_venc), 'x', print_calc)
-				grad_out.append(ret[0])
-				venc_vector_out.append(ret[1])
 
-		return grad_out, venc_vector_out
+				T, DT = calc_T_DT(
+							abs(velocity_vector[i]), 
+							convert(max_grad, from_unit='Hz/m', to_unit='mT/m'), 
+							convert(max_slew, from_unit='Hz/m/s', to_unit='T/m/s'), 
+							self.system.gamma, 
+							L
+						)
+				
+				print('T: ', T, ' DT: ', DT)
+
+				Gmax = max_slew*DT
+
+				if velocity_vector[i] > 0:
+					grad_blip = np.array([0, -Gmax, -Gmax, 0, Gmax, Gmax, 0, 0])
+				else:
+					grad_blip = np.array([0, Gmax, Gmax, 0, -Gmax, -Gmax, 0, 0])
+
+				grad_wave = interp1d(
+								np.array([0, DT, T+DT, T+2*DT, T+3*DT, 2*T+3*DT, 2*T+4*DT, 2*T+4*DT+GRT]),
+								grad_blip,
+								kind='linear'
+							)(t)
+
+				if self.print_calc:
+					plt.figure()
+					plt.plot(t, convert(grad_wave, from_unit='Hz/m', to_unit='mT/m'), 'r-')
+					plt.title('Velocity Gradient waveforms')
+					plt.xlabel('Time [s]')
+					plt.ylabel('Gradient [mT/m]')
+					plt.show()
+
+				grad_wave = np.concatenate([grad_wave, np.zeros((self.longest_kernel,))])
+
+				DM0, DM1, DM2, venc = self.calculate_moments_and_venc(*self.ltik_corrected_upsamp_grad(grad_wave, channels[i]))
+
+				if self.print_calc:
+					print('Zeroth order moment: ', DM0, ' First order moment: ', DM1, 'Second order moment: ', DM2, ' Venc: ', venc)
+
+				grad_waves.append(grad_wave)
+				grad_properties.append((DM0, DM1, DM2, venc))
+
+		return grad_waves, grad_properties
 
 
 
-
-def test_kernel(system):
-	kernel_oversampling = 100
-	k1 = 8.0
-	k2 = 1.5
-	Dk = 6.0 / system.grad_raster_time
-
-	n_grad_raster_times = 3
-	t = np.linspace(0, n_grad_raster_times*system.grad_raster_time, n_grad_raster_times*kernel_oversampling)
-	kernel = (Dk*t)**(k1) * np.exp(-k2*Dk*t)
-	kernel /= np.sum(kernel)
-
-	return kernel, kernel_oversampling
+		
 
 
+if __name__ == "__main__":
 
-if __name__ == '__main__':
-
+	#T, DT = calc_T_DT(0.001, 80, 200, 42.58e6)
 	system = pp.Opts(max_grad=80, grad_unit='mT/m', max_slew=200, slew_unit='T/m/s', B0=3.0, grad_raster_time=10e-6)
-	kernel, kernel_oversampling = test_kernel(system)
 
-	vef = VelocityEncodingFactory(system, {'x': kernel, 'y': kernel, 'z': kernel}, kernel_oversampling, print_calc=True)
+	ltik = LTIGradientKernels(system).init_from_test()
 
-	ret = vef.get_velocity_encoding_gradients([0.5, 0.25, 0.1])
-	print(ret[1])
+	vef = VelocityEncodingFactory(ltik, SafetyLimits(), print_calc=True)
+
+	back = vef.get_gradients([1.5, None, 0.2])
