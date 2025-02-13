@@ -72,7 +72,6 @@ class VelocityEncodingFactory:
 		self.print_calc = print_calc
 
 		ko = self.ltik.kernel_oversampling
-		self.longest_kernel = max([math.ceil(kernel.shape[0]/ko) for kernel in ltik.kernels.values()])
 	
 	def ltik_corrected_upsamp_grad(self, grad_wave, channel):
 		ko = self.ltik.kernel_oversampling
@@ -128,7 +127,7 @@ class VelocityEncodingFactory:
 			
 			if velocity_vector[i] is None or velocity_vector[i] > 1e4:
 
-				grad_wave = np.zeros((t.shape[0] + self.longest_kernel,))
+				grad_wave = np.zeros((t.shape[0] + self.ltik.max_kernel_length,))
 
 				if self.print_calc:
 					print('Velocity is None or too high, setting to zero')
@@ -146,7 +145,7 @@ class VelocityEncodingFactory:
 							L
 						)
 				
-				print('T: ', T, ' DT: ', DT)
+				#print('T: ', T, ' DT: ', DT)
 
 				Gmax = max_slew*DT
 
@@ -169,7 +168,7 @@ class VelocityEncodingFactory:
 					plt.ylabel('Gradient [mT/m]')
 					plt.show()
 
-				grad_wave = np.concatenate([grad_wave, np.zeros((self.longest_kernel,))])
+				grad_wave = np.concatenate([grad_wave, np.zeros((self.ltik.max_kernel_length,))])
 
 				DM0, DM1, DM2, venc = self.calculate_moments_and_venc(*self.ltik_corrected_upsamp_grad(grad_wave, channels[i]))
 

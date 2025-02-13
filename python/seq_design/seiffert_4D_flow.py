@@ -15,18 +15,48 @@ import scipy.special as sps
 from sequtil import SafetyLimits, LTIGradientKernels, ImageProperties
 
 from vel_design import VelocityEncodingFactory
-from traj_design import SeiffertSpiral
+from traj_design import Spiral3D
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import traj_utils as tu
 
-venc1 = 0.2
+def speed_interpolation(undersamp_traj, option):
+	PRE_N_SAMPLES = undersamp_traj.shape[2]
+	cs = CubicSpline(np.linspace(0,1,PRE_N_SAMPLES), undersamp_traj, axis=2)
+	if option==1:
+		k1 = 0.2
+		k2 = 10.0
+		t_end = -(1.0 / k2) * math.log(1.0 - (1.0 / k1))
+		tnew = np.linspace(0, t_end, 5*PRE_N_SAMPLES)
+		tnew = k1*(1.0 - np.exp(-k2*tnew))
+	elif option==2:
+		k1 = 0.2
+		k2 = 1.5
+		t_end = ((1/k2) + math.sqrt(k1))**2 - k1
+		tnew = np.linspace(0, t_end, 5*PRE_N_SAMPLES)
+		tnew = k2*(np.sqrt(k1 + tnew) - math.sqrt(k1))
+
+	convolve = True
+	if convolve:
+		kernel = np.array([0.0, 0.0, 0.1, 0.3, 0.7, 0.3, 0.1, 0.0, 0.0])
+		kernel /= np.sum(kernel)
+		tnew = np.convolve(tnew, kernel, mode='full')[:-kernel.shape[0]]
+		tnew = tnew[tnew < 1.0]
+
+	#plt.figure()
+	#plt.plot(tnew)
+	#plt.plot(np.linspace(0,1,5*PRE_N_SAMPLES))
+	#plt.show()
+	undersamp_traj = cs(tnew) 
+	return undersamp_traj
+
+venc1 = 0.3
 venc2 = 0.8
 
 system = pp.Opts(
 	max_grad=80, grad_unit='mT/m', 
-	max_slew=200, slew_unit='T/m/s', 
+	max_slew=200, slew_unit='T/m/s',
 	rf_raster_time=2e-6,
 	rf_dead_time=100e-6,
 	rf_ringdown_time=60e-6,
@@ -37,34 +67,76 @@ system = pp.Opts(
 	B0=3.0, 
 )
 
-ltik = LTIGradientKernels(system).init_from_test()
+ltik = LTIGradientKernels(system, LTIGradientKernels.kernels_from_test(system.grad_raster_time))
 
 sl = SafetyLimits()
 imgprop = ImageProperties([320,320,320], 220e-3, 320)
 
+
+vencs = [None, 		 None, 		 None] 		 + \
+		[venc1*-1.0, venc1*-1.0, venc1*-1.0] + \
+		[venc1* 1.0, venc1* 1.0, venc1*-1.0] + \
+		[venc1* 1.0, venc1*-1.0, venc1* 1.0] + \
+		[venc1*-1.0, venc1* 1.0, venc1* 1.0] + \
+		[venc2*-1.0, venc2*-1.0, venc2* 1.0] + \
+		[venc2* 1.0, venc2*-1.0, venc2*-1.0] + \
+		[venc2*-1.0, venc2* 1.0, venc2*-1.0]
+
+channels = []
+for i,_ in enumerate(vencs):
+	channels += ['x', 'y', 'z']
+
 vef = VelocityEncodingFactory(ltik, sl, print_calc=False)
+VelEnc_ret = vef.get_gradients(vencs, channels)
+VelEnc_grads = []
+VelEnc_props = []
+for enci in range(len(VelEnc_ret[0])//3):
+	VelEnc_grads.append([
+		VelEnc_ret[0][enci*3], 
+		VelEnc_ret[0][enci*3+1], 
+		VelEnc_ret[0][enci*3+2]
+	])
+	VelEnc_props.append([
+		VelEnc_ret[1][enci*3], 
+		VelEnc_ret[1][enci*3+1], 
+		VelEnc_ret[1][enci*3+2]
+	])
 
-E0g = vef.get_gradients([None, None, None])
-E1g = vef.get_gradients([venc1*-1.0, venc1*-1.0, venc1*-1.0])
-E2g = vef.get_gradients([venc1* 1.0, venc1* 1.0, venc1*-1.0])
-E3g = vef.get_gradients([venc1* 1.0, venc1*-1.0, venc1* 1.0])
-E4g = vef.get_gradients([venc1*-1.0, venc1* 1.0, venc1* 1.0])
-E5g = vef.get_gradients([venc2*-1.0, venc2*-1.0, venc2* 1.0])
-E6g = vef.get_gradients([venc2* 1.0, venc2*-1.0, venc2*-1.0])
-E7g = vef.get_gradients([venc2*-1.0, venc2* 1.0, venc2*-1.0])
-
-Eg_list = [E0g, E1g, E2g, E3g, E4g, E5g, E6g, E7g]
-
-tf = SeiffertSpiral(ltik, sl, imgprop, print_calc=True)
+tf = Spiral3D(ltik, sl, imgprop, print_calc=True)
 
 scan_time = 60*10
 
-nshots = int(scan_time / 0.019) // 8
+estimate_rough_TR = 0.10
+nshots = int(scan_time / estimate_rough_TR) // 8
+nshots = 10
 
-trajectory, traj_grad_list, traj_slew_list, traj_grad_max_list, traj_slew_max_list = tf.get_gradients(nshots, None)
 
-TRAJ_N_SAMPLES = trajectory.shape[1]
-VELENC_N_SAMPLES = E0g[0][0].shape[0]
+
+spiral_type = 'cones'
+if spiral_type == 'cones':
+	spiral_settings = Spiral3D.get_default_cones_settings()
+	spiral_settings['width'] = 150
+	spiral_settings['nb_zigzags'] = 20
+	spiral_settings['oncurve_samples'] = 200
+	spiral_settings['add_rand_perturb'] = True
+
+	speed_interpolator = lambda x: speed_interpolation(x, 2)
+elif spiral_type == 'seiffert':
+	spiral_settings = Spiral3D.get_default_seiffert_settings()
+	spiral_settings['add_rand_perturb'] = True
+
+	speed_interpolator = None
+
+
+tfret = tf.get_gradients(nshots, spiral_settings, speed_interpolation=speed_interpolator)
+trajectory = tfret[0]
+traj_grad_list = tfret[1]
+traj_slew_list = tfret[2]
+traj_grad_max_list = tfret[3]
+traj_slew_max_list = tfret[4]
+
+TRAJ_N_SAMPLES = trajectory.shape[2]
+VELENC_N_SAMPLES = VelEnc_grads[0][0].shape[0]
 
 TRAJ_TIME = TRAJ_N_SAMPLES*system.grad_raster_time
 VELENC_TIME = VELENC_N_SAMPLES*system.grad_raster_time
@@ -94,9 +166,9 @@ vel_enc_adc = pp.make_adc(
 
 traj_adc = pp.make_adc(
 				num_samples=TRAJ_N_SAMPLES,
-                duration=TRAJ_TIME,
-                delay=0,
-                system=system
+				duration=TRAJ_TIME,
+				delay=0,
+				system=system
 			)
 
 shotperm = np.random.permutation(nshots)
@@ -105,13 +177,13 @@ seq = pp.Sequence(system=system)
 
 for shotidx, shot in enumerate(shotperm):
 
-	for encidx, enc in enumerate(Eg_list):
+	for encidx, velenc_grad in enumerate(VelEnc_grads):
 
 		seq.add_block(rf, gzsr)
 
-		vel_gx = pp.make_arbitrary_grad(channel='x', waveform=enc[0][0], system=system)
-		vel_gy = pp.make_arbitrary_grad(channel='y', waveform=enc[0][1], system=system)
-		vel_gz = pp.make_arbitrary_grad(channel='z', waveform=enc[0][2], system=system)
+		vel_gx = pp.make_arbitrary_grad(channel='x', waveform=velenc_grad[0], system=system)
+		vel_gy = pp.make_arbitrary_grad(channel='y', waveform=velenc_grad[1], system=system)
+		vel_gz = pp.make_arbitrary_grad(channel='z', waveform=velenc_grad[2], system=system)
 
 		seq.add_block(vel_gx, vel_gy, vel_gz, vel_enc_adc)
 
@@ -123,6 +195,19 @@ for shotidx, shot in enumerate(shotperm):
 
 		seq.add_block(pp.make_delay(1e-4))
 
-seq.plot()
+seq.plot(time_range=(0, TR))
+seq.plot(time_range=(0, 2*TR))
+seq.plot(time_range=(0, 3*TR))
+#seq.plot()
+
+from pypulseq.utils.safe_pns_prediction import safe_example_hw
+
+pns_ok, pns_n, pns_c, tpns = seq.calculate_pns(safe_example_hw(), do_plots=True)  # Safe example HW
+plt.show()
+
+print('PNS OK: ', pns_ok)
+print('PNS Norm: ', pns_n)
+print('PNS Components: ', pns_c)
+print('PNS Time: ', tpns)
 
 seq.write('/home/turbotage/Documents/seiffert_4D_flow.seq')
