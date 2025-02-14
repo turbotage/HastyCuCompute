@@ -23,6 +23,7 @@ import traj_utils as tu
 
 def speed_interpolation(undersamp_traj, option):
 	PRE_N_SAMPLES = undersamp_traj.shape[2]
+
 	cs = CubicSpline(np.linspace(0,1,PRE_N_SAMPLES), undersamp_traj, axis=2)
 	if option==1:
 		k1 = 0.2
@@ -31,8 +32,8 @@ def speed_interpolation(undersamp_traj, option):
 		tnew = np.linspace(0, t_end, 5*PRE_N_SAMPLES)
 		tnew = k1*(1.0 - np.exp(-k2*tnew))
 	elif option==2:
-		k1 = 0.2
-		k2 = 1.5
+		k1 = 0.05
+		k2 = 5.0
 		t_end = ((1/k2) + math.sqrt(k1))**2 - k1
 		tnew = np.linspace(0, t_end, 5*PRE_N_SAMPLES)
 		tnew = k2*(np.sqrt(k1 + tnew) - math.sqrt(k1))
@@ -70,7 +71,8 @@ system = pp.Opts(
 ltik = LTIGradientKernels(system, LTIGradientKernels.kernels_from_test(system.grad_raster_time))
 
 sl = SafetyLimits()
-imgprop = ImageProperties([320,320,320], 220e-3, 320)
+imgprop = ImageProperties([320,320,320], 
+			np.array([220e-3, 220e-3, 220e-3]), np.array([320,320,320]))
 
 
 vencs = [None, 		 None, 		 None] 		 + \
@@ -110,14 +112,12 @@ estimate_rough_TR = 0.10
 nshots = int(scan_time / estimate_rough_TR) // 8
 nshots = 10
 
-
-
 spiral_type = 'cones'
 if spiral_type == 'cones':
 	spiral_settings = Spiral3D.get_default_cones_settings()
-	spiral_settings['width'] = 150
+	spiral_settings['width'] = 80
 	spiral_settings['nb_zigzags'] = 20
-	spiral_settings['oncurve_samples'] = 200
+	spiral_settings['oncurve_samples'] = 160
 	spiral_settings['add_rand_perturb'] = True
 
 	speed_interpolator = lambda x: speed_interpolation(x, 2)
@@ -151,7 +151,7 @@ rf, gzs, gzsr = pp.make_sinc_pulse(
 	ernst_angle,
 	system=system,
 	duration=3e-3,
-	slice_thickness=imgprop.fov,
+	slice_thickness=imgprop.fov[2],
 	apodization=0.5,
 	time_bw_product=4,
 	return_gz=True,

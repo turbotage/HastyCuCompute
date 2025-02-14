@@ -32,7 +32,6 @@ def initialize_sloped_3D_cones(
     nb_zigzags: float = 5,
     spiral: str | float = "archimedes",
     width: float = 1,
-    shape: NDArray
     ) -> NDArray:
 
     single_spiral = initialize_2D_spiral(

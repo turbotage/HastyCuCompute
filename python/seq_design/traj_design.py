@@ -22,7 +22,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import traj_utils as tu
 
-def plot31(slew, title='', vlines=None):
+def plot31(slew, title='', vlines=None, norm=False):
 	plt.figure()
 	plt.plot(slew[0, :], 'r-*')
 	plt.plot(slew[1, :], 'g-*')
@@ -31,6 +31,8 @@ def plot31(slew, title='', vlines=None):
 		for vline in vlines:
 			plt.axvline(x=vline, color='k', linestyle='--')
 		#plt.vlines(vlines, color='k', linestyle='--')
+	if norm:
+		plt.plot(np.sqrt(np.sum(np.square(slew), axis=0)), 'c-*')
 	plt.title(title)
 	plt.show()
 
@@ -253,8 +255,8 @@ class Spiral3D:
 
 		max_slew_shot = np.argmax(np.abs(gi).max(axis=(1,2)), axis=0)
 		random_shot = np.random.randint(0, nshots)
-		plot31(convert(gi[max_slew_shot,...], from_unit='Hz/m', to_unit='mT/m'), 'Gradient')
-		plot31(convert(si[max_slew_shot,...], from_unit='Hz/m/s', to_unit='T/m/s'), 'Slew Rate')
+		plot31(convert(gi[max_slew_shot,...], from_unit='Hz/m', to_unit='mT/m'), 'Gradient', norm=True)
+		plot31(convert(si[max_slew_shot,...], from_unit='Hz/m/s', to_unit='T/m/s'), 'Slew Rate', norm=True)
 
 		max_grad = np.abs(gi).max()
 		max_slew = np.abs(si).max()
@@ -284,15 +286,18 @@ class Spiral3D:
 		else:
 			raise ValueError('Unknown spiral type: ', spiral_settings['spiral_type'])
 
-		fov = self.imgprop.fov
 		resolution = self.imgprop.resolution
 		delta_k = 1.0 / self.imgprop.fov
 
 		undersamp_traj = np.ascontiguousarray(undersamp_traj.transpose(0,2,1))
-		undersamp_traj *= (resolution * delta_k)
+		undersamp_traj *= (resolution * delta_k)[None,:,None]
 
 		if spiral_settings['add_rand_perturb']:
-			perturbation = 0.2*np.random.uniform(-delta_k, delta_k, undersamp_traj.shape)
+			perturbation = np.stack([
+					np.random.uniform(-delta_k[0], delta_k[0], undersamp_traj[:,0,:].shape),
+					np.random.uniform(-delta_k[1], delta_k[1], undersamp_traj[:,1,:].shape),
+					np.random.uniform(-delta_k[2], delta_k[2], undersamp_traj[:,2,:].shape)
+				],axis=1)
 			perturb_factor = np.linspace(0,1,undersamp_traj.shape[2])[None,None,:]
 			perturb_factor = np.square(perturb_factor)
 			perturbation *= perturb_factor
