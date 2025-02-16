@@ -46,7 +46,7 @@ class LTIGradientKernels:
         return self.kernel_oversampling
     
     def transfer_gradient(self, grad, channel):
-        grad_oversamp = mn.oversample(grad[None,:], grad.shape[0]*self.kernel_oversampling, kind='linear')[0,:]
+        grad_oversamp = mn.oversample(grad[:,None,:], grad.shape[1]*self.kernel_oversampling, kind='linear')[0,:]
         dt = self.system.grad_raster_time / self.kernel_oversampling
 
         grad_corr = np.convolve(grad_oversamp, self.kernels[channel], mode='full')

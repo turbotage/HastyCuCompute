@@ -10,11 +10,13 @@ from pypulseq.convert import convert
 from pypulseq import add_ramps as pp_ramp
 
 import scipy as sp
-from scipy.interpolate import CubicSpline, PchipInterpolator, interp1d
+from scipy.interpolate import CubicSpline, PchipInterpolator, interp1d, LinearNDInterpolator
 import scipy.special as sps
 from scipy.integrate import cumulative_trapezoid
 
 from sequtil import SafetyLimits, LTIGradientKernels, ImageProperties
+
+from my_trajectories import initialize_my_yarn_ball
 
 #from ramping import calc_ramp, add_ramps
 
@@ -91,6 +93,17 @@ class Spiral3D:
 			'spiral': "archimedes",
 			'width': 1.0,
 			'add_rand_perturb': False
+		}
+	
+	@staticmethod
+	def get_default_my_yarn_ball_settings():
+		return {
+			'spiral_type': "my_yarn_ball",
+			'oncurve_samples': 200,
+			'nb_revs': 5,
+			'nb_folds': 5,
+			'add_rand_perturb': False,
+			'rand_perturb_factor': 0.2
 		}
 
 	def one_seiffert_run(self, trajectory):
@@ -175,6 +188,32 @@ class Spiral3D:
 
 		return trajectory, grad, slew
 
+	def one_my_yarn_ball_run(self, trajectory):
+		GRT = self.system.grad_raster_time
+		safe_max_grad = self.system.max_grad * self.safety.grad_ratio
+		safe_max_slew = self.system.max_slew * self.safety.slew_ratio
+		
+		gi, si = pp.traj_to_grad(trajectory, raster_time=GRT)
+
+		end_traj_gi = gi[:,:,-1][:,:,None]
+		max_end_gi = np.abs(end_traj_gi).max()
+		DT = max_end_gi / (0.95*safe_max_slew)
+		DT_N = math.ceil(DT / GRT)
+		DT = DT_N * GRT
+		downramp_slew = end_traj_gi / DT
+		downramp_gi = np.flip(np.arange(DT_N)[None,None,:] * GRT * downramp_slew, axis=2)
+
+		# Start the trajectory with 2 GRT of zero gradients
+		zero_gi = np.zeros((gi.shape[0],3,3))
+
+		gi = np.concatenate([zero_gi, gi, downramp_gi], axis=2)
+
+		trajectory = traj_from_grad(gi, GRT)
+
+		grad, slew = pp.traj_to_grad(trajectory, raster_time=GRT)
+
+		return trajectory, grad, slew
+
 	def get_fastest_spiral_gradients(self, undersamp_traj, spiral_settings):
 
 		MKL = self.ltik.max_kernel_length
@@ -185,6 +224,7 @@ class Spiral3D:
 
 		def one_run(NGRT):
 
+			#interp_type = 'cubic'
 			trajectory = CubicSpline(
 							np.linspace(0,1,undersamp_traj.shape[2]), 
 							undersamp_traj, 
@@ -195,13 +235,15 @@ class Spiral3D:
 				trajectory, grad, slew = self.one_seiffert_run(trajectory)
 			elif spiral_settings['spiral_type'] == "cones-3d":
 				trajectory, grad, slew = self.one_cones_run(trajectory)
+			elif spiral_settings['spiral_type'] == "my_yarn_ball":
+				trajectory, grad, slew = self.one_my_yarn_ball_run(trajectory)
 			else:
 				raise ValueError('Unknown spiral type: ', spiral_settings['spiral_type'])
 
-			#max_slew_shot = np.argmax(np.abs(gi).max(axis=(1,2)), axis=0)
+			#max_slew_shot = np.argmax(np.abs(grad).max(axis=(1,2)), axis=0)
 			#random_shot = np.random.randint(0, nshots)
-			#plot31(convert(gi[max_slew_shot,...], from_unit='Hz/m', to_unit='mT/m'), 'Gradient')
-			#plot31(convert(si[max_slew_shot,...], from_unit='Hz/m/s', to_unit='T/m/s'), 'Slew Rate')
+			#plot31(convert(grad[max_slew_shot,...], from_unit='Hz/m', to_unit='mT/m'), 'Gradient')
+			#plot31(convert(slew[max_slew_shot,...], from_unit='Hz/m/s', to_unit='T/m/s'), 'Slew Rate')
 
 			max_grad = np.abs(grad).max()
 			max_slew = np.abs(slew).max()
@@ -224,14 +266,14 @@ class Spiral3D:
 		else:
 			decrease_NGRT = True
 		
-		print('')
+		print('', end='')
 		for i in range(500):
 			if decrease_NGRT:
 				NGRT_i -= 100
 			else:
 				NGRT_i += 100
 
-			print('\rAttempting a readout of: ', NGRT_i * GRT * 1e3, 'ms', end='')
+			print('\rAttempting a readout of: ', NGRT_i * GRT * 1e3, 'ms, iteration: ', i, end='')
 
 			temp_trajectory, temp_gi, temp_si, temp_max_grad, temp_max_slew = one_run(NGRT_i)
 
@@ -283,6 +325,14 @@ class Spiral3D:
 								spiral=spiral_settings['spiral'],
 								width=spiral_settings['width']
 							)
+		elif spiral_settings['spiral_type'] == "my_yarn_ball":
+			undersamp_traj = initialize_my_yarn_ball(
+								nshots, 
+								spiral_settings['oncurve_samples'], 
+								tilt="random",
+								nb_revs=spiral_settings['nb_revs'],
+								nb_folds=spiral_settings['nb_folds']
+							)
 		else:
 			raise ValueError('Unknown spiral type: ', spiral_settings['spiral_type'])
 
@@ -293,6 +343,8 @@ class Spiral3D:
 		undersamp_traj *= (resolution * delta_k)[None,:,None]
 
 		if spiral_settings['add_rand_perturb']:
+			rand_perturb_factor = spiral_settings['rand_perturb_factor']
+			rand_perturb_factor = 0.5 if rand_perturb_factor is None else rand_perturb_factor
 			perturbation = np.stack([
 					np.random.uniform(-delta_k[0], delta_k[0], undersamp_traj[:,0,:].shape),
 					np.random.uniform(-delta_k[1], delta_k[1], undersamp_traj[:,1,:].shape),
@@ -300,7 +352,7 @@ class Spiral3D:
 				],axis=1)
 			perturb_factor = np.linspace(0,1,undersamp_traj.shape[2])[None,None,:]
 			perturb_factor = np.square(perturb_factor)
-			perturbation *= perturb_factor
+			perturbation *= (perturb_factor * rand_perturb_factor)
 			undersamp_traj += perturbation
 
 		if speed_interpolation is not None:

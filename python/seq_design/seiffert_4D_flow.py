@@ -110,13 +110,13 @@ scan_time = 60*10
 
 estimate_rough_TR = 0.10
 nshots = int(scan_time / estimate_rough_TR) // 8
-nshots = 10
+nshots = 15
 
-spiral_type = 'cones'
+spiral_type = 'my_yarn_ball'
 if spiral_type == 'cones':
 	spiral_settings = Spiral3D.get_default_cones_settings()
-	spiral_settings['width'] = 80
-	spiral_settings['nb_zigzags'] = 20
+	spiral_settings['width'] = 40
+	spiral_settings['nb_zigzags'] = 12
 	spiral_settings['oncurve_samples'] = 160
 	spiral_settings['add_rand_perturb'] = True
 
@@ -124,8 +124,17 @@ if spiral_type == 'cones':
 elif spiral_type == 'seiffert':
 	spiral_settings = Spiral3D.get_default_seiffert_settings()
 	spiral_settings['add_rand_perturb'] = True
-
 	speed_interpolator = None
+elif spiral_type == 'my_yarn_ball':
+	spiral_settings = Spiral3D.get_default_my_yarn_ball_settings()
+	spiral_settings['nb_revs'] = 7
+	spiral_settings['nb_folds'] = 7
+	spiral_settings['add_rand_perturb'] = True
+	spiral_settings['oncurve_samples'] = 800
+	spiral_settings['rand_perturb_factor'] = 1e-3
+
+	speed_interpolator = lambda x: speed_interpolation(x, 2)
+
 
 
 tfret = tf.get_gradients(nshots, spiral_settings, speed_interpolation=speed_interpolator)
@@ -196,8 +205,8 @@ for shotidx, shot in enumerate(shotperm):
 		seq.add_block(pp.make_delay(1e-4))
 
 seq.plot(time_range=(0, TR))
-seq.plot(time_range=(0, 2*TR))
 seq.plot(time_range=(0, 3*TR))
+seq.plot(time_range=(0, 9*TR))
 #seq.plot()
 
 from pypulseq.utils.safe_pns_prediction import safe_example_hw

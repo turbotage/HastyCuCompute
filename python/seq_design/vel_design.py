@@ -168,21 +168,31 @@ class VelocityEncodingFactory:
 					plt.ylabel('Gradient [mT/m]')
 					plt.show()
 
+				smooth_velenc = True
+				if smooth_velenc:
+					kernel = np.linspace(0,1,grad_wave.shape[0] // 4) - 0.5
+					kernel = np.exp(-np.square(kernel)/0.05)
+					kernel /= np.sum(kernel)
+
+					#plt.figure()
+					#plt.plot(kernel)
+					#plt.title('Smoothing kernel')
+					#plt.show()
+
+					grad_wave = np.convolve(grad_wave, kernel, mode='full')
+
 				grad_wave = np.concatenate([grad_wave, np.zeros((self.ltik.max_kernel_length,))])
 
 				DM0, DM1, DM2, venc = self.calculate_moments_and_venc(*self.ltik_corrected_upsamp_grad(grad_wave, channels[i]))
 
-				if self.print_calc:
-					print('Zeroth order moment: ', DM0, ' First order moment: ', DM1, 'Second order moment: ', DM2, ' Venc: ', venc)
+				#if self.print_calc:
+				print('Zeroth order moment: ', DM0, ' First order moment: ', DM1, 'Second order moment: ', DM2, ' Venc: ', venc)
 
 				grad_waves.append(grad_wave)
 				grad_properties.append((DM0, DM1, DM2, venc))
 
 		return grad_waves, grad_properties
 
-
-
-		
 
 
 if __name__ == "__main__":
