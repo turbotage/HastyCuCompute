@@ -70,6 +70,9 @@ def initialize_my_yarn_ball(
 	theta_tilt = np.pi * rng.rvs(Nc)
 	phi_tilt = np.random.uniform(0, 2*np.pi, Nc)
 
+	theta_tilt *= 0.0
+	phi_tilt *= 0.0
+
 	plot = False
 	if plot:
 		plt.figure()
@@ -81,22 +84,25 @@ def initialize_my_yarn_ball(
 		plt.show()
 
 	t = np.linspace(0,1,Ns)
-	t = np.square(t) / (t + 0.01)
+	lag_length = Ns//100
+	t_lagged = np.concatenate([np.zeros((lag_length,)), (np.square(t) / (t + 0.1))[:-lag_length]])
 
 	omega = 2*np.pi*nb_revs
 
-	rho_0 = 1*t
+	rho_0 = 1*(np.square(t) / (t+0.1))
 	rho_wiggle = 1#(1 + 0.2*np.sin(nb_envelopes*2*np.pi*t))
 	rho = rho_0*rho_wiggle
 
-	x = rho*np.cos(omega*t)
-	y = rho*np.sin(omega*t)
+	omega = omega * (t_lagged)**0.8
+
+	x = rho*np.cos(omega)
+	y = rho*np.sin(omega)
 	z = np.zeros_like(t)
 	traj = np.stack([x,y,z],axis=0)
 
 	rot_angle = np.pi*nb_folds/Ns
 	for i in range(1,Ns):
-		ti = t[i]
+		ti = t_lagged[i]
 		rmat = Ra(np.array([np.cos(ti), np.sin(ti), 0.0]), rot_angle*i)
 		traj[:,i] = (rmat @ traj[:,i][:,None])[:,0]
 

@@ -32,7 +32,7 @@ def speed_interpolation(undersamp_traj, option):
 		tnew = np.linspace(0, t_end, 5*PRE_N_SAMPLES)
 		tnew = k1*(1.0 - np.exp(-k2*tnew))
 	elif option==2:
-		k1 = 0.05
+		k1 = 0.02
 		k2 = 5.0
 		t_end = ((1/k2) + math.sqrt(k1))**2 - k1
 		tnew = np.linspace(0, t_end, 5*PRE_N_SAMPLES)
@@ -52,7 +52,7 @@ def speed_interpolation(undersamp_traj, option):
 	undersamp_traj = cs(tnew) 
 	return undersamp_traj
 
-venc1 = 0.3
+venc1 = 0.5
 venc2 = 0.8
 
 system = pp.Opts(
@@ -77,18 +77,18 @@ imgprop = ImageProperties([320,320,320],
 
 vencs = [None, 		 None, 		 None] 		 + \
 		[venc1*-1.0, venc1*-1.0, venc1*-1.0] + \
-		[venc1* 1.0, venc1* 1.0, venc1*-1.0] + \
-		[venc1* 1.0, venc1*-1.0, venc1* 1.0] + \
-		[venc1*-1.0, venc1* 1.0, venc1* 1.0] + \
-		[venc2*-1.0, venc2*-1.0, venc2* 1.0] + \
 		[venc2* 1.0, venc2*-1.0, venc2*-1.0] + \
-		[venc2*-1.0, venc2* 1.0, venc2*-1.0]
+		[venc1* 1.0, venc1* 1.0, venc1*-1.0] + \
+		[venc2*-1.0, venc2*-1.0, venc2* 1.0] + \
+		[venc1* 1.0, venc1*-1.0, venc1* 1.0] + \
+		[venc2*-1.0, venc2* 1.0, venc2*-1.0] + \
+		[venc1*-1.0, venc1* 1.0, venc1* 1.0]
 
 channels = []
 for i,_ in enumerate(vencs):
 	channels += ['x', 'y', 'z']
 
-vef = VelocityEncodingFactory(ltik, sl, print_calc=False)
+vef = VelocityEncodingFactory(ltik, SafetyLimits(0.7, 0.95), print_calc=False)
 VelEnc_ret = vef.get_gradients(vencs, channels)
 VelEnc_grads = []
 VelEnc_props = []
@@ -110,7 +110,7 @@ scan_time = 60*10
 
 estimate_rough_TR = 0.10
 nshots = int(scan_time / estimate_rough_TR) // 8
-nshots = 15
+nshots = 1
 
 spiral_type = 'my_yarn_ball'
 if spiral_type == 'cones':
@@ -127,8 +127,8 @@ elif spiral_type == 'seiffert':
 	speed_interpolator = None
 elif spiral_type == 'my_yarn_ball':
 	spiral_settings = Spiral3D.get_default_my_yarn_ball_settings()
-	spiral_settings['nb_revs'] = 7
-	spiral_settings['nb_folds'] = 7
+	spiral_settings['nb_revs'] = 17
+	spiral_settings['nb_folds'] = 5
 	spiral_settings['add_rand_perturb'] = True
 	spiral_settings['oncurve_samples'] = 800
 	spiral_settings['rand_perturb_factor'] = 1e-3
@@ -156,16 +156,6 @@ T1 = 1.9 # We target blood with T1 approx 1.9 s
 ernst_angle = np.arccos(np.exp(-TR/T1))
 print('TR: ', TR, 'Ernst angle: ', np.rad2deg(ernst_angle))
 
-rf, gzs, gzsr = pp.make_sinc_pulse(
-	ernst_angle,
-	system=system,
-	duration=3e-3,
-	slice_thickness=imgprop.fov[2],
-	apodization=0.5,
-	time_bw_product=4,
-	return_gz=True,
-)
-
 vel_enc_adc = pp.make_adc(
 					num_samples=VELENC_N_SAMPLES, 
 					duration=VELENC_TIME, 
@@ -182,11 +172,28 @@ traj_adc = pp.make_adc(
 
 shotperm = np.random.permutation(nshots)
 
-seq = pp.Sequence(system=system)
 
+rf_spoiling_inc = 117
+rf_inc = 0
+rf_phase = 0
+
+rf, gzs, gzsr = pp.make_sinc_pulse(
+	ernst_angle,
+	system=system,
+	duration=3e-3,
+	slice_thickness=imgprop.fov[2],
+	apodization=0.5,
+	time_bw_product=4,
+	return_gz=True,
+)
+
+seq = pp.Sequence(system=system)
 for shotidx, shot in enumerate(shotperm):
 
 	for encidx, velenc_grad in enumerate(VelEnc_grads):
+		rf.phase_offset = math.pi * rf_phase / 180.0
+		traj_adc.phase_offset = math.pi * rf_phase / 180.0
+		vel_enc_adc.phase_offset = math.pi * rf_phase / 180.0
 
 		seq.add_block(rf, gzsr)
 
