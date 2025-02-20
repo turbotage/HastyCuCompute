@@ -52,8 +52,8 @@ def speed_interpolation(undersamp_traj, option):
 	undersamp_traj = cs(tnew) 
 	return undersamp_traj
 
-venc1 = 0.5
-venc2 = 0.8
+venc1 = 0.4
+venc2 = 0.9
 
 system = pp.Opts(
 	max_grad=80, grad_unit='mT/m', 
@@ -73,7 +73,6 @@ ltik = LTIGradientKernels(system, LTIGradientKernels.kernels_from_test(system.gr
 sl = SafetyLimits()
 imgprop = ImageProperties([320,320,320], 
 			np.array([220e-3, 220e-3, 220e-3]), np.array([320,320,320]))
-
 
 vencs = [None, 		 None, 		 None] 		 + \
 		[venc1*-1.0, venc1*-1.0, venc1*-1.0] + \
@@ -108,9 +107,9 @@ tf = Spiral3D(ltik, sl, imgprop, print_calc=True)
 
 scan_time = 60*10
 
-estimate_rough_TR = 0.10
+estimate_rough_TR = 0.03
 nshots = int(scan_time / estimate_rough_TR) // 8
-nshots = 1
+nshots = 20
 
 spiral_type = 'my_yarn_ball'
 if spiral_type == 'cones':
@@ -185,6 +184,7 @@ rf, gzs, gzsr = pp.make_sinc_pulse(
 	apodization=0.5,
 	time_bw_product=4,
 	return_gz=True,
+	max_slew=system.max_slew / 5,
 )
 
 seq = pp.Sequence(system=system)
@@ -197,11 +197,11 @@ for shotidx, shot in enumerate(shotperm):
 
 		seq.add_block(rf, gzsr)
 
-		vel_gx = pp.make_arbitrary_grad(channel='x', waveform=velenc_grad[0], system=system)
-		vel_gy = pp.make_arbitrary_grad(channel='y', waveform=velenc_grad[1], system=system)
-		vel_gz = pp.make_arbitrary_grad(channel='z', waveform=velenc_grad[2], system=system)
+		#vel_gx = pp.make_arbitrary_grad(channel='x', waveform=velenc_grad[0], system=system)
+		#vel_gy = pp.make_arbitrary_grad(channel='y', waveform=velenc_grad[1], system=system)
+		#vel_gz = pp.make_arbitrary_grad(channel='z', waveform=velenc_grad[2], system=system)
 
-		seq.add_block(vel_gx, vel_gy, vel_gz, vel_enc_adc)
+		#seq.add_block(vel_gx, vel_gy, vel_gz, vel_enc_adc)
 
 		traj_gx = pp.make_arbitrary_grad(channel='x', waveform=traj_grad_list[shot, 0, :], system=system)
 		traj_gy = pp.make_arbitrary_grad(channel='y', waveform=traj_grad_list[shot, 1, :], system=system)

@@ -177,10 +177,10 @@ class Spiral3D:
 		downramp_slew = end_traj_gi / DT
 		downramp_gi = np.flip(np.arange(DT_N)[None,None,:] * GRT * downramp_slew, axis=2)
 
-		# Start the trajectory with 2 GRT of zero gradients
+		# Start and end the trajectory with 3 GRT of zero gradients
 		zero_gi = np.zeros((gi.shape[0],3,3))
 
-		gi = np.concatenate([zero_gi, gi, downramp_gi], axis=2)
+		gi = np.concatenate([zero_gi, gi, downramp_gi, zero_gi], axis=2)
 
 		trajectory = traj_from_grad(gi, GRT)
 
@@ -197,16 +197,16 @@ class Spiral3D:
 
 		end_traj_gi = gi[:,:,-1][:,:,None]
 		max_end_gi = np.abs(end_traj_gi).max()
-		DT = max_end_gi / (0.95*safe_max_slew)
+		DT = 1.2*max_end_gi / (safe_max_slew)
 		DT_N = math.ceil(DT / GRT)
 		DT = DT_N * GRT
 		downramp_slew = end_traj_gi / DT
-		downramp_gi = np.flip(np.arange(DT_N)[None,None,:] * GRT * downramp_slew, axis=2)
+		downramp_gi = np.flip(np.arange(DT_N+1)[None,None,:] * GRT * downramp_slew, axis=2)
 
 		# Start the trajectory with 2 GRT of zero gradients
-		zero_gi = np.zeros((gi.shape[0],3,3))
+		zero_gi = np.zeros((gi.shape[0],3,2))
 
-		gi = np.concatenate([zero_gi, gi, downramp_gi], axis=2)
+		gi = np.concatenate([zero_gi, gi, downramp_gi, zero_gi], axis=2)
 
 		trajectory = traj_from_grad(gi, GRT)
 
@@ -295,15 +295,18 @@ class Spiral3D:
 				break
 		print('')
 
-		max_slew_shot = np.argmax(np.abs(gi).max(axis=(1,2)), axis=0)
-		random_shot = np.random.randint(0, nshots)
-		plot31(convert(gi[max_slew_shot,...], from_unit='Hz/m', to_unit='mT/m'), 'Gradient', norm=True)
-		plot31(convert(si[max_slew_shot,...], from_unit='Hz/m/s', to_unit='T/m/s'), 'Slew Rate', norm=True)
-
+		if self.print_calc:
+			max_slew_shot = np.argmax(np.abs(si).max(axis=(1,2)), axis=0)
+			max_grad_shot = np.argmax(np.abs(gi).max(axis=(1,2)), axis=0)
+			plot31(convert(gi[max_slew_shot,...], from_unit='Hz/m', to_unit='mT/m'), 'Gradient : Max Slew Spoke', norm=True)
+			plot31(convert(si[max_slew_shot,...], from_unit='Hz/m/s', to_unit='T/m/s'), 'Slew Rate : Max Slew Spoke', norm=True)
+			plot31(convert(gi[max_grad_shot,...], from_unit='Hz/m', to_unit='mT/m'), 'Gradient : Max Slew Spoke', norm=True)
+			plot31(convert(si[max_grad_shot,...], from_unit='Hz/m/s', to_unit='T/m/s'), 'Slew Rate : Max Slew Spoke', norm=True)
+			plot31(trajectory[max_slew_shot,...], 'Trajectory : Max Slew Spoke')
+			plot31(trajectory[max_grad_shot,...], 'Trajectory : Max Grad Spoke')
+		
 		max_grad = np.abs(gi).max()
 		max_slew = np.abs(si).max()
-
-		plot31(trajectory[max_slew_shot,...], 'Trajectory')
 
 		return trajectory, gi, si, max_grad, max_slew
 
@@ -340,7 +343,7 @@ class Spiral3D:
 		delta_k = 1.0 / self.imgprop.fov
 
 		undersamp_traj = np.ascontiguousarray(undersamp_traj.transpose(0,2,1))
-		undersamp_traj *= (resolution * delta_k)[None,:,None]
+		undersamp_traj *= (0.5*resolution * delta_k)[None,:,None]
 
 		if spiral_settings['add_rand_perturb']:
 			rand_perturb_factor = spiral_settings['rand_perturb_factor']
@@ -365,7 +368,7 @@ class Spiral3D:
 			print('Max gradient: ', convert(max_grad, from_unit='Hz/m', to_unit='mT/m'))
 			print('Max slew: ', convert(max_slew, from_unit='Hz/m/s', to_unit='T/m/s'))
 
-			rand_sample_mask = np.random.randint(0, nshots, 50)
+			rand_sample_mask = np.random.randint(0, nshots, min(25, nshots))
 			traj_subsample = trajectory[rand_sample_mask,...].transpose(0,2,1)
 			tu.show_trajectory(0.5 * traj_subsample / np.abs(traj_subsample).max(), 0, figure_size = 8)
 

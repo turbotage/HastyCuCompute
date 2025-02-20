@@ -70,8 +70,8 @@ def initialize_my_yarn_ball(
 	theta_tilt = np.pi * rng.rvs(Nc)
 	phi_tilt = np.random.uniform(0, 2*np.pi, Nc)
 
-	theta_tilt *= 0.0
-	phi_tilt *= 0.0
+	#theta_tilt *= 0.0
+	#phi_tilt *= 0.0
 
 	plot = False
 	if plot:
@@ -115,7 +115,7 @@ def initialize_my_yarn_ball(
 		rmat = Rz(phi) @ Ry(theta)
 		traj = np.concatenate([traj, (rmat @ traj[0])[None,...]], axis=0)
 
-	traj = traj.transpose(0,2,1)
+	traj = traj[1:].transpose(0,2,1)
 	traj = 0.5*traj / np.abs(traj).max()
 
 	if plot:
