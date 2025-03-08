@@ -32,7 +32,7 @@ def speed_interpolation(undersamp_traj, option):
 		tnew = np.linspace(0, t_end, 5*PRE_N_SAMPLES)
 		tnew = k1*(1.0 - np.exp(-k2*tnew))
 	elif option==2:
-		k1 = 0.02
+		k1 = 0.05
 		k2 = 5.0
 		t_end = ((1/k2) + math.sqrt(k1))**2 - k1
 		tnew = np.linspace(0, t_end, 5*PRE_N_SAMPLES)
@@ -52,8 +52,8 @@ def speed_interpolation(undersamp_traj, option):
 	undersamp_traj = cs(tnew) 
 	return undersamp_traj
 
-venc1 = 0.4
-venc2 = 0.9
+venc1 = 0.8
+venc2 = 0.18
 
 system = pp.Opts(
 	max_grad=80, grad_unit='mT/m', 
@@ -179,7 +179,7 @@ rf_phase = 0
 rf, gzs, gzsr = pp.make_sinc_pulse(
 	ernst_angle,
 	system=system,
-	duration=3e-3,
+	duration=1e-3,
 	slice_thickness=imgprop.fov[2],
 	apodization=0.5,
 	time_bw_product=4,
@@ -197,11 +197,11 @@ for shotidx, shot in enumerate(shotperm):
 
 		seq.add_block(rf, gzsr)
 
-		#vel_gx = pp.make_arbitrary_grad(channel='x', waveform=velenc_grad[0], system=system)
-		#vel_gy = pp.make_arbitrary_grad(channel='y', waveform=velenc_grad[1], system=system)
-		#vel_gz = pp.make_arbitrary_grad(channel='z', waveform=velenc_grad[2], system=system)
+		vel_gx = pp.make_arbitrary_grad(channel='x', waveform=velenc_grad[0], system=system)
+		vel_gy = pp.make_arbitrary_grad(channel='y', waveform=velenc_grad[1], system=system)
+		vel_gz = pp.make_arbitrary_grad(channel='z', waveform=velenc_grad[2], system=system)
 
-		#seq.add_block(vel_gx, vel_gy, vel_gz, vel_enc_adc)
+		seq.add_block(vel_gx, vel_gy, vel_gz, vel_enc_adc)
 
 		traj_gx = pp.make_arbitrary_grad(channel='x', waveform=traj_grad_list[shot, 0, :], system=system)
 		traj_gy = pp.make_arbitrary_grad(channel='y', waveform=traj_grad_list[shot, 1, :], system=system)

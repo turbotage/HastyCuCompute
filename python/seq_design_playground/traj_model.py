@@ -6,6 +6,9 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import traj_utils as tu
 import math
+import pypulseq as pp
+from sequtil import SafetyLimits, LTIGradientKernels, ImageProperties
+import numpy as np
 
 class PNS:
 	def __init__(self,
@@ -41,6 +44,9 @@ class PNS:
 
 			return R
 
+
+
+
 def target_distribution(x, t, mean, std, tmax):
 	r = torch.square(x).sum(dim=0).sqrt()
 	meant = mean(t)
@@ -49,8 +55,6 @@ def target_distribution(x, t, mean, std, tmax):
 	const = 3*math.sqrt(2) / (4*(math.pi**(5/2))*(tmax**3))
 
 	return const * torch.exp(-torch.square((r - meant) / (math.sqrt(2)*torch.square(stdt)))) / stdt
-
-
 
 def target_score(x, mean, std, meandt, stddt):
 	c = x[0:3,:]
@@ -107,6 +111,7 @@ def stein_score_matching_loss_fast(xsamp, mean, std, meandt, stddt, num_hutchins
 class TrajectoryModel(nn.Module):
 	def __init__(self, 
 			nshots,
+			nsamp,
 			kspace_edges=None,
 			grad_edges=None,
 			pns=None,
@@ -120,6 +125,7 @@ class TrajectoryModel(nn.Module):
 			):
 		super().__init__()
 		
+		self.pns = pns
 		self.device = device
 		self.resolution = resolution.to(device)
 		self.fov = fov.to(device)
@@ -142,20 +148,23 @@ class TrajectoryModel(nn.Module):
 				self.grad_edges = [grad_edges[i].to(device) for i in range(3)]
 			self.nshots = nshots
 			
-			self.tmax = torch.tensor(0.08) #torch.nn.Parameter(torch.tensor(0.08))
+			self.nsamp = nsamp
+			self.tmax = nsamp*grad_raster_time
+			self.times = self.grad_raster_time*torch.arange(self.nsamp)
 
-			self.kspace_freq = torch.nn.Parameter(torch.rand((3,10,nshots)))
-			self.kspace_amp = torch.nn.Parameter(torch.rand((3,10,nshots)))
+			self.kspace_freq = torch.nn.Parameter(torch.rand((3,2,nshots)))
+			self.kspace_amp = torch.nn.Parameter(torch.rand((3,2,nshots)))
 
+	def all_times(self):
+		return self.times.repeat(self.nshots,1)
 
 	def forward(self):
 		with self.device:
-			NGRT = int(self.tmax.item()/self.grad_raster_time)+1
-			times = self.grad_raster_time*torch.arange(NGRT).view(1,1,1,NGRT)
-			kspace = self.kspace_amp.unsqueeze(-1) * torch.sin(2*math.pi*self.kspace_freq.unsqueeze(-1)*times/self.tmax)
+			kspace = self.kspace_amp.unsqueeze(-1) * torch.sin(
+							self.kspace_freq.unsqueeze(-1)*self.times.view(1,1,1,self.nsamp)/self.tmax)
 			kspace = kspace.sum(axis=1)
 
-			return kspace, times.squeeze()
+			return kspace
 
 	def traj_to_grad(self, kspace):
 		# Compute finite difference for gradients
@@ -170,6 +179,18 @@ class TrajectoryModel(nn.Module):
 		sr[...,-1] = sr0[...,-1]
 
 		return g, sr
+	
+	def pns_loss(self, slew_waveform, logt = 1.0):
+		pnsval = self.pns(slew_waveform)
+		if logt < 1.0:
+			return torch.sum(torch.pow(pnsval, 1.0 / logt)) / slew_waveform.numel()
+		else:
+			k1 = 1.0
+			r1 = 1.05
+			d = 80
+			p_2 = k1*((r1*pnsval) - torch.pow(r1*pnsval, d))
+			barrier = (-1/logt)*torch.log(1+p_2)
+			return torch.sum(1+barrier) / slew_waveform.numel()
 
 
 if __name__ == "__main__":
@@ -183,10 +204,11 @@ if __name__ == "__main__":
 		# coord -= res//2
 		# t = torch.linspace(0,0.08, 32)
 		tmax = 0.08
+		mean_slope = 0.5*res / (tmax*fov)
 
-		mean = lambda tarr: res*tarr/tmax
-		std = lambda tarr: torch.ones_like(tarr)*2
-		meandt = lambda tarr: torch.ones_like(tarr)*res/tmax
+		mean = lambda tarr: mean_slope*tarr
+		std = lambda tarr: 2*torch.ones_like(tarr)
+		meandt = lambda tarr: mean_slope*torch.ones_like(tarr)
 		stddt = lambda tarr: torch.zeros_like(tarr)
 
 		# dists = torch.empty((t.shape[0], res, res, res), device=device)
@@ -195,33 +217,73 @@ if __name__ == "__main__":
 		# x = torch.concatenate([coord, torch.ones_like(coord[:,0]).unsqueeze(-1)*t[0]], dim=-1)
 
 		#loss = stein_score_matching_loss_fast(x, mean, std, meandt, stddt)
-		
+		nsamp = 10000
+
+		system = pp.Opts(
+			max_grad=80, grad_unit='mT/m', 
+			max_slew=200, slew_unit='T/m/s',
+			rf_raster_time=2e-6,
+			rf_dead_time=100e-6,
+			rf_ringdown_time=60e-6,
+			adc_raster_time=2e-6,
+			adc_dead_time=40e-6,
+			grad_raster_time=4e-6,
+			block_duration_raster=4e-6,
+			B0=3.0, 
+		)
+
+		ltik = LTIGradientKernels(system, LTIGradientKernels.kernels_from_test(system.grad_raster_time))
+		sl = SafetyLimits()
+		#imgprop = ImageProperties([320,320,320], 
+		#			np.array([220e-3, 220e-3, 220e-3]), np.array([320,320,320]))
+
+
+		pns = PNS(
+			nsamp=nsamp,
+			grad_raster_time=system.grad_raster_time, 
+			max_pns=0.905, 
+			device=device
+		)
+
 		tm = TrajectoryModel(
-			nshots=32, 
+			nshots=32,
+			nsamp=nsamp, 
 			kspace_edges=None, 
 			grad_edges=None, 
-			pns=None, 
+			pns=pns, 
 			device=torch.device('cuda:0'),
 			resolution=torch.tensor([res,res,res]),
-			fov=torch.tensor([0.2,0.2,0.2])
-			)
+			fov=torch.tensor([0.2,0.2,0.2]),
+			grad_raster_time=system.grad_raster_time
+		)
 
 
 		optimizer = torch.optim.SGD(tm.parameters(), lr=1e-9, momentum=0.9)
 		for i in range(1000):
 
-			kspace, times = tm()
+			kspace = tm()
+
+			times = tm.all_times()
 
 			if i % 100 == 0:
-				to_plot = kspace[:,:,::100].permute(1,2,0)
+				to_plot = kspace[:,0:1,::100].permute(1,2,0)
 				to_plot = 0.5 * to_plot / to_plot.abs().max()
 				tu.show_trajectory(to_plot.detach().cpu().numpy(), 0, 8)
 
-			times = times.repeat(kspace.shape[1])
-			x = torch.cat([kspace.view(3, kspace.shape[1]*kspace.shape[2]), times.unsqueeze(0)], dim=0)
+			x = torch.cat(	[
+								kspace.view(3, kspace.shape[1]*kspace.shape[2]), 
+								times.view(1, times.shape[0]*times.shape[1])
+							], dim=0)
 
-			loss = stein_score_matching_loss_fast(x, mean, std, meandt, stddt)
-			print('Loss: ', loss.item())
+			stein_loss = stein_score_matching_loss_fast(x, mean, std, meandt, stddt)
+
+			grad, slew = tm.traj_to_grad(kspace)
+
+			pns_loss = 1e10*tm.pns_loss(slew)
+
+			loss = stein_loss + pns_loss
+
+			print('Stein Loss: ', stein_loss.item(), ' PNS Loss: ', pns_loss.item())
 
 			optimizer.zero_grad()
 			loss.backward()
