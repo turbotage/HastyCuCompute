@@ -230,10 +230,10 @@ namespace hasty {
 
 
     export template<is_tensor_operator Op>
-    using tensor_matching_input_op_t = tensor<Op::device_type_t, typename Op::input_tensor_type_t, Op::input_rank_t()>;
+    using tensor_matching_input_op_t = tensor<typename Op::device_type_t, typename Op::input_tensor_type_t, Op::input_rank_t()>;
 
     export template<is_tensor_operator Op>
-    using tensor_matching_output_op_t = tensor<Op::device_type_t, typename Op::output_tensor_type_t, Op::output_rank_t()>;
+    using tensor_matching_output_op_t = tensor<typename Op::device_type_t, typename Op::output_tensor_type_t, Op::output_rank_t()>;
 
 
 

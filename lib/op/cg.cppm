@@ -17,7 +17,7 @@ namespace hasty {
 	requires    std::same_as<typename Op::device_type_t, typename PrecondOp::device_type_t> &&
 				std::same_as<typename Op::output_tensor_type_t, typename PrecondOp::input_tensor_type_t> &&
 				std::same_as<typename Op::output_tensor_rank_t, typename PrecondOp::input_tensor_rank_t>
-	auto conjugate_gradient(sptr<Op> A, sptr<PrecondOp> P, i32 max_inner_iter = 0, i32 max_outer_iter, double tol = 1e-6) 
+	auto conjugate_gradient(sptr<Op> A, sptr<PrecondOp> P, i32 max_inner_iter, i32 max_outer_iter, double tol = 1e-6) 
 	{
 		using D = typename Op::device_type_t;
 		using TT = typename Op::input_tensor_type_t;

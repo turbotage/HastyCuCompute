@@ -3,6 +3,7 @@ import math
 import rot
 
 import spiral_trajectory as sptraj
+import torchinterp1d
 
 def traj_to_grad(kspace, GRT, gamma=42.576e6):
 	with kspace.device:
@@ -147,12 +148,18 @@ class Spiral3D(torch.nn.Module):
 				self.decay_width = spp.decay_width
 
 			#self.r0 = torch.nn.Parameter(torch.scalar_tensor(1000, requires_grad=True))
+			
 			self.r0 = torch.scalar_tensor(900.0)
-			self.n_time_points = 100
+			self.n_time_points = 200
+			self.interp_input_times = torch.linspace(0,1.0,self.n_time_points, requires_grad=False)
+			self.interp_output_times = torch.linspace(0,1.0,self.nsamp-1, requires_grad=False)
 			self.times = torch.nn.Parameter(torch.ones(
 								self.n_time_points, 
 								requires_grad=True
 							)*math.sqrt(system.grad_raster_time))
+			self.gaussian = torch.exp(-torch.square(torch.linspace(-0.5,0.5,int(0.5*self.nsamp / self.n_time_points)))/((0.3)**2))
+			self.gaussian /= torch.sum(self.gaussian)
+			self.gaussian = torch.fft.rfft(self.gaussian.to(torch.float64), n=self.n_time_points).to(torch.complex64)
 
 			self.rad_decay = sptraj.create_decay(
 								self.nsamp, 
@@ -191,7 +198,30 @@ class Spiral3D(torch.nn.Module):
 		with self.device:
 
 			times = torch.zeros(self.nsamp)
-			times[1:] = torch.cumsum(torch.square(self.times), dim=0)
+
+
+			#plt.figure()
+			#plt.plot(self.gaussian.detach().cpu().numpy())
+			#plt.show()
+
+			#plt.figure()
+			#plt.plot(self.times.detach().cpu().numpy())
+			#plt.show()
+
+			#plt.figure()
+			#plt.plot(torch.fft.rfft(self.times).detach().cpu().numpy())
+			#plt.show()
+
+			#plt.figure()
+			#plt.plot((torch.fft.rfft(self.times) * self.gaussian).detach().cpu().numpy())
+			#plt.show()
+
+			newinterp_times = torch.fft.irfft(torch.fft.rfft(self.times) * self.gaussian, n=self.nsamp-1)
+			#plt.figure()
+			#plt.plot(newinterp_times.detach().cpu().numpy())
+			#plt.show()
+
+			times[1:] = torch.cumsum(newinterp_times, dim=0)
 
 			traj = sptraj.spiral_trajectory(
 						times,
@@ -232,15 +262,18 @@ class Spiral3D(torch.nn.Module):
 
 			R = torch.sqrt(torch.square(R).sum(axis=0))
 
+			# Try to be close to 0.8
+			ret = 10*torch.linalg.norm(R-0.8) / R.shape[0]
+
 			if logt < 1.0:
-				return torch.sum(torch.pow(R, 1.0/logt)) / R.shape[0], R
+				return ret + torch.sum(torch.pow(R, 1.0/logt)) / R.shape[0], R
 			else:
 				k1 = 1.0
 				r1 = 1.05
 				d = 80
 				p_2 = k1*((r1*R) - torch.pow(r1*R, d))
 				barrier = (-1/logt)*torch.log(1+p_2)
-				return torch.sum(1+barrier) / R.shape[0], R
+				return ret + torch.sum(1+barrier) / R.shape[0], R
 
 	def slew_bound_loss(self, slew, logt):
 		with self.device:
@@ -277,31 +310,33 @@ if __name__ == "__main__":
 	from scipy.interpolate import interp1d
 	import matplotlib.pyplot as plt
 
-	nsamp = 4000
+	nsamp = 2300
+
+	device = torch.device('cuda:0')
 
 	spp = Spiral3DProperties(
 		nsamp = nsamp,
-		nb_revs = torch.scalar_tensor(5.0), 
-		nb_folds = torch.scalar_tensor(5.0), 
-		nb_rots = torch.scalar_tensor(1.0), 
-		theta = torch.scalar_tensor(0.0), 
-		phi = torch.scalar_tensor(0.0), 
+		nb_revs = torch.scalar_tensor(5.0, device=device), 
+		nb_folds = torch.scalar_tensor(5.0, device=device), 
+		nb_rots = torch.scalar_tensor(1.0, device=device), 
+		theta = torch.scalar_tensor(0.0, device=device), 
+		phi = torch.scalar_tensor(0.0, device=device), 
 		radial_downramp_start = int(0.85*nsamp),
 		radial_downramp_stop = nsamp-1,
 		rev_downramp_start = None,
 		fold_downramp_start = None,
 		rot_downramp_start = None,
-		decay_width = torch.scalar_tensor(0.3)
+		decay_width = torch.scalar_tensor(0.3, device=device)
 	)
 
 	system = System(max_slew=200, max_grad=80, grad_raster_time=4e-6)
 
-	spiral = Spiral3D(nsamp, spp, system, torch.device('cpu'))
+	spiral = Spiral3D(nsamp, spp, system, device=device)
 
 	optimizer = torch.optim.Adam(spiral.parameters(), lr=1e-2)
 
 	GRT = spiral.system.grad_raster_time
-	system_times = GRT*torch.arange(nsamp, device=spiral.device)
+	system_times = GRT*torch.arange(nsamp, device=device)
 
 	niter = 50000
 	for iter in range(niter):
@@ -310,10 +345,10 @@ if __name__ == "__main__":
 
 		g, s = traj_to_grad(traj, GRT)
 
-		pns_loss, pns_val = spiral.pns_loss(s, system_times, 0.2)
+		pns_loss, pns_val = spiral.pns_loss(s, system_times, 0.1)
 
 		grad_loss = spiral.grad_bound_loss(g, 0.1)
-		slew_loss = spiral.slew_bound_loss(s, 0.5)
+		slew_loss = spiral.slew_bound_loss(s, 0.1)
 
 		loss = pns_loss + grad_loss + slew_loss
 

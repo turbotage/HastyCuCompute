@@ -2,7 +2,11 @@ module;
 
 #include "pch.hpp"
 
-export module misc;
+export module mri:misc;
+
+import util;
+import trace;
+import tensor;
 
 namespace hasty {
 

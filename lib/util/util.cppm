@@ -53,12 +53,33 @@ namespace hasty {
     private:
         T&& _obj;
     };
-    
-    void synchronize() {
+
+    export enum struct device_idx {
+        CPU = -1,
+        CUDA0 = 0,
+        CUDA1 = 1,
+        CUDA2 = 2,
+        CUDA3 = 3,
+        CUDA4 = 4,
+        CUDA5 = 5,
+        CUDA6 = 6,
+        CUDA7 = 7,
+        CUDA8 = 8,
+        CUDA9 = 9,
+        CUDA10 = 10,
+        CUDA11 = 11,
+        CUDA12 = 12,
+        CUDA13 = 13,
+        CUDA14 = 14,
+        CUDA15 = 15,
+        MAX_CUDA_DEVICES = 16
+    };
+
+    export void synchronize() {
         torch::cuda::synchronize();
     }
 
-    void synchronize(device_idx idx) {
+    export void synchronize(device_idx idx) {
         torch::cuda::synchronize(i32(idx));
     }
 

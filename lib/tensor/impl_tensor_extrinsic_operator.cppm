@@ -26,16 +26,16 @@ namespace hasty {
         return tensor<D1,nonloss_type_t<TT1,TT2>,RETRANK>(new_shape, std::move(newtensor));
     }
 
-    export template<is_device D, is_tensor_type TT, size_t R>
-    auto operator+(const tensor<D,TT,R>& lhs, base_t<TT> rhs) -> tensor<D,TT,R> {
+    export template<is_device D1, is_tensor_type TT1, size_t R1>
+    auto operator+(const tensor<D1,TT1,R1>& lhs, base_t<TT1> rhs) -> tensor<D1,TT1,R1> {
         at::Tensor newtensor = lhs._pimpl->underlying_tensor.add(rhs);
-        return tensor<D,TT,R>(lhs.get_shape(), std::move(newtensor));
+        return tensor<D1,TT1,R1>(lhs.get_shape(), std::move(newtensor));
     }
 
-    export template<is_device D, is_tensor_type TT, size_t R>
-    auto operator+(base_t<TT> lhs, const tensor<D,TT,R>& rhs) -> tensor<D,TT,R> {
+    export template<is_device D1, is_tensor_type TT1, size_t R1>
+    auto operator+(base_t<TT1> lhs, const tensor<D1,TT1,R1>& rhs) -> tensor<D1,TT1,R1> {
         at::Tensor newtensor = rhs._pimpl->underlying_tensor.add(lhs);
-        return tensor<D,TT,R>(rhs.get_shape(), std::move(newtensor));
+        return tensor<D1,TT1,R1>(rhs.get_shape(), std::move(newtensor));
     }
 
     // SUBTRACTION
@@ -55,17 +55,17 @@ namespace hasty {
 
         return tensor<D1,nonloss_type_t<TT1,TT2>,RETRANK>(new_shape, std::move(newtensor));
     }
-
-    export template<is_device D, is_tensor_type TT, size_t R>
-    auto operator-(const tensor<D,TT,R>& lhs, base_t<TT> rhs) -> tensor<D,TT,R> {
+    
+    export template<is_device D1, is_tensor_type TT1, size_t R1>
+    auto operator-(const tensor<D1,TT1,R1>& lhs, base_t<TT1> rhs) -> tensor<D1,TT1,R1> {
         at::Tensor newtensor = lhs._pimpl->underlying_tensor.sub(rhs);
-        return tensor<D,TT,R>(lhs.get_shape(), std::move(newtensor));
+        return tensor<D1,TT1,R1>(lhs.get_shape(), std::move(newtensor));
     }
 
-    export template<is_device D, is_tensor_type TT, size_t R>
-    auto operator-(base_t<TT> lhs, const tensor<D,TT,R>& rhs) -> tensor<D,TT,R> {
+    export template<is_device D1, is_tensor_type TT1, size_t R1>
+    auto operator-(base_t<TT1> lhs, const tensor<D1,TT1,R1>& rhs) -> tensor<D1,TT1,R1> {
         at::Tensor newtensor = rhs._pimpl->underlying_tensor.sub(lhs);
-        return tensor<D,TT,R>(rhs.get_shape(), std::move(newtensor));
+        return tensor<D1,TT1,R1>(rhs.get_shape(), std::move(newtensor));
     }
 
     // MULTIPLICATION
@@ -85,16 +85,16 @@ namespace hasty {
         return tensor<D1,nonloss_type_t<TT1,TT2>,RETRANK>(new_shape, std::move(newtensor));
     }
 
-    export template<is_device D, is_tensor_type TT, size_t R>
-    auto operator*(const tensor<D,TT,R>& lhs, base_t<TT> rhs) -> tensor<D,TT,R> {
+    export template<is_device D1, is_tensor_type TT1, size_t R1>
+    auto operator*(const tensor<D1,TT1,R1>& lhs, base_t<TT1> rhs) -> tensor<D1,TT1,R1> {
         at::Tensor newtensor = lhs._pimpl->underlying_tensor.mul(rhs);
-        return tensor<D,TT,R>(lhs.get_shape(), std::move(newtensor));
+        return tensor<D1,TT1,R1>(lhs.get_shape(), std::move(newtensor));
     }
 
-    export template<is_device D, is_tensor_type TT, size_t R>
-    auto operator*(base_t<TT> lhs, const tensor<D,TT,R>& rhs) -> tensor<D,TT,R> {
+    export template<is_device D1, is_tensor_type TT1, size_t R1>
+    auto operator*(base_t<TT1> lhs, const tensor<D1,TT1,R1>& rhs) -> tensor<D1,TT1,R1> {
         at::Tensor newtensor = rhs._pimpl->underlying_tensor.mul(lhs);
-        return tensor<D,TT,R>(rhs.get_shape(), std::move(newtensor));
+        return tensor<D1,TT1,R1>(rhs.get_shape(), std::move(newtensor));
     }
 
     // DIVISION
@@ -114,16 +114,16 @@ namespace hasty {
         return tensor<D1,nonloss_type_t<TT1,TT2>,RETRANK>(new_shape, std::move(newtensor));
     }
 
-    export template<is_device D, is_tensor_type TT, size_t R>
-    auto operator/(const tensor<D,TT,R>& lhs, base_t<TT> rhs) -> tensor<D,TT,R> {
+    export template<is_device D1, is_tensor_type TT1, size_t R1>
+    auto operator/(const tensor<D1,TT1,R1>& lhs, base_t<TT1> rhs) -> tensor<D1,TT1,R1> {
         at::Tensor newtensor = lhs._pimpl->underlying_tensor.div(rhs);
-        return tensor<D,TT,R>(lhs.get_shape(), std::move(newtensor));
+        return tensor<D1,TT1,R1>(lhs.get_shape(), std::move(newtensor));
     }
 
-    export template<is_device D, is_tensor_type TT, size_t R>
-    auto operator/(base_t<TT> lhs, const tensor<D,TT,R>& rhs) -> tensor<D,TT,R> {
+    export template<is_device D1, is_tensor_type TT1, size_t R1>
+    auto operator/(base_t<TT1> lhs, const tensor<D1,TT1,R1>& rhs) -> tensor<D1,TT1,R1> {
         at::Tensor newtensor = rhs._pimpl->underlying_tensor.div(lhs);
-        return tensor<D,TT,R>(rhs.get_shape(), std::move(newtensor));
+        return tensor<D1,TT1,R1>(rhs.get_shape(), std::move(newtensor));
     }
 
 }

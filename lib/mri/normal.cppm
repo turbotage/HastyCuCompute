@@ -2,7 +2,7 @@ module;
 
 #include "pch.hpp"
 
-export module normal;
+export module mri:normal;
 
 //import pch;
 

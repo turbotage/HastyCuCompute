@@ -2,7 +2,7 @@ module;
 
 #include "pch.hpp"
 
-export module trajectory;
+export module mri:trajectory;
 
 //import pch;
 

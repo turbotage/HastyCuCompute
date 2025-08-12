@@ -6,7 +6,7 @@ set(CMAKE_EXPERIMENTAL_CXX_IMPORT_STD "0e5b6991-d74f-4b3d-a41c-cf096e0b2508")
 
 project("HastyCuCompute" VERSION 0.1 LANGUAGES CXX)
 
-
+message("Hello ${pybind11_DIR}")
 # Add the unsupported compiler flag explicitly
 add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:-allow-unsupported-compiler>)
 
@@ -77,26 +77,24 @@ target_link_libraries(HastyCuCompute PRIVATE CUDA::toolkit)
 target_link_libraries(HastyCuCompute PRIVATE CUDA::nvrtc)
 target_link_libraries(HastyCuCompute PRIVATE CUDA::cudart)
 
+# this gives access to cufinufft
+set(FINUFFT_USE_CUDA ON CACHE BOOL "" FORCE)
+# this disables finufft leaving only cufinufft available
+set(FINUFFT_USE_CPU OFF CACHE BOOL "" FORCE)
 
-find_library(finufft REQUIRED 
-    NAMES 
-        libfinufft finufft
-    HINTS
-        "${finufft_ROOT}/lib" 
-)
-find_library(cufinufft REQUIRED
-    NAMES 
-        libcufinufft cufinufft
-    HINTS
-        "${finufft_ROOT}/lib"
+FetchContent_Declare(
+  finufft
+  GIT_REPOSITORY https://github.com/flatironinstitute/finufft.git
+  GIT_TAG        v2.4.1
 )
 
-message(${finufft})
-message(${cufinufft})
+FetchContent_MakeAvailable(finufft)
 
-target_link_libraries(HastyCuCompute PRIVATE ${finufft})
-target_link_libraries(HastyCuCompute PRIVATE ${cufinufft})
-target_include_directories(HastyCuCompute PRIVATE "${finufft_ROOT}/include")
+target_link_libraries(HastyCuCompute PRIVATE $<BUILD_INTERFACE:finufft>)
+target_link_libraries(HastyCuCompute PRIVATE $<BUILD_INTERFACE:cufinufft>)
+
+set_target_properties(cufinufft PROPERTIES EXPORT_EXCLUDE TRUE)
+
 
 find_package(Torch REQUIRED)
 target_link_libraries(HastyCuCompute PRIVATE ${TORCH_LIBRARIES})
@@ -130,87 +128,6 @@ set_target_properties(HastyCuCompute PROPERTIES
 target_compile_definitions(HastyCuCompute PUBLIC _GLIBCXX_USE_CXX11_ABI=1)
 
 set_target_properties(HastyCuCompute PROPERTIES INSTALL_RPATH "$ORIGIN")
-
-#target_precompile_headers(HastyCuCompute PRIVATE "include/pch.hpp")
-
-#if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-#
-#    file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/pcm)
-#    # Find the base include directory for LibTorch
-#    foreach(dir ${TORCH_INCLUDE_DIRS})
-#        message("Checking " ${dir})
-#        if(EXISTS "${dir}/ATen/core/ivalue.h")
-#            set(TORCH_IVALUE_INCLUDE_DIR ${dir})
-#        endif()
-#        if(EXISTS "${dir}/torch/torch.h")
-#            set(TORCH_TORCH_INCLUDE_DIR ${dir})
-#        endif()
-#        if(EXISTS "${dir}/torch/jit.h")
-#            set(TORCH_JIT_INCLUDE_DIR ${dir})
-#        endif()
-#    endforeach()
-#
-#    set(PCM_INCLUDE_DIRS 
-#            ${TORCH_IVALUE_INCLUDE_DIR} 
-#            ${TORCH_TORCH_INCLUDE_DIR}
-#            ${TORCH_JIT_INCLUDE_DIR})
-#    
-#    list(REMOVE_DUPLICATES PCM_INCLUDE_DIRS)
-#
-#
-#    
-#    set(PCM_INCLUDE_FLAGS "")
-#    foreach(dir ${PCM_INCLUDE_DIRS})
-#        list(APPEND PCM_INCLUDE_FLAGS "-I${dir}")
-#    endforeach()
-#
-#    # Join the include flags into a single string
-#    string(JOIN \t PCM_INCLUDE_FLAGS ${PCM_INCLUDE_FLAGS})
-#
-#    # Define a custom target for GCM files
-#    add_custom_target(PCMFiles ALL
-#        COMMAND ${CMAKE_CXX_COMPILER} 
-#            -x c++-header -stdlib=libc++ -std=gnu++23 -xc++-user-header --precompile
-#            ${PCM_INCLUDE_FLAGS}
-#            -o ${CMAKE_BINARY_DIR}/pcm/ivalue.pcm ${TORCH_IVALUE_INCLUDE_DIR}/ATen/core/ivalue.h
-#        COMMAND ${CMAKE_CXX_COMPILER} 
-#            -x c++-header -stdlib=libc++ -std=gnu++23 -xc++-user-header --precompile
-#            ${PCM_INCLUDE_FLAGS}
-#            -o ${CMAKE_BINARY_DIR}/pcm/torch.pcm ${TORCH_TORCH_INCLUDE_DIR}/torch/torch.h
-#        COMMAND ${CMAKE_CXX_COMPILER} 
-#            -x c++-header -stdlib=libc++ -std=gnu++23 -xc++-user-header --precompile
-#            ${PCM_INCLUDE_FLAGS}
-#            -o ${CMAKE_BINARY_DIR}/pcm/jit.pcm ${TORCH_JIT_INCLUDE_DIR}/torch/jit.h
-#        COMMAND ${CMAKE_CXX_COMPILER} 
-#            -x c++-header -stdlib=libc++ -std=gnu++23 -xc++-user-header --precompile
-#            -I${CUDA_INCLUDE_DIRS}
-#            -o ${CMAKE_BINARY_DIR}/pcm/cuComplex.pcm ${CUDA_INCLUDE_DIRS}/cuComplex.h
-#        DEPENDS ${TORCH_IVALUE_INCLUDE_DIR}/ATen/core/ivalue.h
-#                ${TORCH_TORCH_INCLUDE_DIR}/torch/torch.h
-#                ${TORCH_JIT_INCLUDE_DIR}/torch/jit.h
-#                ${CUDA_INCLUDE_DIRS}/cuComplex.h
-#    )
-#
-#    add_dependencies(HastyCuCompute PCMFiles)
-#
-#    target_compile_options(HastyCuCompute PRIVATE
-#        -fmodule-file=${CMAKE_BINARY_DIR}/pcm/ivalue.pcm
-#        -fmodule-file=${CMAKE_BINARY_DIR}/pcm/torch.pcm
-#        -fmodule-file=${CMAKE_BINARY_DIR}/pcm/jit.pcm
-#        -fmodule-file=${CMAKE_BINARY_DIR}/pcm/cuComplex.pcm
-#    )
-#    #target_include_directories(HastyCuCompute PRIVATE ${CMAKE_BINARY_DIR}/pcm)
-#
-#else()
-#    message(FATAL_ERROR "Only Clang is supported for header units")
-#endif()
-
-
-
-
-
-
-
 
 
 install(FILES include/interface.hpp DESTINATION include/HastyCuCompute)

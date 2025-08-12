@@ -2,10 +2,11 @@ module;
 
 #include "pch.hpp"
 
-export module forward;
+export module mri:adjoint;
 
 import util;
 import tensor;
+import threading;
 
 namespace hasty {
 
@@ -41,7 +42,7 @@ namespace hasty {
 
 		auto output = make_empty_like(smaps);
 
-		int L = bil.shape<0>();
+		int L = bil.template shape<0>();
 
 		auto run_lambda = [&output, &coords, &kdata, &smaps, &bil, &cjl](storage& store, i32 data_idx) 
 		{

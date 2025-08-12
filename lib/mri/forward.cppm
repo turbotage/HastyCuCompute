@@ -2,10 +2,12 @@ module;
 
 #include "pch.hpp"
 
-export module forward;
+export module mri:forward;
 
 import util;
 import tensor;
+import nufft;
+import threading;
 
 namespace hasty {
 
@@ -28,7 +30,7 @@ namespace hasty {
 	@tparam TTC Precision used for NUFFT
 	@tparam DIM Dimension.
 	*/
-	template<is_deice D, is_fp_complex_tensor_type TT, is_fp_real_tensor_type TTC, size_t DIM>
+	template<is_device D, is_fp_complex_tensor_type TT, is_fp_real_tensor_type TTC, size_t DIM>
 	auto sense_forward_offresonance(
 		std::array<cache_tensor<TTC,1>,DIM>& coords,
 		cache_tensor<TT,DIM>& image,
@@ -40,11 +42,11 @@ namespace hasty {
 	{
 		auto spatial_dim = image.shape();
 
-		int64_t number_of_datapts = coords[0].get().shape<0>();
+		int64_t number_of_datapts = coords[0].get().template shape<0>();
 
-		auto output = make_empty_tensor<cpu_t,TT,2>(span<2>{smaps.shape<0>(), coords[0].shape<0>()});
+		auto output = make_empty_tensor<cpu_t,TT,2>(span<2>{smaps.template shape<0>(), coords[0].template shape<0>()});
 
-		auto run_lambda = [&output, &coords, &image, &smaps, &offresonance, &interpt_interpcoeff, number_of_datapts](
+		auto run_lambda = [&output, &coords, &image, &smaps, &bil, &cjl, number_of_datapts](
 			storage& store, i32 data_idx)
 		{
 			device_idx didx = store.get_ref_throw<device_idx>("device_idx");
