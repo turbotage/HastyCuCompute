@@ -18,6 +18,8 @@ namespace hasty {
 	\f[ Ax \f] with the offresonance approximation
 	\f[ e^{z_jt_i} \approx \sum_{l=1}^L b_{il}c_{lj} \f]
 	
+	The forward operation creates one 
+
 	@param coords 
 	@param image
 	@param smaps
@@ -51,9 +53,7 @@ namespace hasty {
 		{
 			device_idx didx = store.get_ref_throw<device_idx>("device_idx");
 
-			i32 interp_steps = interpt_interpcoeff.size();
-
-			if (!store.exists("nufft_plan")) {
+			if (!store.exist("nufft_plan")) {
 				nufft_opts<cuda_t,TTC,DIM> options;
 				options.device_idx = i32(didx);
 				options.nmodes = spatial_dim;
@@ -67,7 +67,7 @@ namespace hasty {
 				}
 
 				std::array<tensor<cuda_t,TTC,1>,DIM> cuda_coords;
-				for_sequence<DIM>([&cuda_coords](auto i) {
+				for_sequence<DIM>([&cuda_coords, &coords, didx](auto i) {
 					cuda_coords[i] = coords[i].get(didx);
 				});
 
@@ -77,17 +77,17 @@ namespace hasty {
 				store.add<nufft_plan<cuda_t,TTC,DIM,nufft_type::FORWARD>>("nufft_plan", std::make_shared(plan));
 			}
 
-			if (!store.exists("image")) {
+			if (!store.exist("image")) {
 				auto cuda_image = image.get(device_idx::CPU).template to<cuda_t>(didx);
 				store.add<tensor<cuda_t,TT,DIM>>("image", cuda_image);
 			}
 
-			if (!store.exists("bil")) {
+			if (!store.exist("bil")) {
 				auto cubil = bil.get(device_idx::CPU).template to<cuda_t>(didx);
 				store.add<tensor<cuda_t,TT,DIM>>("bil", cubil);
 			}
 
-			if (!store.exists("cjl")) {
+			if (!store.exist("cjl")) {
 				auto cucjl = cjl.get(device_idx::CPU).template to<cuda_t>(didx);
 				store.add<tensor<cuda_t,TT,DIM+1>>("cjl", cucjl);
 			}
@@ -97,8 +97,8 @@ namespace hasty {
 			
 			auto temp_img = make_empty_tensor_like(smap);
 			
-			auto output_slice = make_zero_tensor<cuda_t,TT,2>(span<2>{1, number_of_datapts});
-			auto temp_output = make_empty_tensor<cuda_t,complex_t<TTC>,2>(span<2>{1, number_of_datapts});
+			auto output_slice = make_zero_tensor<cuda_t,TT,2>(span<2>({1, number_of_datapts}));
+			auto temp_output = make_empty_tensor<cuda_t,complex_t<TTC>,2>(span<2>({1, number_of_datapts}));
 
 			auto& nufft_plan = store.get_ref_throw<nufft_plan<cuda_t,TTC,DIM,nufft_type::BACKWARD>>("nufft_plan");
 			auto& cuda_bil = store.get_ref_throw<tensor<cuda_t,TT,2>>("bil");
