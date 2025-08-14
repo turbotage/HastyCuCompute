@@ -110,6 +110,108 @@ namespace hasty {
             _block->hashidx = hashidx;
         }
 
+        template<size_t R>
+		requires less_than<R, RANK>
+		int64_t shape() const
+        {
+            if (!_block)
+                throw std::runtime_error("shape: cache_tensor is not initialized");
+            return _block->shape[R];
+        }
+
+        /*
+        @brief Be careful with this operator, if asked device is cpu it will return a view of the tensor,
+        if cuda is asked for and the tensor is already cuda backed, it will return a view of the tensor,
+        if it is not cuda backed, it will create a new cuda tensor that sliced the backing cpu tensor.
+        I.e no view. This behaviour is intentional. It allows a user to make sure that large cpu tensors
+        that should not be copied to cuda are not copied. But slices of the tensors can be copied into
+        cuda. I.e with slicing, you will not populate the cuda cache of this cache_tensor.
+        */
+        template<class D, size_t N>
+        requires less_than_or_equal<N, RANK> && less_than<0, RANK>
+        auto operator[](device_idx didx, const std::array<Slice, N>& slices) const -> tensor<D, TT, RANK>
+        {
+            std::unique_lock<std::mutex> lock(_block->mutex);
+
+            if constexpr(std::is_same_v<D,cpu_t>) {
+                return get_cpu()[slices];
+            } else {
+                if (_block->cuda_tensors[didx]) {
+                    return get_cuda(didx)[slices];
+                } else {
+                    return get_cpu()[slices].template to<cuda_t>(didx);
+                }
+            }
+        }
+
+        /*
+        @brief Be careful with this operator, if asked device is cpu it will return a view of the tensor,
+        if cuda is asked for and the tensor is already cuda backed, it will return a view of the tensor,
+        if it is not cuda backed, it will create a new cuda tensor that sliced the backing cpu tensor.
+        I.e no view. This behaviour is intentional. It allows a user to make sure that large cpu tensors
+        that should not be copied to cuda are not copied. But slices of the tensors can be copied into
+        cuda. I.e with slicing, you will not populate the cuda cache of this cache_tensor.
+        */
+        template<class D, index_type ...Idx>
+        requires less_than<0, RANK>
+        auto operator[](device_idx didx, std::tuple<Idx...> indices) const -> tensor<D, TT, RANK>
+        {
+            std::unique_lock<std::mutex> lock(_block->mutex);
+
+            if constexpr(std::is_same_v<D,cpu_t>) {
+                return get_cpu()[indices];
+            } else {
+                if (_block->cuda_tensors[didx]) {
+                    return get_cuda(didx)[indices];
+                } else {
+                    return get_cpu()[indices].template to<cuda_t>(didx);
+                }
+            }
+        }
+
+        /*
+        @brief Be careful with this operator, if asked device is cpu it will return a view of the tensor,
+        if cuda is asked for and the tensor is already cuda backed, it will return a view of the tensor,
+        if it is not cuda backed, it will create a new cuda tensor that sliced the backing cpu tensor.
+        I.e no view. This behaviour is intentional. It allows a user to make sure that large cpu tensors
+        that should not be copied to cuda are not copied. But slices of the tensors can be copied into
+        cuda. I.e with slicing, you will not populate the cuda cache of this cache_tensor.
+        */
+        template<class D, index_type ...Idx>
+        requires less_than<0, RANK>
+        auto operator[](device_idx didx, Idx... indices) const -> tensor<D, TT, RANK>
+        {
+            std::unique_lock<std::mutex> lock(_block->mutex);
+
+            if constexpr(std::is_same_v<D,cpu_t>) {
+                return get_cpu()[indices...];
+            } else {
+                if (_block->cuda_tensors[didx]) {
+                    return get_cuda(didx)[indices...];
+                } else {
+                    return get_cpu()[indices...].template to<cuda_t>(didx);
+                }
+            }
+        }
+
+
+        template<class D>
+        auto operator[](device_idx didx, const tensor<D, b8_t, RANK>& mask) const -> tensor<D, TT, 1>
+        {
+            std::unique_lock<std::mutex> lock(_block->mutex);
+
+            if constexpr(std::is_same_v<D,cpu_t>) {
+                return get_cpu()[mask];
+            } else {
+                if (_block->cuda_tensors[didx]) {
+                    return get_cuda(didx)[mask];
+                } else {
+                    return get_cpu()[mask].template to<cuda_t>(didx);
+                }
+            }
+        }
+
+
         template<is_device D>
         auto get_ptr(device_idx idx = device_idx::CPU) -> sptr<tensor<D,TT,RANK>> {
             std::unique_lock<std::mutex> lock(_block->mutex);

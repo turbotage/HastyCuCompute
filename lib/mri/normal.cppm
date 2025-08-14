@@ -155,22 +155,22 @@ namespace hasty {
 	/**
 	@brief
 	Performs the operation:
-	\f[Tx\f] where \f[T = \sum_l D_l^H \left[ \sum_s D_s^H T_l D_s \right] D_l\f]
+	\f[Tx\f] where \f[T = \sum_l R_l^H \left[ \sum_s \Psi_s^H F^H T_l F \Psi_s \right] R_l\f]
 	
 	The ordering of the matrices emphasizes the ordering in which the looping is performed. In each iteration \f[l\f], \f[T_l\f] and \f[D_l\f] 
 	will be loaded into device memory, while all diagonal matrices \f[D_s\f] are loaded into
-	device memory before any iterations begin and stay there over all iterations. \f[\sum_s D_s^H T_l D_s \f] is run as one kernel. 
-	When the \f[l\f]'th iteration is complete, \f[T_l\f] is freed from device memory. Freeing \f[D_l\f] is optional and freeing \f[D_s\f] after the entire
+	device memory before any iterations begin and stay there over all iterations. \f[\sum_s \Psi_s^H F^H T_l F \Psi_s \f] is run as one kernel. 
+	When the \f[l\f]'th iteration is complete, \f[T_l\f] is freed from device memory. Freeing \f[D_l\f] is optional and freeing \f[\Psi_s\f] after the entire
 	matrix vector product is complete is also optional.
 	
-	@param kernels_kerneldiags vector of pairs of kernels and kernel diagonals \f[<T_l,D_l>\f]
-	@param stacked_diags stacked diagonals \f[\{D_s\}\f].
+	@param kernels_kerneldiags vector of pairs of kernels and kernel diagonals \f[<T_l,R_l>\f]
+	@param stacked_diags stacked diagonals \f[\{\Psi_s\}\f].
 
 	Example:
 	The normal operator for a common sense operator with off-resonance correction and diagonal phase modulation
 	can be written as:
-	\f[A^HA = D_\phi^H \sum_i S_i^H  \left[ \sum_l D_l^H T_l D_l \right] S_i D_\phi\f]
-	where \f[D_\phi\f] is the diagonal phase modulation matrix, \f[S_i\f] are the coil sensitivity matrices, \f[D_l\f] come from 
+	\f[A^HA = D_\phi^H \sum_i S_i^H  \left[ \sum_l R_l^H F^H T_l F R_l \right] S_i D_\phi\f]
+	where \f[D_\phi\f] is the diagonal phase modulation matrix, \f[S_i\f] are the coil sensitivity matrices, \f[R_l\f] come from 
 	the off-resonance ratemaps and \f[T_l\f] are the toeplitz matrices. This matrix vector with \f[A^HA\f] can be computed by calling this class operator()
 	with the pairs \f[<T_l, D_lD_\phi>\f] and the stacked diagonals \f[S = \{S_i\}\f].
 
@@ -197,9 +197,12 @@ namespace hasty {
 		@tparam DIM Dimension.
 		*/
 		normal_innerlooped_diagonal_toeplitz_operator(
-			std::vector<std::pair<cache_tensor<TT,DIM>, cache_tensor<TT,DIM>>>&& kernels_kerneldiags,
+			cache_tensor<TT,DIM+1>&& kernels, cache_tensor<TT,DIM+1>&& kerneldiags,
 			cache_tensor<TT,DIM+1>&& stacked_diags, i32 fft_batch_size = 4)
-			: _kernels_kerneldiags(std::move(kernels_kerneldiags)), _stacked_diags(std::move(stacked_diags)),
+			: 
+			_kernels(std::move(kernels)), 
+			_kerneldiags(std::move(kerneldiags)),
+			_stacked_diags(std::move(stacked_diags)),
 			_runner(std::remove_reference_t<decltype(*this)>::build_runner()),
 			_fft_batch_size(fft_batch_size)
 		{
@@ -213,7 +216,8 @@ namespace hasty {
 			auto didx = x.get_device_idx();
 
 			// The first term in the sum
-			tensor<D,TT,DIM> out = std::get<0>(_runner.run(x, 
+			tensor<D,TT,DIM> out = std::get<0>(_runner.run(
+				x, 
 				this->_kernels_kerneldiags[0].first.template get<D>(didx), 
 				this->_kernels_kerneldiags[0].second.template get<D>(didx),
 				this->_stacked_diags.template get<D>(didx)
@@ -283,8 +287,8 @@ namespace hasty {
 		expanded_shp = [2*s for s in spatial_shp]
 		transform_dims = [i+1 for i in range(len(spatial_shp))]
 
-		ncoil = stacked_diag.shape[0]
-		nrun = ncoil // {0}
+		nstack = stacked_diag.shape[0]
+		nrun = nstack // {0}
 
 		out = torch.zeros_like(input)
 
@@ -316,7 +320,8 @@ namespace hasty {
 		}
 
 	private:
-		std::vector<std::pair<cache_tensor<TT,DIM>, cache_tensor<TT,DIM>>> _kernels_kerneldiags;
+		cache_tensor<TT,DIM+1> _kernels;
+		cache_tensor<TT,DIM+1> _kerneldiags;
 		cache_tensor<TT,DIM+1> _stacked_diags;
 		i32 _fft_batch_size;
 
@@ -326,10 +331,184 @@ namespace hasty {
 	export template<is_device D, is_fp_complex_tensor_type TT, size_t DIM>
 	using NIDT_OP = normal_innerlooped_diagonal_toeplitz_operator<D,TT,DIM>;
 
+
+	/**
+	@brief
+	Performs the operation:
+	\f[Tx\f] where \f[T = \sum_{i,j} W_{ij} \Psi_i^H \left[ \sum_l R_l^H F^H T_l F R_l \right] \Psi_j\f]
+	
+
+	@param kernels_kerneldiags vector of pairs of kernels and kernel diagonals \f[<T_l,R_l>\f]
+	@param stacked_diags stacked diagonals \f[\{\Psi_s\}\f].
+	@param weights Weights to use when combining stacked diagonals \f[\{\Psi_s\}\f] \f[W_{ij}\f]
+
+	Example:
+	The normal operator for a common sense operator with off-resonance correction and diagonal phase modulation and nose de-whitening
+	can be written as:
+	\f[A^HA = D_\phi^H \left[ \sum_{i,j} W_{ij} S_i^H  \left[ \sum_l R_l^H F^H T_l F R_l \right] S_j \right] D_\phi\f]
+	where \f[D_\phi\f] is the diagonal phase modulation matrix, \f[S_i\f] are the coil sensitivity matrices, \f[R_l\f] come from
+	the off-resonance ratemaps and \f[T_l\f] are the toeplitz matrices.
+
+	@tparam D Device type.
+	@tparam TT Tensor type.
+	@tparam DIM Dimension.
+	*/
+	export template<is_device D, is_fp_complex_tensor_type TT, size_t DIM>
+	class normal_innerlooped_diagonal_toeplitz_operator_weighted_operator {
+	public:
+
+		using device_type_t = D;
+		using input_tensor_type_t = TT;
+		using output_tensor_type_t = TT;
+		static constexpr std::integral_constant<size_t, DIM> input_rank_t = {};
+		static constexpr std::integral_constant<size_t, DIM> output_rank_t = {};
+
+		/**
+		@param kernels_kerneldiags vector of pairs of kernels and kernel diagonals \f[<T_l,D_l>\f]
+		@param stacked_diags stacked diagonals \f[\{D_s\}\f].
+
+		@tparam D Device type.
+		@tparam TT Tensor type.
+		@tparam DIM Dimension.
+		*/
+		normal_innerlooped_diagonal_toeplitz_operator(
+			cache_tensor<TT,DIM+1>&& kernels, cache_tensor<TT,DIM+1>&& kerneldiags,
+			cache_tensor<TT,DIM+1>&& stacked_diags, cache_tensor<TT,2> weights, i32 fft_batch_size = 4)
+			: 
+			_kernels(std::move(kernels)),
+			_kerneldiags(std::move(kerneldiags)),
+			_stacked_diags(std::move(stacked_diags)),
+			_weights(std::move(weights)),
+			_runner(std::remove_reference_t<decltype(*this)>::build_runner()),
+			_fft_batch_size(fft_batch_size)
+		{
+		}
+
+		tensor<D,TT,DIM> operator()(tensor<D,TT,DIM>&& x)
+		{
+			
+			auto didx = x.get_device_idx();
+
+			// The first term in the sum
+			tensor<D,TT,DIM> out = std::get<0>(_runner.run(
+				x,
+				_kernels.operator<D>[didx, 0, Slice{}],
+				_kerneldiags.operator<D>[didx, 0, Slice{}],
+				_stacked_diags.template get<D>(didx),
+				_weights.template get<D>(didx)
+			));
+			
+			// Loop over off kernels >= 1
+			for (int i = 1; i < this->_kernels_kerneldiags.size(); ++i) {
+				std::tuple<tensor<D,TT,DIM>> tensortup = _runner.run(
+					x, 
+					_kernels.operator<D>[didx, i, Slice{}],
+					_kerneldiags.operator<D>[didx, i, Slice{}],
+					this->_stacked_diags.template get<D>(didx),
+					this->_weights.template get<D>(didx)
+				);
+
+				out += std::get<0>(tensortup);
+			}
+
+			return out;
+		}
+
+	protected:
+
+		using INPUT_PROTO_T = trace::tensor_prototype<D,TT,DIM>;
+		using KERNEL_PROTO_T = trace::tensor_prototype<D,TT,DIM>;
+		using DIAG_PROTO_T = trace::tensor_prototype<D,TT,DIM>;
+		using STACKED_DIAG_PROTO_T = trace::tensor_prototype<D,TT,DIM+1>;
+		using WEIGHTS_PROTO_T = trace::tensor_prototype<D,TT,2>;
+
+		using OUTPUT_PROTO_T = trace::tensor_prototype<D,TT,DIM>;
+
+		using TRACE_FUNC_T = trace::trace_function<
+			std::tuple<OUTPUT_PROTO_T>, 
+			std::tuple<	INPUT_PROTO_T,
+						KERNEL_PROTO_T,
+						DIAG_PROTO_T,
+						STACKED_DIAG_PROTO_T>
+		>;
+
+		static auto build_runner() -> TRACE_FUNC_T {
+
+			INPUT_PROTO_T             input("input");
+			KERNEL_PROTO_T            kernel("kernel");
+			DIAG_PROTO_T              diag("diag");
+			STACKED_DIAG_PROTO_T      stacked_diag("stacked_diag");
+			WEIGHTS_PROTO_T           weights("weights");
+
+			
+			OUTPUT_PROTO_T            output("output");
+
+			TRACE_FUNC_T ret = trace::trace_function_factory<OUTPUT_PROTO_T>::make("normal_innerlooped_diagonal_toeplitz_operator", 
+												input, kernel, diag, stacked_diag, weights);
+
+			ret.add_lines(std::format(R"ts(
+	with torch.inference_mode():
+		spatial_shp = input.shape #shp[1:]
+		expanded_shp = [2*s for s in spatial_shp]
+		transform_dims = [i+1 for i in range(len(spatial_shp))]
+
+		nstack = stacked_diag.shape[0]
+		nrun = nstack // {0}
+
+		out = torch.zeros_like(input)
+
+		input = input * diag
+
+		stack_out = torch.empty_like(stacked_diag)
+
+		for run in range(nrun):
+			bst = run*{0}
+			dmap = stacked_diag[bst:(bst+{0})]
+			d = dmap * input
+			d = torch.fft_fftn(d, expanded_shp, transform_dims)
+			d *= kernel
+			d = torch.fft_ifftn(d, None, transform_dims)
+
+			for dim in range(len(spatial_shp)):
+				d = torch.slice(d, dim+1, spatial_shp[dim]-1, -1)
+
+			stack_out[bst:(bst+{0})] = d
+
+		for i in range(nstack):
+			for j in range(nstack):
+				out += weights[i,j] * stacked_diag[i].conj() * stack_out[j]	
+
+		out *= diag.conj()
+		out *= (1 / torch.prod(torch.tensor(spatial_shp)))
+		
+		return out
+)ts", _fft_batch_size));
+
+			ret.compile();
+
+			return ret;
+		}
+
+	private:
+		cache_tensor<TT,DIM+1> _kernels;
+		cache_tensor<TT,DIM+1> _kerneldiags;
+		cache_tensor<TT,DIM+1> _stacked_diags;
+		cache_tensor<TT,2> _weights;
+		i32 _fft_batch_size;
+
+		TRACE_FUNC_T _runner;
+
+	};
+
+
+
+
+
 	/*
 	The masks are stored in a integer mask tensor, a specific mask
 	is selected by bitwise anding the mask tensor with a mask index.
 	*/
+	/*
 	export template<is_device D, is_fp_complex_tensor_type TT, is_int_tensor_type TI, size_t DIM, size_t NUM_MASK>
 	class mask_regularized_operator_sum {
 	public:
@@ -574,6 +753,6 @@ namespace hasty {
 	private:
 		std::unique_ptr<storage_thread_pool> _pool;
 	};
-
+	*/
 
 }

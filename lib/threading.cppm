@@ -18,7 +18,6 @@ namespace hasty {
         }
     ) 
     {
-
         i32 device_count = torch::cuda::device_count();
         std::vector<device_idx> devices;
         devices.reserve(device_count);
@@ -36,107 +35,112 @@ namespace hasty {
     export class storage {
     private:
 
-        struct key {
-            std::string name;
+        struct storage_item {
+            std::shared_ptr<void> ptr;
             std::type_index type;
-
-            bool operator==(const key& other) const {
-                return name == other.name && type == other.type;
-            }
-
         };
 
-        struct key_hash {
-            std::size_t operator()(const key& k) const {
-                return std::hash<std::string>()(k.name) ^ std::hash<std::type_index>()(k.type);
-            }
-        };
-
-        struct key_equal {
-            bool operator()(const key& lhs, const key& rhs) const {
-                return lhs == rhs;
-            }
-        };
-        
-        std::unordered_map<key, std::shared_ptr<void>, key_hash, key_equal> _storage;
-        std::unordered_multimap<std::string, key> _names;
+        std::unordered_map<std::string, storage_item> _storage;
 
     public:
 
         template<typename T>
         auto get_ref(const std::string& name) -> std::optional<std::reference_wrapper<T>> {
-            key k = {name, typeid(T)};
-            auto it = _storage.find(k);
+            auto it = _storage.find(name);
             if (it != _storage.end()) {
-                return std::optional<std::reference_wrapper<T>>(*(T*)it->second.get());
-            } else {
-                return std::nullopt;
+                if (it->second.type != typeid(T)) {
+                    return std::nullopt;
+                }
+                return std::optional<std::reference_wrapper<T>>(*(T*)it->second.ptr.get());
             }
+            return std::nullopt;
         }
 
         template<typename T>
         auto get_ref_throw(const std::string& name) -> T& {
-            key k = {name, typeid(T)};
-            auto it = _storage.find(k);
+            auto it = _storage.find(name);
             if (it != _storage.end()) {
-                return *(T*)it->second.get();
+                if (it->second.type != typeid(T)) {
+                    throw std::runtime_error("Storage does not contain key: " + name + " with type: " + typeid(T).name());
+                }
+                return *(T*)it->second.ptr.get();
+            }
+            throw std::runtime_error("Storage does not contain key: " + name);
+        }
+
+        template<typename T>
+        auto get_ptr(const std::string& name) -> std::shared_ptr<T> {
+            auto it = _storage.find(name);
+            if (it != _storage.end()) {
+                if (it->second.type != typeid(T)) {
+                    return nullptr;
+                }
+                return std::static_pointer_cast<T>(it->second.ptr);
+            }
+            return nullptr;
+        }
+
+        template<typename T>
+        auto get_ptr_throw(const std::string& name) -> std::shared_ptr<T>
+        {
+            auto it = _storage.find(name);
+            if (it != _storage.end()) {
+                if (it->second.type != typeid(T)) {
+                    throw std::runtime_error("Storage does not contain key: " + name + " with type: " + typeid(T).name());
+                }
+                return std::static_pointer_cast<T>(it->second.ptr);
+            }
+            throw std::runtime_error("Storage does not contain key: " + name);
+        }
+
+        template<typename T>
+        void add(const std::string& name, std::shared_ptr<T> ptr) {
+            std::shared_ptr<void> inptr = std::static_pointer_cast<void>(ptr);
+            _storage.insert({name, {inptr, typeid(T)}});
+        }
+
+        template<typename T>
+        void clear(const std::string& name) {
+            auto it = _storage.find(name);
+            if (it != _storage.end()) {
+                if (it->second.type != typeid(T)) {
+                    throw std::runtime_error("Storage does not contain key: " + name + " with type: " + typeid(T).name());
+                }
+                _storage.erase(it);
+            }
+        }
+
+        template<typename T>
+        void clear_throw(const std::string& name) {
+            auto it = _storage.find(name);
+            if (it != _storage.end()) {
+                if (it->second.type != typeid(T)) {
+                    throw std::runtime_error("Storage does not contain key: " + name + " with type: " + typeid(T).name());
+                }
+                _storage.erase(it);
             } else {
                 throw std::runtime_error("Storage does not contain key: " + name);
             }
         }
 
-        template<typename T>
-        auto get_ptr(const std::string& name) -> std::shared_ptr<T> {
-            key k = {name, typeid(T)};
-            auto it = _storage.find(k);
-            if (it != _storage.end()) {
-                std::shared_ptr<T> ret = std::static_pointer_cast<T>(it->second);
-                return ret;
-            } else {
-                return nullptr;
-            }
-        }
-
-        template<typename T>
-        void add(const std::string& name, std::shared_ptr<T> ptr) {
-            key k = {name, typeid(T)};
-            std::shared_ptr<void> inptr = std::static_pointer_cast<void>(ptr);
-            _storage.insert(std::make_pair(k, inptr));
-            _names.insert(std::make_pair(name, k));
-        }
-
-        template<typename T>
         void clear(const std::string& name) {
-            key k = {name, typeid(T)};
-            auto eqit = _names.equal_range(name);
-            for (auto it = eqit.first; it != eqit.second; it++) {
-                if (it->second == k) {
-                    _storage.erase(it->second);
-                    _names.erase(it);
-                    break;
-                }
+            auto it = _storage.find(name);
+            if (it != _storage.end()) {
+                _storage.erase(it);
             }
         }
 
         bool exist(const std::string& name) {
-            return _names.contains(name);
-        };
-
-        std::set<std::string> names() {
-            std::set<std::string> names;
-            for (const auto& [name, key] : _names) {
-                names.insert(name);
-            }
-            return names;
+            return _storage.find(name) != _storage.end();
         }
 
-        std::vector<key> keys() {
-            std::vector<key> keys;
-            keys.reserve(_storage.size());
-            for (const auto& [key, ptr] : _storage) {
-                keys.push_back(key);
+        vset<std::string> names() {
+            vset<std::string> result;
+            result.reserve(_storage.size());
+            for (const auto& [name, str] : _storage) {
+                result.insert_without_check(name);
             }
-            return keys;
+            return result;
         }
 
     };
@@ -199,9 +203,9 @@ namespace hasty {
         template<class F, class... Args>
         std::future<typename std::invoke_result<F, storage&, Args...>::type> enqueue(
             F&& f, 
-            std::set<std::string> must_have_all_names,
-            std::set<std::string> must_have_any_names,
-            std::set<std::string> good_to_have_names,
+            vset<std::string> must_have_all_names,
+            vset<std::string> must_have_any_names,
+            vset<std::string> good_to_have_names,
             Args&&... args) 
         {
             using return_type = typename std::invoke_result<F, storage&, Args...>::type;
@@ -229,6 +233,44 @@ namespace hasty {
 
         const std::vector<storage>& storages() const {
             return _storages;
+        }
+
+        void clear_from_storages(vset<std::string> storage_match_all, 
+                                vset<std::string> storage_match_any,
+                                vset<std::string> names_to_clear) 
+        {
+            {
+                // Step 0: Pause the pool
+                std::lock_guard<std::mutex> lock(_mutex);
+                _paused.store(true);
+            }
+
+            // Step 1: Wait until all work is done
+            {
+                std::unique_lock<std::mutex> lock(_mutex);
+                _cv.wait(lock, [this] { return _work_length.load() == 0; });
+            }
+
+            // Step 2: Clear storages
+            {
+                std::lock_guard<std::mutex> lock(_mutex);
+
+                for (auto& store : _storages) {
+                    bool has_all = std::all_of(storage_match_all.begin(), storage_match_all.end(),
+                                            [&](const std::string& s){ return store.exist(s); });
+
+                    bool has_any = storage_match_any.empty() ||
+                                std::any_of(storage_match_any.begin(), storage_match_any.end(),
+                                            [&](const std::string& s){ return store.exist(s); });
+
+                    if (has_all && has_any) {
+                        for (const auto& s : names_to_clear) {
+                            store.clear(s);
+                        }
+                    }
+                }
+            }
+
         }
 
     private:
@@ -312,6 +354,8 @@ namespace hasty {
         std::condition_variable _cv;
         std::mutex _mutex;
 
+        std::atomic<bool> _paused;
+
         struct WorkItem {
             std::function<void(storage&)> func;
             std::set<std::string> must_all;
@@ -331,10 +375,11 @@ namespace hasty {
     export class storage_thread_pool_interface {
     public:
 
-        storage_thread_pool_interface(storage_thread_pool& thread_pool, std::set<std::string> must_have_all_names = {},
-                                      std::set<std::string> must_have_any_names = {},
-                                      std::set<std::string> good_to_have_names = {})
-            :   _thread_pool(thread_pool), 
+        storage_thread_pool_interface(std::shared_ptr<storage_thread_pool> thread_pool, 
+                                        vset<std::string> must_have_all_names = {},
+                                        vset<std::string> must_have_any_names = {},
+                                        vset<std::string> good_to_have_names = {})
+            :   _thread_pool(std::move(thread_pool)), 
                 _must_have_all_names(std::move(must_have_all_names)),
                 _must_have_any_names(std::move(must_have_any_names)), 
                 _good_to_have_names(std::move(good_to_have_names))
@@ -342,21 +387,29 @@ namespace hasty {
 
         template<class F, class... Args>
         std::future<typename std::invoke_result<F, storage&, Args...>::type> enqueue(
-            F&& f, Args&&... args) {
-            return _thread_pool.enqueue(
+            F&& f, vset<std::string> good_to_have_names, Args&&... args) {
+            return _thread_pool->enqueue(
                 std::forward<F>(f), 
                 _must_have_all_names, 
                 _must_have_any_names, 
-                _good_to_have_names, 
+                merge(_good_to_have_names, good_to_have_names),
                 std::forward<Args>(args)...
             );
         }
 
+        void clear_from_storages(vset<std::string> names_to_clear) {
+            _thread_pool->clear_from_storages(
+                _must_have_all_names, 
+                _must_have_any_names, 
+                names_to_clear
+            );
+        }
+
     private:
-        storage_thread_pool& _thread_pool;
-        std::set<std::string> _must_have_all_names;
-        std::set<std::string> _must_have_any_names;
-        std::set<std::string> _good_to_have_names;
+        std::shared_ptr<storage_thread_pool> _thread_pool;
+        vset<std::string> _must_have_all_names;
+        vset<std::string> _must_have_any_names;
+        vset<std::string> _good_to_have_names;
     };
 
 }

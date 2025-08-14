@@ -7,6 +7,7 @@ export module mri:adjoint;
 import util;
 import tensor;
 import threading;
+import nufft;
 
 namespace hasty {
 
@@ -35,20 +36,24 @@ namespace hasty {
 		cache_tensor<TT,DIM+1>& smaps, 
 		cache_tensor<TT,2>& bil,
 		cache_tensor<TT,DIM+1>& cjl,
-		storage_thread_pool& thread_pool,
+		storage_thread_pool_interface& thread_pool,
+		bool free_bil = true,
+		bool free_cjl = true,
 		bool free_nufft_plan = true) 
 	{
+		using NP_T = nufft_plan<cuda_t,TTC,DIM,nufft_type::BACKWARD>;
+		int interp_steps = bil.template shape<0>();
+
 		auto spatial_dim = span<DIM>(smaps.shape(), 1).to_arr();
 
 		auto output = make_empty_like(smaps);
 
-		int L = bil.template shape<0>();
 
-		auto run_lambda = [&output, &coords, &kdata, &smaps, &bil, &cjl](storage& store, i32 data_idx) 
+		auto run_lambda = [&output, &coords, &kdata, &smaps, &bil, &cjl, interp_steps](storage& store, i32 data_idx) 
 		{
 			device_idx didx = store.get_ref_throw<device_idx>("device_idx");
 
-			if (!store.exists("nufft_plan")) {
+			if (!store.exist("nufft_plan")) {
 				nufft_opts<cuda_t,TTC,DIM> options;
 				options.device_idx = i32(didx);
 				options.nmodes = spatial_dim;
@@ -62,24 +67,24 @@ namespace hasty {
 				}
 
 				std::array<tensor<cuda_t,TTC,1>,DIM> cuda_coords;
-				for_sequence<DIM>([&cuda_coords](auto i) {
-					cuda_coords[i] = coords.get(didx);
+				for_sequence<DIM>([&cuda_coords, &coords, didx](auto i) {
+					cuda_coords[i] = coords[i].get(didx);
 				});
 
 				hasty::synchronize(didx);
-				auto plan = nufft_plan<cuda_t,TTC,DIM,nufft_type::BACKWARD>::make(options);
+				auto plan = NP_T::make(options);
 				plan->setpts(cuda_coords);
 				hasty::synchronize(didx);
 
-				store.add<nufft_plan<cuda_t,TTC,DIM,nufft_type::BACKWARD>>("nufft_plan", std::make_shared(std::move(plan)));
+				store.add<NP_T>("nufft_plan", std::make_shared(std::move(plan)));
 			}
 
-			if (!store.exists("bil")) {
+			if (!store.exist("bil")) {
 				auto cubil = bil.get(device_idx::CPU).template to<cuda_t>(didx);
 				store.add<tensor<cuda_t,TT,DIM>>("bil", cubil);
 			}
 
-			if (!store.exists("cjl")) {
+			if (!store.exist("cjl")) {
 				auto cucjl = cjl.get(device_idx::CPU).template to<cuda_t>(didx);
 				store.add<tensor<cuda_t,TT,DIM+1>>("cjl", cucjl);
 			}
@@ -89,7 +94,7 @@ namespace hasty {
 			auto cuda_nufft_output = make_empty_tensor<cuda_t,complex_t<TTC>,DIM>(spatial_dim);
 			auto cuda_output = make_zeros_tensor_like(cuda_nufft_output);
 
-			auto& nufft_plan = store.get_ref_throw<nufft_plan<cuda_t,TTC,DIM,nufft_type::BACKWARD>>("nufft_plan");
+			auto& nufft_plan = store.get_ref_throw<NP_T>("nufft_plan");
 			auto& cuda_bil = store.get_ref_throw<tensor<cuda_t,TT,2>>("bil");
 			auto& cuda_cjl = store.get_ref_throw<tensor<cuda_t,TT,DIM+1>>("cjl");
 
@@ -97,25 +102,7 @@ namespace hasty {
 				auto cuda_kdata = kdata[data_idx, Ellipsis{}].unsqueeze(0).template to<cuda_t>(didx);
 				auto temp = make_empty_tensor_like(cuda_kdata);
 
-				for (int i = 0; i < L; ++i) {
-					temp = cuda_kdata * cuda_bil[i, Ellipsis{}]
-
-					hasty::synchronize(didx);
-					nufft_plan->execute(temp, cuda_nufft_output);
-					hasty::synchronize(didx);
-
-					cuda_nufft_output *= cuda_cjl[i, Ellipsis{}];
-					cuda_output += cuda_nufft_output;
-				}
-
-				output[data_idx, Ellipsis{}] = cuda_output.template to<cpu_t>(didx);
-
-			} else {
-				auto cuda_kdata = input[cuda_kdata, Ellipsis{}].unsqueeze(0).template to<cuda_t>(
-					coords[0].get_device_idx()).template to<complex_t<TTC>>();
-				auto temp = make_empty_tensor_like(cuda_kdata);
-
-				for (int i = 0; i < L; ++i) {
+				for (int i = 0; i < interp_steps; ++i) {
 					temp = cuda_kdata * cuda_bil[i, Ellipsis{}].conj();
 
 					hasty::synchronize(didx);
@@ -126,7 +113,26 @@ namespace hasty {
 					cuda_output += cuda_nufft_output;
 				}
 
-				output[data_idx, Ellipsis{}] = cuda_output.template to<TT>().template to<cpu_t>(didx);
+				cuda_output *= mul;
+				output[data_idx, Ellipsis{}] = (mul * cuda_output).template to<cpu_t>(didx);
+
+			} else {
+				auto cuda_kdata = kdata[data_idx, Ellipsis{}].unsqueeze(0).template to<cuda_t>(didx).template to<complex_t<TTC>>();
+				auto temp = make_empty_tensor_like(cuda_kdata);
+
+				for (int i = 0; i < interp_steps; ++i) {
+					temp = cuda_kdata * cuda_bil[i, Ellipsis{}].conj();
+
+					hasty::synchronize(didx);
+					nufft_plan->execute(temp, cuda_nufft_output);
+					hasty::synchronize(didx);
+
+					cuda_nufft_output *= cuda_cjl[i, Ellipsis{}].conj();
+					cuda_output += cuda_nufft_output;
+				}
+
+
+				output[data_idx, Ellipsis{}] = (mul *cuda_output.template to<TT>()).template to<cpu_t>(didx);
 
 			}
 			
@@ -134,9 +140,9 @@ namespace hasty {
 
 		
 		std::vector<std::future<void>> futures;
-		futures.reserve(smaps.shape<0>());
+		futures.reserve(smaps.template shape<0>());
 
-		for (int i = 0; i < smaps.shape<0>(); ++i) {
+		for (int i = 0; i < smaps.template shape<0>(); ++i) {
 			auto runner = [i, &run_lambda](storage& store) {
 				run_lambda(store, i);
 			};
@@ -149,15 +155,18 @@ namespace hasty {
 			util::future_catcher(fut);
 		}
 
-		const auto& storages = thread_pool.get_storages();
-		for (auto& store : storages) {
-			store.clear("image");
-			store.clear("bil");
-			store.clear("cjl");
-			if (free_nufft_plan) {
-				store.clear("nufft_plan");
-			}
+		vset<std::string> names_to_clear;
+		names_to_clear.reserve(3);
+		if (free_bil) {
+			names_to_clear.insert("bil");
 		}
+		if (free_cjl) {
+			names_to_clear.insert("cjl");
+		}
+		if (free_nufft_plan) {
+			names_to_clear.insert("nufft_plan");
+		}
+		thread_pool.clear_from_storage(names_to_clear);
 
 	}
 

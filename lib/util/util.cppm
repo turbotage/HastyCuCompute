@@ -6,6 +6,7 @@ export module util;
 
 //import pch;
 
+export import :containers;
 export import :funcs;
 export import :idx;
 export import :meta;

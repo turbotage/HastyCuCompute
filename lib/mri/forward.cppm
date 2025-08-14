@@ -39,16 +39,22 @@ namespace hasty {
 		cache_tensor<TT,DIM+1>& smaps,
 		cache_tensor<TT,2>& bil,
 		cache_tensor<TT,DIM+1>& cjl,
-		storage_thread_pool& thread_pool,
-		bool free_nufft_plan = true) -> tensor<cpu_t,TT,2>
+		storage_thread_pool_interface& thread_pool,
+		bool free_bil = true,
+		bool free_cjl = true,
+		bool free_nufft_plan = true
+	) -> tensor<cpu_t,TT,2>
 	{
+		using NP_T = nufft_plan<cuda_t,TTC,DIM,nufft_type::FORWARD>;
+		int interp_steps = bil.template shape<0>();
+
 		auto spatial_dim = image.shape();
 
 		int64_t number_of_datapts = coords[0].get().template shape<0>();
 
 		auto output = make_empty_tensor<cpu_t,TT,2>(span<2>{smaps.template shape<0>(), coords[0].template shape<0>()});
 
-		auto run_lambda = [&output, &coords, &image, &smaps, &bil, &cjl, number_of_datapts](
+		auto run_lambda = [&output, &coords, &image, &smaps, &bil, &cjl, number_of_datapts, interp_steps](
 			storage& store, i32 data_idx)
 		{
 			device_idx didx = store.get_ref_throw<device_idx>("device_idx");
@@ -71,10 +77,13 @@ namespace hasty {
 					cuda_coords[i] = coords[i].get(didx);
 				});
 
-				auto plan = nufft_plan<cuda_t,TTC,DIM,nufft_type::FORWARD>::make(options);
+				auto plan = NP_T::make(options);
 				plan->setpts(cuda_coords);
 
-				store.add<nufft_plan<cuda_t,TTC,DIM,nufft_type::FORWARD>>("nufft_plan", std::make_shared(plan));
+				store.add<NP_T>(
+					"nufft_plan", 
+					std::make_shared<NP_T>(std::move(plan))
+				);
 			}
 
 			if (!store.exist("image")) {
@@ -100,10 +109,9 @@ namespace hasty {
 			auto output_slice = make_zero_tensor<cuda_t,TT,2>(span<2>({1, number_of_datapts}));
 			auto temp_output = make_empty_tensor<cuda_t,complex_t<TTC>,2>(span<2>({1, number_of_datapts}));
 
-			auto& nufft_plan = store.get_ref_throw<nufft_plan<cuda_t,TTC,DIM,nufft_type::BACKWARD>>("nufft_plan");
+			auto& nufft_plan = store.get_ref_throw<NP_T>("nufft_plan");
 			auto& cuda_bil = store.get_ref_throw<tensor<cuda_t,TT,2>>("bil");
 			auto& cuda_cjl = store.get_ref_throw<tensor<cuda_t,TT,DIM+1>>("cjl");
-
 
 			for (int i = 0; i < interp_steps; ++i) {
 				
@@ -125,9 +133,9 @@ namespace hasty {
 		};
 
 		std::vector<std::future<void>> futures;
-		futures.reserve(smaps.shape<0>());
+		futures.reserve(smaps.template shape<0>());
 
-		for (int i = 0; i < smaps.shape<0>(); i++) {
+		for (int i = 0; i < smaps.template shape<0>(); i++) {
 			auto runner = [i, &run_lambda](storage& store) {
 				run_lambda(store, i);
 			};
@@ -139,16 +147,21 @@ namespace hasty {
 			util::future_catcher(fut);
 		}
 
-		const auto& storages = thread_pool.get_storages();
-		for (auto& store : storages) {
-			store.clear("image");
-			store.clear("bil");
-			store.clear("cjl");
-			if (free_nufft_plan) {
-				store.clear("nufft_plan");
-			}
+		vset<std::string> names_to_clear{"image"};
+		names_to_clear.reserve(4);
+		if (free_bil) {
+			names_to_clear.insert_without_check("bil");
+		}
+		if (free_cjl) {
+			names_to_clear.insert_without_check("cjl");
+		}
+		if (free_nufft_plan) {
+			names_to_clear.insert_without_check("nufft_plan");
 		}
 
+		thread_pool.clear_from_storages(names_to_clear);
+
+		return output;
 	}
 
 }
