@@ -280,6 +280,11 @@ namespace hasty {
         _pimpl = std::make_shared<tensor<D,TT,RANK>::tensor_base>(input_shape, std::move(input));
     }
 
+    template<size_t DIM>
+    requires less_than<DIM, RANK+1>
+    tensor<D,TT,RANK+1> tensor<D,TT,RANK>::stack(const std::vector<tensor<D,TT,RANK>>& tensors) {
+    
+    }
 
 
     template<is_device D, is_tensor_type TT, size_t RANK>

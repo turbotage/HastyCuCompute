@@ -5,14 +5,15 @@ module;
 export module mri:normal;
 
 //import pch;
+export import :trajectory;
 
 import op;
 import util;
-import trajectory;
 import tensor;
 import trace;
 import nufft;
 import threading;
+
 
 namespace hasty {
 
@@ -203,14 +204,13 @@ namespace hasty {
 			_kernels(std::move(kernels)), 
 			_kerneldiags(std::move(kerneldiags)),
 			_stacked_diags(std::move(stacked_diags)),
-			_runner(std::remove_reference_t<decltype(*this)>::build_runner()),
+			_runner(std::remove_reference_t<decltype(*this)>::build_runner(fft_batch_size)),
 			_fft_batch_size(fft_batch_size)
 		{
 		}
 
 		tensor<D,TT,DIM> operator()(
-			tensor<D,TT,DIM>&& x,
-			bool free_stacks = false, bool free_kerneldiags = false) 
+			tensor<D,TT,DIM>&& x)
 		{
 			
 			auto didx = x.get_device_idx();
@@ -218,35 +218,25 @@ namespace hasty {
 			// The first term in the sum
 			tensor<D,TT,DIM> out = std::get<0>(_runner.run(
 				x, 
-				this->_kernels_kerneldiags[0].first.template get<D>(didx), 
-				this->_kernels_kerneldiags[0].second.template get<D>(didx),
-				this->_stacked_diags.template get<D>(didx)
+				_kernels.template operator[]<D>(didx, 0, Slice{}),
+				_kerneldiags.template operator[]<D>(didx, 0, Slice{}),
+				_stacked_diags.template get<D>(didx)
 			));
-
-			this->_kernels_kerneldiags[0].first.free(didx);
-			if (free_kerneldiags) {
-				this->_kernels_kerneldiags[0].second.free(didx);
-			}
 			
+			if (_kernels.template shape<0>() != _kerneldiags.template shape<0>()) {
+				throw std::runtime_error("Number of kernels and kernel diagonals must match.");
+			}
+
 			// Loop over off kernels >= 1
-			for (int i = 1; i < this->_kernels_kerneldiags.size(); ++i) {
+			for (int i = 1; i < _kernels.template shape<0>(); ++i) {
 				std::tuple<tensor<D,TT,DIM>> tensortup = _runner.run(
-					x, 
-					this->_kernels_kerneldiags[i].first.template get<D>(didx), 
-					this->_kernels_kerneldiags[i].second.template get<D>(didx),
-					this->_stacked_diags.template get<D>(didx),
-					output
+					x,
+					_kernels.template operator[]<D>(didx, i, Slice{}),
+					_kerneldiags.template operator[]<D>(didx, i, Slice{}),
+					_stacked_diags.template get<D>(didx)
 				);
 
 				out += std::get<0>(tensortup);
-
-				if (free_kerneldiags) {
-					this->_kernels_kerneldiags[i].second.free(didx);
-				}
-			}
-
-			if (free_stacks) {
-				this->_stacked_diags.free(didx);
 			}
 
 			return out;
@@ -269,7 +259,7 @@ namespace hasty {
 						STACKED_DIAG_PROTO_T>
 		>;
 
-		static auto build_runner() -> TRACE_FUNC_T {
+		static auto build_runner(i32 fft_batch_size) -> TRACE_FUNC_T {
 
 			INPUT_PROTO_T             input("input");
 			KERNEL_PROTO_T            kernel("kernel");
@@ -312,7 +302,7 @@ namespace hasty {
 		out *= (1 / torch.prod(torch.tensor(spatial_shp)))
 		
 		return out
-)ts", _fft_batch_size));
+)ts", fft_batch_size));
 
 			ret.compile();
 
@@ -354,7 +344,7 @@ namespace hasty {
 	@tparam DIM Dimension.
 	*/
 	export template<is_device D, is_fp_complex_tensor_type TT, size_t DIM>
-	class normal_innerlooped_diagonal_toeplitz_operator_weighted_operator {
+	class normal_innerlooped_diagonal_toeplitz_weighted_operator {
 	public:
 
 		using device_type_t = D;
@@ -371,7 +361,7 @@ namespace hasty {
 		@tparam TT Tensor type.
 		@tparam DIM Dimension.
 		*/
-		normal_innerlooped_diagonal_toeplitz_operator(
+		normal_innerlooped_diagonal_toeplitz_weighted_operator(
 			cache_tensor<TT,DIM+1>&& kernels, cache_tensor<TT,DIM+1>&& kerneldiags,
 			cache_tensor<TT,DIM+1>&& stacked_diags, cache_tensor<TT,2> weights, i32 fft_batch_size = 4)
 			: 
@@ -379,7 +369,7 @@ namespace hasty {
 			_kerneldiags(std::move(kerneldiags)),
 			_stacked_diags(std::move(stacked_diags)),
 			_weights(std::move(weights)),
-			_runner(std::remove_reference_t<decltype(*this)>::build_runner()),
+			_runner(std::remove_reference_t<decltype(*this)>::build_runner(fft_batch_size)),
 			_fft_batch_size(fft_batch_size)
 		{
 		}
@@ -392,20 +382,24 @@ namespace hasty {
 			// The first term in the sum
 			tensor<D,TT,DIM> out = std::get<0>(_runner.run(
 				x,
-				_kernels.operator<D>[didx, 0, Slice{}],
-				_kerneldiags.operator<D>[didx, 0, Slice{}],
+				_kernels.template operator[]<D>(didx, 0, Slice{}),
+				_kerneldiags.template operator[]<D>(didx, 0, Slice{}),
 				_stacked_diags.template get<D>(didx),
 				_weights.template get<D>(didx)
 			));
 			
+			if (_kernels.template shape<0>() != _kerneldiags.template shape<0>()) {
+				throw std::runtime_error("Number of kernels and kernel diagonals must match.");
+			}
+
 			// Loop over off kernels >= 1
-			for (int i = 1; i < this->_kernels_kerneldiags.size(); ++i) {
+			for (int i = 1; i < _kernels.template shape<0>(); ++i) {
 				std::tuple<tensor<D,TT,DIM>> tensortup = _runner.run(
 					x, 
-					_kernels.operator<D>[didx, i, Slice{}],
-					_kerneldiags.operator<D>[didx, i, Slice{}],
-					this->_stacked_diags.template get<D>(didx),
-					this->_weights.template get<D>(didx)
+					_kernels.template operator[]<D>(didx, i, Slice{}),
+					_kerneldiags.template operator[]<D>(didx, i, Slice{}),
+					_stacked_diags.template get<D>(didx),
+					_weights.template get<D>(didx)
 				);
 
 				out += std::get<0>(tensortup);
@@ -432,7 +426,7 @@ namespace hasty {
 						STACKED_DIAG_PROTO_T>
 		>;
 
-		static auto build_runner() -> TRACE_FUNC_T {
+		static auto build_runner(i32 fft_batch_size) -> TRACE_FUNC_T {
 
 			INPUT_PROTO_T             input("input");
 			KERNEL_PROTO_T            kernel("kernel");
@@ -482,7 +476,7 @@ namespace hasty {
 		out *= (1 / torch.prod(torch.tensor(spatial_shp)))
 		
 		return out
-)ts", _fft_batch_size));
+)ts", fft_batch_size));
 
 			ret.compile();
 
@@ -500,6 +494,8 @@ namespace hasty {
 
 	};
 
+	export template<is_device D, is_fp_complex_tensor_type TT, size_t DIM>
+	using NIDTW_OP = normal_innerlooped_diagonal_toeplitz_weighted_operator<D,TT,DIM>;
 
 
 

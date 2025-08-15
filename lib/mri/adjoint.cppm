@@ -166,7 +166,7 @@ namespace hasty {
 		if (free_nufft_plan) {
 			names_to_clear.insert("nufft_plan");
 		}
-		thread_pool.clear_from_storage(names_to_clear);
+		thread_pool.clear_from_storages(names_to_clear);
 
 	}
 

@@ -84,4 +84,95 @@ namespace hasty {
         torch::cuda::synchronize(i32(idx));
     }
 
+    namespace util {
+        
+        export template<typename T>
+        T future_catcher(std::future<T>& fut)
+        {
+            try {
+                return fut.get();
+            }
+            catch (c10::Error& e) {
+                std::string err = e.what();
+                std::cerr << err << std::endl;
+                throw std::runtime_error(err);
+            }
+            catch (std::exception& e) {
+                std::string err = e.what();
+                std::cerr << err << std::endl;
+                throw std::runtime_error(err);
+            }
+            catch (...) {
+                std::cerr << "caught something strange: " << std::endl;
+                throw std::runtime_error("caught something strange: ");
+            }
+        }
+    
+        export template<typename T>
+        T future_catcher(const std::function<T()>& func)
+        {
+            try {
+                return func();
+            }
+            catch (c10::Error& e) {
+                std::string err = e.what();
+                std::cerr << err << std::endl;
+                throw std::runtime_error(err);
+            }
+            catch (std::exception& e) {
+                std::string err = e.what();
+                std::cerr << err << std::endl;
+                throw std::runtime_error(err);
+            }
+            catch (...) {
+                std::cerr << "caught something strange: " << std::endl;
+                throw std::runtime_error("caught something strange: ");
+            }
+        }
+    
+        export void future_catcher(std::future<void>& fut)
+        {
+            try {
+                fut.get();
+            }
+            catch (c10::Error& e) {
+                std::string err = e.what();
+                std::cerr << err << std::endl;
+                throw std::runtime_error(err);
+            }
+            catch (std::exception& e) {
+                std::string err = e.what();
+                std::cerr << err << std::endl;
+                throw std::runtime_error(err);
+            }
+            catch (...) {
+                std::cerr << "caught something strange: " << std::endl;
+                throw std::runtime_error("caught something strange: ");
+            }
+        }
+    
+        export void future_catcher(const std::function<void()>& func)
+        {
+            try {
+                func();
+            }
+            catch (c10::Error& e) {
+                std::string err = e.what();
+                std::cerr << err << std::endl;
+                throw std::runtime_error(err);
+            }
+            catch (std::exception& e) {
+                std::string err = e.what();
+                std::cerr << err << std::endl;
+                throw std::runtime_error(err);
+            }
+            catch (...) {
+                std::cerr << "caught something strange: " << std::endl;
+                throw std::runtime_error("caught something strange: ");
+            }
+        }
+
+    }
+
+
 }

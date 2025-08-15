@@ -6,7 +6,7 @@ import tensor;
 import hdf5;
 import nufft;
 
-import normal;
+import mri;
 import trace;
 
 namespace ffi {
@@ -196,7 +196,6 @@ namespace ffi {
 				std::hash<std::string>{}("kerneldiags" + std::to_string(i))
 			});
 
-			kernels_kerneldiags.push_back({kernel, kerneldiag});
 		}
 
 		auto input = make_rand_tensor<cuda_t,c64_t,3>(span<3>({xres, yres, zres}), device_idx::CUDA0);
