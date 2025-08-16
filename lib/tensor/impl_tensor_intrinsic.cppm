@@ -280,10 +280,32 @@ namespace hasty {
         _pimpl = std::make_shared<tensor<D,TT,RANK>::tensor_base>(input_shape, std::move(input));
     }
 
-    template<size_t DIM>
-    requires less_than<DIM, RANK+1>
-    tensor<D,TT,RANK+1> tensor<D,TT,RANK>::stack(const std::vector<tensor<D,TT,RANK>>& tensors) {
-    
+    template<size_t DIM, is_device D1, is_tensor_type TT1, size_t RANK1>
+    requires less_than_or_equal<DIM, RANK1>
+    tensor<D1,TT1,RANK1+1> stack(const std::vector<tensor<D1,TT1,RANK1>>& tensors)
+    {
+        if (tensors.empty()) {
+            throw std::runtime_error("tensor::stack: cannot stack empty vector");
+        }
+
+        std::array<int64_t, RANK1> oneshape;
+        std::array<int64_t, RANK1+1> new_shape;
+        for_sequence<RANK1>([&](auto i) { 
+            if (i == DIM) {
+                new_shape[i] = tensors.size();
+            } else {
+                new_shape[i] = tensors[0].template shape<i>();
+            }
+        });
+
+        std::vector<TensorBackend> tensor_views;
+        tensor_views.reserve(tensors.size());
+        for (const auto& t : tensors) {
+            tensor_views.emplace_back(t.get_tensor());
+        }
+
+        TensorBackend stacked_tensor = torch::stack(std::move(tensor_views), DIM);
+        return tensor<D1,TT1,RANK1+1>(new_shape, std::move(stacked_tensor));
     }
 
 

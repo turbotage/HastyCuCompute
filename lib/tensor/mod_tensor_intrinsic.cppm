@@ -105,9 +105,9 @@ namespace hasty {
 
 		void assign(span<RANK> input_shape, TensorBackend input);
 
-		template<size_t DIM>
-		requires less_than<DIM, RANK+1>
-		friend tensor<D,TT,RANK+1> stack(const std::vector<tensor<D,TT,RANK>>& tensors);
+		template<size_t DIM, is_device D1, is_tensor_type TT1, size_t RANK1>
+		requires less_than_or_equal<DIM, RANK1>
+		friend tensor<D1,TT1,RANK1+1> stack(const std::vector<tensor<D1,TT1,RANK1>>& tensors);
 
 
 

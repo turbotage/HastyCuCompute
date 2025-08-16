@@ -117,7 +117,7 @@
     },
     "cmake.cmakePath": "/snap/cmake/current/bin/cmake",
     "cmake.buildArgs": ["--verbose"],
-    "lldb-dap.executable-path": "/usr/bin/lldb-dap-20",
+    "lldb-dap.executable-path": "/usr/bin/lldb-dap-22",
     "latex-workshop.hover.preview.enabled": true,
     "mathover.matchRegex": "\\\\f\\[(.*?)\\\\f\\]",
     "mathover.forwardSkip": 3,

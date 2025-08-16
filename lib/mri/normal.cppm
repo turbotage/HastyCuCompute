@@ -215,6 +215,19 @@ namespace hasty {
 			
 			auto didx = x.get_device_idx();
 
+			constexpr size_t kernelsize = decltype(_kernels.template operator[]<D>(didx, 0, Slice{}))::size();
+			static_assert(
+					kernelsize == DIM, "Kernel was wrong size"
+			);
+			constexpr size_t kerneldiagsize = decltype(_kerneldiags.template operator[]<D>(didx, 0, Slice{}))::size();
+			static_assert(
+				kerneldiagsize == DIM, "Kerneldiag was wrong size"
+			);
+			constexpr size_t stacked_diagsize = decltype(_stacked_diags.template get<D>(didx))::size();
+			static_assert(
+				stacked_diagsize == DIM+1, "Stacked diag was wrong size"
+			);
+
 			// The first term in the sum
 			tensor<D,TT,DIM> out = std::get<0>(_runner.run(
 				x, 
@@ -229,6 +242,7 @@ namespace hasty {
 
 			// Loop over off kernels >= 1
 			for (int i = 1; i < _kernels.template shape<0>(); ++i) {
+
 				std::tuple<tensor<D,TT,DIM>> tensortup = _runner.run(
 					x,
 					_kernels.template operator[]<D>(didx, i, Slice{}),

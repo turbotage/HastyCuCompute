@@ -164,11 +164,11 @@ namespace ffi {
 
 		cache_dir = "/home/turbotage/Documents/hasty_cache/";
 
-		int xres = 256;
-		int yres = 256;
-		int zres = 256;
-		int ncoils = 16;
-		int offresonance_n = 4;
+		int xres = 320;
+		int yres = 320;
+		int zres = 320;
+		int ncoils = 24;
+		int offresonance_n = 6;
 
 		
 		cache_tensor<c64_t, 3> phase_offset{
@@ -180,21 +180,36 @@ namespace ffi {
 			make_rand_tensor<cpu_t,c64_t,4>(span<4>({ncoils, xres, yres, zres})),
 			std::hash<std::string>{}("smaps")   
 		};
-		std::vector<std::pair<cache_tensor<c64_t, 3>, cache_tensor<c64_t, 3>>> kernels_kerneldiags;
-		for (int i = 0; i < offresonance_n; ++i) {
-			// Toeplitz kernel
-			auto kernel = cache_tensor<c64_t,3>({
-				make_rand_tensor<cpu_t,c64_t,3>(span<3>({2*xres, 2*yres, 2*zres})),
-				std::hash<std::string>{}("toeplitz_kernel" + std::to_string(i))
-			});
 
-			auto ratemap = make_rand_tensor<cpu_t,c64_t,3>(span<3>({xres, yres, zres}));
+		cache_tensor<c64_t,4> kernels;
+		cache_tensor<c64_t,4> kerneldiags;
+		{
+			std::vector<tensor<cpu_t,c64_t,3>> kernelvec;
+			std::vector<tensor<cpu_t,c64_t,3>> kerneldiagvec;
+			for (int i = 0; i < offresonance_n; ++i) {
+				// Toeplitz kernel
 
-			// Ratemap diagonal * Phase offset diagonal
-			auto kerneldiag = cache_tensor<c64_t,3>({
-				phase_offset.template get<cpu_t>() * ratemap,
-				std::hash<std::string>{}("kerneldiags" + std::to_string(i))
-			});
+				kernelvec.push_back(
+					make_rand_tensor<cpu_t,c64_t,3>(span<3>({2*xres, 2*yres, 2*zres}))
+				);
+
+				auto ratemap = make_rand_tensor<cpu_t,c64_t,3>(span<3>({xres, yres, zres}));
+	
+				// Ratemap diagonal * Phase offset diagonal
+				kerneldiagvec.push_back(
+					phase_offset.template get<cpu_t>() * ratemap
+				);
+			}
+
+			kernels = cache_tensor(
+				stack<0>(kernelvec),
+				std::hash<std::string>{}("kernels")
+			);
+
+			kerneldiags = cache_tensor(
+				stack<0>(kerneldiagvec),
+				std::hash<std::string>{}("kerneldiag")
+			);
 
 		}
 
@@ -202,7 +217,10 @@ namespace ffi {
 
 		//sense_normal_image_offresonance_diagonal<cuda_t, c64_t, 3> sense(smaps, diagonal, kernels, ratemap_diagonals);
 		normal_innerlooped_diagonal_toeplitz_operator<cuda_t, c64_t, 3> normal_sense(
-			std::move(kernels_kerneldiags), std::move(smaps));
+			std::move(kernels), 
+			std::move(kerneldiags),
+			std::move(smaps)
+		);
 
 		auto output = normal_sense(std::move(input));
 

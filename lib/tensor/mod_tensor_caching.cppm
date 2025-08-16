@@ -47,6 +47,15 @@ namespace hasty {
             return *_block->tensor_cpu;
         }
 
+        auto get_cpu() const -> const tensor<cpu_t,TT,RANK>& {
+            if (_block->tensor_cpu)
+                return *_block->tensor_cpu;
+
+            uncache_disk();
+
+            return *_block->tensor_cpu;
+        }
+
         auto get_cpu_ptr() -> sptr<tensor<cpu_t,TT,RANK>>&  {
             if (_block->tensor_cpu)
                 return _block->tensor_cpu;
@@ -56,7 +65,16 @@ namespace hasty {
             return _block->tensor_cpu;
         }
 
-        void cache_disk() {
+        auto get_cpu_ptr() const -> const sptr<tensor<cpu_t,TT,RANK>>&  {
+            if (_block->tensor_cpu)
+                return _block->tensor_cpu;
+
+            uncache_disk();
+
+            return _block->tensor_cpu;
+        }
+
+        void cache_disk() const {
 
             if (_block->tensor_cpu == nullptr)
                 throw std::runtime_error("cache_disk: no tensor to cache");
@@ -69,7 +87,7 @@ namespace hasty {
             );
         }
 
-        void uncache_disk() {
+        void uncache_disk() const {
             namespace fs = std::filesystem;
 
             auto tt = import_binary_tensor(
@@ -89,7 +107,25 @@ namespace hasty {
             return *_block->cuda_tensors[i32(didx)];
         }
 
+        auto get_cuda(device_idx didx) const -> const tensor<cuda_t,TT,RANK>& {
+            if (_block->cuda_tensors[i32(didx)])
+                return *_block->cuda_tensors[i32(didx)];
+
+            _block->cuda_tensors[i32(didx)] = std::make_shared<tensor<cuda_t,TT,RANK>>(get_cpu_ptr()->template to<cuda_t>(didx));
+
+            return *_block->cuda_tensors[i32(didx)];
+        }
+
         auto get_cuda_ptr(device_idx didx) -> sptr<tensor<cuda_t,TT,RANK>>& {
+            if (_block->cuda_tensors[i32(didx)])
+                return _block->cuda_tensors[i32(didx)];
+
+            _block->cuda_tensors[i32(didx)] = std::make_shared<tensor<cuda_t,TT,RANK>>(get_cpu_ptr()->template to<cuda_t>(didx));
+
+            return _block->cuda_tensors[i32(didx)];
+        }
+
+        auto get_cuda_ptr(device_idx didx) const -> const sptr<tensor<cuda_t,TT,RANK>>& {
             if (_block->cuda_tensors[i32(didx)])
                 return _block->cuda_tensors[i32(didx)];
 
@@ -136,7 +172,7 @@ namespace hasty {
             if constexpr(std::is_same_v<D,cpu_t>) {
                 return get_cpu()[slices];
             } else {
-                if (_block->cuda_tensors[didx]) {
+                if (_block->cuda_tensors[i32(didx)]) {
                     return get_cuda(didx)[slices];
                 } else {
                     return get_cpu()[slices].template to<cuda_t>(didx);
@@ -161,7 +197,7 @@ namespace hasty {
             if constexpr(std::is_same_v<D,cpu_t>) {
                 return get_cpu()[indices];
             } else {
-                if (_block->cuda_tensors[didx]) {
+                if (_block->cuda_tensors[i32(didx)]) {
                     return get_cuda(didx)[indices];
                 } else {
                     return get_cpu()[indices].template to<cuda_t>(didx);
@@ -179,14 +215,14 @@ namespace hasty {
         */
         template<class D, index_type ...Idx>
         requires less_than<0, RANK>
-        auto operator[](device_idx didx, Idx... indices) const -> tensor<D, TT, RANK>
+        auto operator[](device_idx didx, Idx... indices) const
         {
             std::unique_lock<std::mutex> lock(_block->mutex);
 
             if constexpr(std::is_same_v<D,cpu_t>) {
                 return get_cpu()[indices...];
             } else {
-                if (_block->cuda_tensors[didx]) {
+                if (_block->cuda_tensors[i32(didx)]) {
                     return get_cuda(didx)[indices...];
                 } else {
                     return get_cpu()[indices...].template to<cuda_t>(didx);
@@ -203,7 +239,7 @@ namespace hasty {
             if constexpr(std::is_same_v<D,cpu_t>) {
                 return get_cpu()[mask];
             } else {
-                if (_block->cuda_tensors[didx]) {
+                if (_block->cuda_tensors[i32(didx)]) {
                     return get_cuda(didx)[mask];
                 } else {
                     return get_cpu()[mask].template to<cuda_t>(didx);
