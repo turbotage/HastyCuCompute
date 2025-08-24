@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.31 FATAL_ERROR)
 
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
-set(CMAKE_EXPERIMENTAL_CXX_IMPORT_STD "0e5b6991-d74f-4b3d-a41c-cf096e0b2508")
+set(CMAKE_EXPERIMENTAL_CXX_IMPORT_STD "d0edc3af-4c50-42ea-a356-e2862fe7a444")
 
 project("HastyCuCompute" VERSION 0.1 LANGUAGES CXX)
 
@@ -26,6 +26,10 @@ set_target_properties(HastyCuCompute PROPERTIES
     CXX_SCAN_FOR_MODULES ON
     #CXX_MODULE_STD ON
 )
+
+if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    target_compile_options(HastyCuCompute PRIVATE -ftime-trace)
+endif()
 
 target_link_libraries(HastyCuCompute PRIVATE c++ c++abi)
 
@@ -59,6 +63,7 @@ target_sources(HastyCuCompute
             "lib/tensor/mod_tensor_factory.cppm"
             "lib/tensor/mod_tensor_intrinsic.cppm"
             "lib/tensor/mod_tensor.cppm"
+            "lib/util/util_concepts.cppm"
             "lib/util/util_containers.cppm"
             "lib/util/util_funcs.cppm"
             "lib/util/util_idx.cppm"
@@ -82,7 +87,8 @@ target_link_libraries(HastyCuCompute PRIVATE CUDA::cudart)
 # this gives access to cufinufft
 set(FINUFFT_USE_CUDA ON CACHE BOOL "" FORCE)
 # this disables finufft leaving only cufinufft available
-set(FINUFFT_USE_CPU OFF CACHE BOOL "" FORCE)
+set(FINUFFT_USE_CPU ON CACHE BOOL "" FORCE)
+set(FINUFFT_USE_DUCC0 ON CACHE BOOL "" FORCE)
 
 FetchContent_Declare(
   finufft
@@ -178,7 +184,27 @@ target_include_directories(HastyCuTest PRIVATE
     $<TARGET_PROPERTY:HastyCuCompute,INTERFACE_INCLUDE_DIRECTORIES>
 )
 
+################ SMALL-TORCH-TESTS ####################
+add_executable(HastySmallTests "test/torch_tests.cpp")
+target_compile_features(HastySmallTests 
+    PRIVATE cxx_std_23
+    INTERFACE cxx_std_23
+)
+set_target_properties(HastySmallTests PROPERTIES
+    CXX_STANDARD 23
+    CXX_STANDARD_REQUIRED ON
+    CXX_SCAN_FOR_MODULES ON
+    #CXX_MODULE_STD ON
+)
+target_link_libraries(HastySmallTests PRIVATE
+    ${TORCH_LIBRARIES}
+    pybind11::headers
+    Python3::Python
+    c++ 
+    c++abi
+)
 
+################ INSTALL ####################
 include(GNUInstallDirs)
 install(TARGETS HastyCuCompute EXPORT HastyCuComputeTargets
     RUNTIME_DEPENDENCIES

@@ -1,6 +1,7 @@
 module;
 
 #include "pch.hpp"
+#include <sstream>
 
 export module util:funcs;
 
@@ -9,6 +10,23 @@ export module util:funcs;
 namespace hasty {
 
 	namespace util {
+
+		export std::string replace_line(const std::string& src, const std::string& linematch, const std::string replacement)
+		{
+			std::istringstream iss(src);
+			std::string result, line;
+			result.reserve(src.size() + replacement.size() - linematch.size() + 2);
+			bool replaced = false;
+			while(std::getline(iss, line)) {
+				if (!replaced && line.find(linematch) != std::string::npos) {
+					result += replacement + "\n";
+					replaced = true;
+				} else {
+					result += line + "\n";
+				}
+			}
+			return result;
+		}
 
 		export std::size_t replace_all(std::string& inout, std::string_view what, std::string_view with)
 		{

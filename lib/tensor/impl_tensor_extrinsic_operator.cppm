@@ -3,6 +3,7 @@ module;
 #include "pch.hpp"
 
 export module tensor:impl_extrinsic_operator;
+//module tensor:impl_extrinsic_operator;
 
 import util;
 import :intrinsic;

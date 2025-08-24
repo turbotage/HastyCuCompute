@@ -3,6 +3,7 @@ module;
 #include "pch.hpp"
 
 export module tensor:impl_intrinsic;
+//module tensor:impl_intrinsic;
 
 import util;
 import :intrinsic;
@@ -197,7 +198,43 @@ namespace hasty {
         return tensor<D,TT,1>(new_shape, std::move(ret));
     }
 
+    template<is_device D, is_tensor_type TT, size_t RANK>
+    void tensor<D,TT,RANK>::assign(std::array<int64_t, RANK>& input_shape, TensorBackend input) {
+        _pimpl = std::make_shared<tensor<D,TT,RANK>::tensor_base>(input_shape, std::move(input));
+    }
 
+    template<is_device D, is_tensor_type TT, size_t RANK>
+    void tensor<D,TT,RANK>::assign(span<RANK> input_shape, TensorBackend input) {
+        _pimpl = std::make_shared<tensor<D,TT,RANK>::tensor_base>(input_shape, std::move(input));
+    }
+
+    export template<size_t DIM, is_device D1, is_tensor_type TT1, size_t RANK1>
+    requires less_than_or_equal<DIM, RANK1>
+    tensor<D1,TT1,RANK1+1> stack(const std::vector<tensor<D1,TT1,RANK1>>& tensors)
+    {
+        if (tensors.empty()) {
+            throw std::runtime_error("tensor::stack: cannot stack empty vector");
+        }
+
+        std::array<int64_t, RANK1> oneshape;
+        std::array<int64_t, RANK1+1> new_shape;
+        for_sequence<RANK1>([&](auto i) { 
+            if (i == DIM) {
+                new_shape[i] = tensors.size();
+            } else {
+                new_shape[i] = tensors[0].template shape<i>();
+            }
+        });
+
+        std::vector<TensorBackend> tensor_views;
+        tensor_views.reserve(tensors.size());
+        for (const auto& t : tensors) {
+            tensor_views.emplace_back(t.get_tensor());
+        }
+
+        TensorBackend stacked_tensor = torch::stack(std::move(tensor_views), DIM);
+        return tensor<D1,TT1,RANK1+1>(new_shape, std::move(stacked_tensor));
+    }
 
     template<is_device D, is_tensor_type TT, size_t RANK>
     tensor<D,TT,RANK>::tensor() {}
@@ -269,45 +306,6 @@ namespace hasty {
     {
         //debug::print_memory_usage("tensor::tensor(span, TensorBackend): ");
     }
-
-    template<is_device D, is_tensor_type TT, size_t RANK>
-    void tensor<D,TT,RANK>::assign(std::array<int64_t, RANK>& input_shape, TensorBackend input) {
-        _pimpl = std::make_shared<tensor<D,TT,RANK>::tensor_base>(input_shape, std::move(input));
-    }
-
-    template<is_device D, is_tensor_type TT, size_t RANK>
-    void tensor<D,TT,RANK>::assign(span<RANK> input_shape, TensorBackend input) {
-        _pimpl = std::make_shared<tensor<D,TT,RANK>::tensor_base>(input_shape, std::move(input));
-    }
-
-    template<size_t DIM, is_device D1, is_tensor_type TT1, size_t RANK1>
-    requires less_than_or_equal<DIM, RANK1>
-    tensor<D1,TT1,RANK1+1> stack(const std::vector<tensor<D1,TT1,RANK1>>& tensors)
-    {
-        if (tensors.empty()) {
-            throw std::runtime_error("tensor::stack: cannot stack empty vector");
-        }
-
-        std::array<int64_t, RANK1> oneshape;
-        std::array<int64_t, RANK1+1> new_shape;
-        for_sequence<RANK1>([&](auto i) { 
-            if (i == DIM) {
-                new_shape[i] = tensors.size();
-            } else {
-                new_shape[i] = tensors[0].template shape<i>();
-            }
-        });
-
-        std::vector<TensorBackend> tensor_views;
-        tensor_views.reserve(tensors.size());
-        for (const auto& t : tensors) {
-            tensor_views.emplace_back(t.get_tensor());
-        }
-
-        TensorBackend stacked_tensor = torch::stack(std::move(tensor_views), DIM);
-        return tensor<D1,TT1,RANK1+1>(new_shape, std::move(stacked_tensor));
-    }
-
 
     template<is_device D, is_tensor_type TT, size_t RANK>
     tensor<D,TT,RANK>::~tensor() {}

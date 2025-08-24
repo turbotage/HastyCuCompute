@@ -10,6 +10,40 @@ import tensor;
 namespace hasty {
 	namespace trace {
 
+		export using CompilationUnit = torch::jit::CompilationUnit;
+		export using CompilationModule = torch::jit::Module;
+
+		export class trace_compilation_unit_cache {
+		public:
+
+			trace_compilation_unit_cache() = default;
+
+			template<typename T>
+			void add_unit(std::shared_ptr<CompilationUnit>&& compunit) {
+				std::lock_guard<std::mutex> lock(_mutex);
+				_units.insert({ typeid(T).name(), std::move(compunit) });
+			}
+
+			template<typename T>
+			void contains() {
+				std::unique_lock<std::mutex> lock(_mutex);
+				_units.contains(typeid(T).name());
+			}
+
+			template<typename T>
+			std::shared_ptr<CompilationUnit> get_unit() {
+				std::unique_lock<std::mutex> lock(_mutex);
+				auto it = _units.find(typeid(T).name());
+				return it != _units.end() ? it->second : nullptr;
+			}
+
+		private:
+			std::mutex _mutex;
+			vmap<std::string, std::shared_ptr<CompilationUnit>> _units;
+		};
+
+		trace_compilation_unit_cache _tcuc;
+
 		// TENSOR PROTOTYPE
 
 		export template<is_device D, is_tensor_type TT, size_t RANK>
@@ -151,12 +185,6 @@ namespace hasty {
 		export template<is_any_tensor_prototype T>
 		using any_tensor_prototype_conversion_t = typename any_tensor_prototype_conversion<T>::type;
 
-
-
-
-
-
-
 		export template<typename... U>
 		struct trace_function;
 
@@ -165,7 +193,10 @@ namespace hasty {
 		private:
 			std::string _funcname;
 			std::string _tracestr;
-			std::shared_ptr<torch::jit::CompilationUnit> _cu;
+			std::string _forwardname;
+			std::string _compiled;
+			//std::shared_ptr<CompilationUnit> _cu;
+			std::unique_ptr<CompilationModule> _mod;
 			std::tuple<InputTt...> _trace_tensors;
 		public:
 
@@ -173,16 +204,18 @@ namespace hasty {
 			using InputTraits = TupleTraits<InputTt...>;
 
 			trace_function(const std::string& funcname, InputTt&&... tts)
-				: _funcname(funcname), _cu(nullptr), _trace_tensors(std::forward<InputTt>(tts)...)
+				: _funcname(funcname),
+				_mod(nullptr), 
+				_trace_tensors(std::forward<InputTt>(tts)...)
 			{
 				reset();
 			}
 
 			void reset() {
 				_tracestr = "";
-				_cu = nullptr;
+				_mod = nullptr;
 
-				std::string variables = for_sequence<sizeof...(InputTt)>([this](auto i, std::string& currentstr){
+				std::string variables = "self, " + for_sequence<sizeof...(InputTt)>([this](auto i, std::string& currentstr){
 					auto& itt = std::get<i>(_trace_tensors);
 
 					currentstr += itt.str() + ": ";
@@ -201,7 +234,7 @@ namespace hasty {
 				}, std::string(""));
 
 				if constexpr(sizeof...(ReturnTt) == 0) {
-					_tracestr = std::format("def {}({}):", _funcname, variables);
+					_tracestr = std::format("def forward({}):", variables);
 					return;
 				}
 
@@ -231,7 +264,7 @@ namespace hasty {
 
 				}
 
-				_tracestr = std::format("def {}({}){}:", _funcname, variables, returnvars);
+				_forwardname = std::format("def forward({}){}:", variables, returnvars);
 
 			}
 
@@ -245,18 +278,27 @@ namespace hasty {
 				//_tracestr += "\n" + lines;
 				_tracestr += lines;
 			}
-
-			const std::string& str() const {
+			
+			const std::string& uncompiled_str() const {
 				return _tracestr;
 			}
 
+			const std::string& compiled_str() const {
+				return _compiled;
+			}
+
 			void compile() {
-				if (_cu != nullptr) {
-					throw std::runtime_error("CompilationUnit already exists");
+				if (_mod != nullptr) {
+					return;
 				}
-				_cu = torch::jit::compile(_tracestr);
-				//torch::jit::optimize_for_inference(_cu);
-				//torch::jit::setGraphExecutorOptimize(true);
+
+				_compiled = util::replace_line(_tracestr, "FORWARD_ENTRYPOINT", _forwardname);
+
+				_mod = std::make_unique<CompilationModule>(_funcname);
+				_mod->define(_compiled);
+
+				*_mod = torch::jit::freeze(*_mod);
+				*_mod = torch::jit::optimize_for_inference(*_mod);
 			}
 
 			template<is_tensor_or_vector_of_tensors ...Ts>
@@ -293,11 +335,7 @@ namespace hasty {
 
 				});
 
-				std::tuple<any_tensor_prototype_conversion_t<ReturnTt>...> rets;
-
-				auto ttscopy = std::tuple(Ts(std::forward<Ts>(tts))...);
-
-				auto gettensorfunc = []<typename T>(T&& t) {
+				auto gettensorfunc = []<typename T>(T&& t) -> torch::jit::IValue {
 					if constexpr (is_vector_of_tensors<T>) {
 						std::vector<at::Tensor> rettensors;
 						rettensors.reserve(t.size());
@@ -308,22 +346,43 @@ namespace hasty {
 								rettensors.emplace_back(tt.get_tensor());
 							}
 						}
-						return rettensors;
+						return torch::jit::IValue(std::move(rettensors));
 					}
 					else if constexpr (is_tensor<T>) {
 						if (t.ninstances() == 1) {
-							return t.decay_to_tensor();
+							return torch::jit::IValue(t.decay_to_tensor());
 						}
-						return t.get_tensor();
+						return torch::jit::IValue(t.get_tensor());
 					} else if constexpr (!is_tensor_or_vector_of_tensors<T>) {
 						static_assert(false, ""); // Why do this trigger?
 					}
 				};
 
-				c10::IValue ret_ivalue;
-				std::apply([&](auto&&... args) {
-					ret_ivalue = _cu->run_method(_funcname, gettensorfunc(std::forward<decltype(args)>(args))...);
-				}, ttscopy);
+				auto ttscopy = std::tuple(Ts(std::forward<Ts>(tts))...);
+				
+				std::vector<torch::jit::IValue> inputs;
+				inputs.reserve(sizeof...(Ts));
+				for_sequence<sizeof...(Ts)>([&](auto i) {
+					inputs.emplace_back(gettensorfunc(std::get<i>(ttscopy)));
+				});
+
+				torch::jit::IValue ret_ivalue = (*_mod)(std::move(inputs));
+
+				std::tuple<any_tensor_prototype_conversion_t<ReturnTt>...> rets;
+
+				auto check_device_type = [&]<typename DEVICE_T>(TensorBackend t) {
+					if constexpr(std::is_same_v<DEVICE_T, cpu_t>) {
+						if (t.device().type() != TensorBackendDeviceType::CPU) {
+							throw std::runtime_error("Tensor was not on CPU");
+						}
+					} else if constexpr(std::is_same_v<DEVICE_T, cuda_t>) {
+						if (t.device().type() != TensorBackendDeviceType::CUDA) {
+							throw std::runtime_error("Tensor was not on CUDA");
+						}
+					} else {
+						static_assert(false, "Invalid device type");
+					}
+				};
 
 				if (ret_ivalue.isTensor()) {
 					auto& ret = std::get<0>(rets);
@@ -335,8 +394,9 @@ namespace hasty {
 					if (!is_tensor_prototype<RET_T>) {
 						throw std::runtime_error("ReturnTt was not a tensor prototype when return value was tensor");
 					}
-					
+
 					TensorBackend ret_tensor = std::move(ret_ivalue.toTensor());
+					check_device_type.template operator()<typename RET_T::device_type_t>(ret_tensor);
 					ret.assign(span<RET_T::size()>(ret_tensor.sizes()), std::move(ret_tensor));
 				} else if (ret_ivalue.isTuple()) {
 					auto tuple_ptr = std::move(ret_ivalue.toTuple());
@@ -361,6 +421,7 @@ namespace hasty {
 
 							for (int j = 0; j < tensor_list.size(); ++j) {
 								TensorBackend ret_tensor = std::move(tensor_list[j]);
+								check_device_type.template operator()<typename RET_T::value_type::device_type_t>(ret_tensor);
 								ret[j].assign(span<RET_T::value_type::size()>(ret_tensor.sizes()), std::move(ret_tensor));
 							}
 						} else if constexpr(is_tensor<RET_T>) {
@@ -369,6 +430,7 @@ namespace hasty {
 							}
 
 							TensorBackend ret_tensor = std::move(tup_ret.toTensor());
+							check_device_type.template operator()<typename RET_T::device_type_t>(ret_tensor);
 							ret.assign(span<RET_T::size()>(ret_tensor.sizes()), std::move(ret_tensor));
 						} else if constexpr(!is_tensor_or_vector_of_tensors<RET_T>) {
 							/*

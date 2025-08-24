@@ -370,12 +370,7 @@ namespace hasty {
 
 
 
-
-
-
-
-
-
+	/*
 	// Explicit instantiations
 
 	// f32_t
@@ -465,7 +460,7 @@ namespace hasty {
 	template class tensor<cuda_t, b8_t, 2>;
 	template class tensor<cuda_t, b8_t, 3>;
 	template class tensor<cuda_t, b8_t, 4>;
-
+	*/
 
 
 }

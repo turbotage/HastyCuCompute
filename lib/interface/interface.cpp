@@ -162,6 +162,87 @@ namespace ffi {
 
 		using namespace hasty;
 
+		hasty::cache_dir = "/home/turbotage/Documents/hasty_cache/";
+
+		int xres = 320;
+		int yres = 320;
+		int zres = 320;
+		int ncoils = 24;
+		int offresonance_n = 6;
+
+		
+		hasty::cache_tensor<c64_t, 3> phase_offset{
+			hasty::make_rand_tensor<cpu_t,c64_t,3>(hasty::span<3>({xres, yres, zres})), 
+			std::hash<std::string>{}("phase_offset")
+		};
+		// This is our stacked diagonals
+		hasty::cache_tensor<c64_t, 4> smaps{
+			hasty::make_rand_tensor<cpu_t,c64_t,4>(hasty::span<4>({ncoils, xres, yres, zres})),
+			std::hash<std::string>{}("smaps")   
+		};
+
+		hasty::cache_tensor<c64_t,4> kernels;
+		hasty::cache_tensor<c64_t,4> kerneldiags;
+		{
+			std::vector<hasty::tensor<cpu_t,c64_t,3>> kernelvec;
+			std::vector<hasty::tensor<cpu_t,c64_t,3>> kerneldiagvec;
+			for (int i = 0; i < offresonance_n; ++i) {
+				// Toeplitz kernel
+
+				kernelvec.push_back(
+					hasty::make_rand_tensor<cpu_t,c64_t,3>(hasty::span<3>({2*xres, 2*yres, 2*zres}))
+				);
+
+				auto ratemap = hasty::make_rand_tensor<cpu_t,c64_t,3>(hasty::span<3>({xres, yres, zres}));
+
+				// Ratemap diagonal * Phase offset diagonal
+				kerneldiagvec.push_back(
+					phase_offset.template get<cpu_t>() * ratemap
+				);
+			}
+
+			kernels = hasty::cache_tensor(
+				hasty::stack<0>(kernelvec),
+				std::hash<std::string>{}("kernels")
+			);
+
+			kerneldiags = hasty::cache_tensor(
+				hasty::stack<0>(kerneldiagvec),
+				std::hash<std::string>{}("kerneldiag")
+			);
+
+		}
+
+		auto input = hasty::make_rand_tensor<cuda_t,c64_t,3>(hasty::span<3>({xres, yres, zres}), device_idx::CUDA0);
+
+		//sense_normal_image_offresonance_diagonal<cuda_t, c64_t, 3> sense(smaps, diagonal, kernels, ratemap_diagonals);
+		NIDT_OP<cuda_t, c64_t, 3> normal_sense(
+			std::move(kernels), 
+			std::move(kerneldiags),
+			std::move(smaps)
+		);
+
+		auto output = normal_sense(std::move(input));
+
+		auto start = std::chrono::high_resolution_clock::now();
+
+		for (int i = 0; i < 100; ++i) {
+			input += output;
+			output = normal_sense(std::move(input));
+		}
+
+		auto end = std::chrono::high_resolution_clock::now();
+
+		std::chrono::duration<double> duration = end - start;
+		std::cout << "Time taken: " << duration.count() << " seconds" << std::endl;
+
+		return output.get_tensor();
+	}
+
+	at::Tensor test_whitten_offresonance_operator() {
+
+		using namespace hasty;
+
 		cache_dir = "/home/turbotage/Documents/hasty_cache/";
 
 		int xres = 320;
@@ -213,20 +294,28 @@ namespace ffi {
 
 		}
 
-		auto input = make_rand_tensor<cuda_t,c64_t,3>(span<3>({xres, yres, zres}), device_idx::CUDA0);
+		cache_tensor<c64_t, 2> coilweights = cache_tensor(
+			make_rand_tensor<cpu_t,c64_t,2>(span<2>({ncoils, ncoils})),
+			std::hash<std::string>{}("coilweights")
+		);
 
-		//sense_normal_image_offresonance_diagonal<cuda_t, c64_t, 3> sense(smaps, diagonal, kernels, ratemap_diagonals);
-		normal_innerlooped_diagonal_toeplitz_operator<cuda_t, c64_t, 3> normal_sense(
+		auto input = make_rand_tensor<cuda_t,c64_t,3>(
+			span<3>({xres, yres, zres}), device_idx::CUDA0
+		);
+
+
+		NIDTW_OP<cuda_t, c64_t, 3> normal_sense(
 			std::move(kernels), 
 			std::move(kerneldiags),
-			std::move(smaps)
+			std::move(smaps),
+			std::move(coilweights)
 		);
 
 		auto output = normal_sense(std::move(input));
 
 		auto start = std::chrono::high_resolution_clock::now();
 
-		for (int i = 0; i < 100; ++i) {
+		for (int i = 0; i < 10; ++i) {
 			input += output;
 			output = normal_sense(std::move(input));
 		}
@@ -255,23 +344,30 @@ namespace ffi {
 							"func", T1("t1"), T2("t2"), T3("t3"));
 
 		func.add_lines(R"ts(
+def somecomp(self, t):
+	return torch.sin(t) + torch.sin(2*t)
+
+FORWARD_ENTRYPOINT(self, func, t1, t2, t3):
 	a = []
 	for t in t3:
-		temp = (t[:,:,0] + t2).cpu() + t1[:,None]
-		a.append(temp)
+		temp = (t[:,:,0] + t2) + t1[:,None].to(t2.device)
+		a.append(self.somecomp(temp).cpu())
 
-	return (a[0][:,0],a)   
+	return (a[0][:,0].to(t2.device),a)
 		)ts");
 
 		func.compile();
 
+		std::cout << "Uncompiled:" << func.uncompiled_str() << std::endl;
+
+		std::cout << "Compiled:" << func.compiled_str() << std::endl;
 
 		//std::vector<hasty::tensor<hasty::empty_strong_typedef<hasty::cuda_>, hasty::strong_typedef<float, hasty::f32_>, 3>> &
 		//
 
 
 		auto in1 = make_rand_tensor<cpu_t,f32_t,1>(span<1>({10}));
-		auto in2 = make_rand_tensor<cuda_t,c64_t,2>(span<2>({10,10}));
+		auto in2 = make_rand_tensor<cuda_t,c64_t,2>(span<2>({10,10}), device_idx::CUDA0);
 		auto in3 = std::vector<tensor<cuda_t,f32_t,3>>{
 			make_rand_tensor<cuda_t,f32_t,3>(span<3>({10,10,10})),
 			make_rand_tensor<cuda_t,f32_t,3>(span<3>({10,10,10})),

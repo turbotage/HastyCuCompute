@@ -11,6 +11,8 @@ namespace hasty {
     export using TensorBackend = at::Tensor;
     export using TensorBackendDevice = at::Device;
 
+    export using TensorBackendDeviceType = at::DeviceType;
+
     export TensorBackendDevice get_backend_device(device_idx idx) {
         if (idx == device_idx::CPU) {
             return at::Device(at::DeviceType::CPU);

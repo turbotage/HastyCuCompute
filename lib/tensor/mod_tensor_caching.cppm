@@ -293,6 +293,7 @@ namespace hasty {
     };
 
 
+    /*
     // Explicit instantiations
     template class cache_tensor<f32_t,1>;
     template class cache_tensor<f32_t,2>;
@@ -333,6 +334,6 @@ namespace hasty {
     template class cache_tensor<b8_t,2>;
     template class cache_tensor<b8_t,3>;
     template class cache_tensor<b8_t,4>;
-
+    */
 
 }
