@@ -15,6 +15,7 @@ add_library(HastyCuCompute SHARED
     "lib/tensor/mod_tensor.cpp"
     "lib/interface/interface.cpp"
     "lib/interface/py_interface.cpp"
+    "lib/trace/trace.cpp"
 )
 target_compile_features(HastyCuCompute 
     PRIVATE cxx_std_23
@@ -75,7 +76,8 @@ target_sources(HastyCuCompute
             "lib/util/util.cppm"
             "lib/hdf5.cppm"
             "lib/threading.cppm"
-            "lib/trace.cppm"
+            "lib/trace/trace.cppm"
+            "lib/trace/trace_cache.cppm"
 )
 
 find_package(CUDAToolkit REQUIRED)
@@ -93,7 +95,7 @@ set(FINUFFT_USE_DUCC0 ON CACHE BOOL "" FORCE)
 FetchContent_Declare(
   finufft
   GIT_REPOSITORY https://github.com/flatironinstitute/finufft.git
-  GIT_TAG        v2.4.1
+  GIT_TAG        master #v2.4.1
 )
 
 FetchContent_MakeAvailable(finufft)

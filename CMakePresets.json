@@ -14,11 +14,11 @@
             "generator": "Ninja",
             "environment": {
                 "MY_INSTALL_PATH": "/home/turbotage/Documents/install",
-                "CUDA_ROOT": "/usr/local/cuda-12.6",
+                "CUDA_ROOT": "/usr/local/cuda-13.0",
                 "VCPKG_ROOT": "/home/turbotage/Documents/GitHub/vcpkg",
                 "CMAKE_BUILD_PARALLEL_LEVEL": "12",
                 "CUDAHOSTCXX": "/usr/bin/clang++-18",
-                "CONDA_ENV_PATH": "/home/turbotage/miniconda3/envs/pt260_cuda126",
+                "CONDA_ENV_PATH": "/home/turbotage/miniconda3/envs/py313c++pkgs",
                 "CONDA_SITE_PKG_PATH": "$env{CONDA_ENV_PATH}/lib/python3.13/site-packages"
             },
             "cacheVariables": {

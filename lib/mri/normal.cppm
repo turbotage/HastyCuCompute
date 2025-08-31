@@ -315,7 +315,7 @@ FORWARD_ENTRYPOINT(self, input, kernel, diag, stacked_diag)
 	out *= diag.conj()
 	out *= (1 / torch.prod(torch.tensor(spatial_shp)))
 	
-	return out
+	return (out,)
 )ts", fft_batch_size));
 
 			ret.compile();
@@ -360,7 +360,7 @@ FORWARD_ENTRYPOINT(self, input, kernel, diag, stacked_diag)
 	export template<is_device D, is_fp_complex_tensor_type TT, size_t DIM>
 	class normal_innerlooped_diagonal_toeplitz_weighted_operator {
 	public:
-
+ 
 		using device_type_t = D;
 		using input_tensor_type_t = TT;
 		using output_tensor_type_t = TT;
@@ -490,7 +490,7 @@ FORWARD_ENTRYPOINT(self, input, diag, stacked_diag, weights)
 	out *= diag.conj()
 	out *= (1 / torch.prod(torch.tensor(spatial_shp)))
 	
-	return out
+	return (out,)
 )ts", fft_batch_size));
 
 			ret.compile();

@@ -308,7 +308,8 @@ namespace ffi {
 			std::move(kernels), 
 			std::move(kerneldiags),
 			std::move(smaps),
-			std::move(coilweights)
+			std::move(coilweights),
+			1
 		);
 
 		auto output = normal_sense(std::move(input));
