@@ -18,6 +18,7 @@
 #include <ATen/core/ivalue.h>
 #include <torch/torch.h>
 #include <torch/jit.h>
+#include <torch/script.h>
 #include <torch/extension.h>
 #include <cuComplex.h>
 

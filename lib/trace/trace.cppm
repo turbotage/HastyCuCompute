@@ -1,6 +1,7 @@
 module;
 
 #include "pch.hpp"
+#include <ratio>
 
 export module trace;
 
@@ -158,6 +159,9 @@ namespace hasty {
 		export template<typename... U>
 		struct trace_function;
 
+		export template<typename... U>
+		struct runnable_trace_function;
+
 		export template<is_any_tensor_prototype... ReturnTt, is_any_tensor_prototype... InputTt>
 		struct runnable_trace_function<std::tuple<ReturnTt...>, std::tuple<InputTt...>> {
 		private:
@@ -206,7 +210,7 @@ namespace hasty {
 			{
 			}
 
-			const CompilationModule& module() const {
+			const CompilationModule& get_module() const {
 				return *_mod;
 			}
 
@@ -298,6 +302,13 @@ namespace hasty {
 
 				*_mod = torch::jit::freeze(*_mod);
 				*_mod = torch::jit::optimize_for_inference(*_mod);
+			}
+
+			auto get_runnable() const -> runnable_trace_function<ReturnTt..., InputTt...> {
+				if (_mod == nullptr) {
+					throw std::runtime_error("Module not compiled");
+				}
+				return runnable_trace_function<ReturnTt..., InputTt...>(*this);
 			}
 
 			template<is_tensor_or_vector_of_tensors ...Ts>
@@ -456,33 +467,14 @@ namespace hasty {
 
 		
 		export template<typename T>
-		concept is_trace_function = requires(T t) {
-			// Check for ReturnTraits and InputTraits
-			typename T::ReturnTraits;
-			typename T::InputTraits;
-
-			// Ensure ReturnTraits and InputTraits are tuples
-			requires std::tuple_size<typename T::ReturnTraits>::value >= 0;
-			requires std::tuple_size<typename T::InputTraits>::value >= 0;
-
-			// Ensure all elements in ReturnTraits and InputTraits are valid tensor prototypes
-			requires []<typename... Ts>(std::tuple<Ts...>*) {
-				return (hasty::trace::is_tensor_prototype<Ts> || hasty::trace::is_tensor_prototype_vector<Ts>) && ...;
-			}(static_cast<typename T::ReturnTraits*>(nullptr));
-
-			requires []<typename... Ts>(std::tuple<Ts...>*) {
-				return (hasty::trace::is_tensor_prototype<Ts> || hasty::trace::is_tensor_prototype_vector<Ts>) && ...;
-			}(static_cast<typename T::InputTraits*>(nullptr));
-
-			// Check for the module() method
-			{ t.module() } -> std::convertible_to<const hasty::trace::CompilationModule&>;
-
-			// Check for the run() method with variadic tensor arguments
-			requires requires (T t, typename T::InputTraits::value_type... inputs) {
-				{ t.run(inputs...) } -> std::convertible_to<std::tuple<hasty::trace::any_tensor_prototype_conversion_t<typename T::ReturnTraits::value_type>>>;
-			};
+		concept is_trace_function = requires {
+			std::derived_from<T, hasty::trace::trace_function<typename T::ReturnTraits, typename T::InputTraits>>;
 		};
 
+		export template<typename T>
+		concept is_runnable_trace_function = requires {
+			std::derived_from<T, hasty::trace::runnable_trace_function<typename T::ReturnTraits, typename T::InputTraits>>;
+		};
 
 		export template<is_any_tensor_prototype... ReturnTt>
 		struct trace_function_factory {

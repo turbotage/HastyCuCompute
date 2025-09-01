@@ -5,5 +5,8 @@ module;
 module trace;
 
 namespace hasty {
-    std::filesystem::path module_cache_dir = cache_dir / "module_cache";
+    namespace trace {
+        std::filesystem::path module_cache_dir = "/home/hasty_cache/modules/";
+    }
+
 }

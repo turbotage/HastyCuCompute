@@ -273,7 +273,31 @@ namespace hasty {
 						STACKED_DIAG_PROTO_T>
 		>;
 
-		static auto build_runner(i32 fft_batch_size) -> TRACE_FUNC_T 
+		using RUNNABLE_TRACE_FUNC_T = trace::runnable_trace_function<
+			std::tuple<OUTPUT_PROTO_T>,
+			std::tuple<	INPUT_PROTO_T,
+						KERNEL_PROTO_T,
+						DIAG_PROTO_T,
+						STACKED_DIAG_PROTO_T>
+		>;
+
+		static auto build_runner(i32 fft_batch_size) -> RUNNABLE_TRACE_FUNC_T 
+		{
+			struct Settings {
+				i32 _fft_batch_size;
+				Settings(i32 fft_batch_size) : _fft_batch_size(fft_batch_size) {}
+				auto name() { return "NIDTO"; }
+				auto to_string() { return std::format("fftbs{}", _fft_batch_size); }
+				bool operator==(const Settings& other) const {
+					return _fft_batch_size == other._fft_batch_size;
+				}
+			};
+
+			
+
+		}
+
+		static auto build_trace_function(i32 fft_batch_size) -> TRACE_FUNC_T 
 		{
 			INPUT_PROTO_T             input("input");
 			KERNEL_PROTO_T            kernel("kernel");
@@ -329,7 +353,7 @@ FORWARD_ENTRYPOINT(self, input, kernel, diag, stacked_diag)
 		cache_tensor<TT,DIM+1> _stacked_diags;
 		i32 _fft_batch_size;
 
-		TRACE_FUNC_T _runner;
+		RUNNABLE_TRACE_FUNC_T _runner;
 	};
 
 	export template<is_device D, is_fp_complex_tensor_type TT, size_t DIM>
