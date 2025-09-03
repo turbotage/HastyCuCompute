@@ -11,13 +11,6 @@ export import trace;
 
 namespace hasty {
 	namespace trace {
-
-		export template<typename T>
-		concept is_module_settings = requires(const T& t1, const T& t2) {
-			{ t1.name() } -> std::convertible_to<std::string>;
-			{ t1.to_string() } -> std::convertible_to<std::string>;
-			{ t1 == t2 } -> std::convertible_to<bool>;
-		};
 		
 		export extern std::filesystem::path module_cache_dir;
 
@@ -26,7 +19,7 @@ namespace hasty {
 
 			trace_cache() = default;
 
-			template<is_module_settings Settings, is_trace_function Func>
+			template<is_stringable Settings, is_trace_function Func>
 			void cache_module(const Settings& settings, std::shared_ptr<Func> func) {
 				std::lock_guard<std::mutex> lock(_cache_mutex);
 
@@ -42,7 +35,7 @@ namespace hasty {
 				};
 			}
 
-			template<is_module_settings Settings, is_trace_function Func>
+			template<is_stringable Settings, is_trace_function Func>
 			auto get_cached_trace_function(const Settings& settings) const -> trace_function<typename Func::ReturnTraits, typename Func::InputTraits> 
 			{
 				std::lock_guard<std::mutex> lock(_cache_mutex);
@@ -55,7 +48,7 @@ namespace hasty {
 				throw std::runtime_error("No cached module for given settings");
 			}
 
-			template<is_module_settings Settings, is_trace_function Func>
+			template<is_stringable Settings, is_trace_function Func>
 			auto get_cached_runnable_trace_function(const Settings& settings) const -> runnable_trace_function<typename Func::ReturnTraits, typename Func::InputTraits> 
 			{
 				std::lock_guard<std::mutex> lock(_cache_mutex);
@@ -68,14 +61,14 @@ namespace hasty {
 				throw std::runtime_error("No cached module for given settings");
 			}
 
-			template<is_module_settings Settings, is_trace_function Func>
+			template<is_stringable Settings, is_trace_function Func>
 			bool contains_cached(const Settings& settings) const {
 				std::lock_guard<std::mutex> lock(_cache_mutex);
 				Key key{settings.to_string(), typeid(Func)};
 				return _module_cache.contains(key);
 			}
 
-			template<is_module_settings Settings, is_trace_function Func>
+			template<is_stringable Settings, is_trace_function Func>
 			bool contains_file(const Settings& settings) const {
 				auto modpath = module_cache_dir / std::format("mod_{}_type_{}.txt", 
 														settings.to_string(), 
@@ -87,7 +80,7 @@ namespace hasty {
 				return true;
 			}
 
-			template<is_module_settings Settings, is_trace_function Func>
+			template<is_stringable Settings, is_trace_function Func>
 			void load_module(const Settings& settings) {
 				auto modpath = module_cache_dir / std::format("mod_{}_type_{}.pt", 
 													settings.to_string(), 
@@ -101,6 +94,28 @@ namespace hasty {
 				auto trace_func_ptr = std::make_shared<Func>(settings.name(), std::move(module));
 
 				cache_module(settings, std::move(trace_func_ptr));
+			}
+
+			template<is_stringable Settings, is_trace_function Func>
+			void save_module(const Settings& settings) const {
+				if (!std::filesystem::exists(module_cache_dir)) {
+					std::filesystem::create_directories(module_cache_dir);
+				}
+				auto modpath = module_cache_dir / std::format("mod_{}_type_{}.pt", 
+													settings.to_string(), 
+													typeid(Func).name());
+
+				Settings key{settings.to_string(), typeid(Func)};
+				{
+					std::lock_guard<std::mutex> lock(_cache_mutex);
+					auto it = _module_cache.find(key);
+					if (it != _module_cache.end()) {
+						auto& storage = it->second;
+						storage.module_getter().save(modpath.string());
+					} else {
+						throw std::runtime_error("No cached module for given settings");
+					}
+				}
 			}
 			
 
@@ -150,8 +165,8 @@ namespace hasty {
 		
 		export extern trace_cache global_trace_cache;
 
-		trace_cache global_trace_cache;
-		
+		export trace_cache global_trace_cache;
+
 	}
 		
 }
