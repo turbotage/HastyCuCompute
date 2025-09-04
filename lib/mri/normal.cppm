@@ -34,38 +34,40 @@ namespace hasty {
 	
 	*/
 	export template<is_device D, is_fp_complex_tensor_type TT, size_t DIM>
-	class normal_toeplitz_type1_operator {
+	class NORMAL_T_T1_OP {
 	public:
+
+		static constexpr std::string_view class_name = "NORMAL_T_T1_OP";
+
 		using device_type_t = D;
 		using input_tensor_type_t = TT;
 		using output_tensor_type_t = TT;
 		static constexpr std::integral_constant<size_t, DIM> input_rank_t = {};
 		static constexpr std::integral_constant<size_t, DIM> output_rank_t = {};
 
-		normal_toeplitz_type1_operator(
+		struct Settings {
+			i32 fft_batch_size = 4;
+			auto to_string() const { return std::format("{}<{}>", class_name, fft_batch_size); }
+			auto name() const { return class_name; }
+		};
+
+		NORMAL_T_T1_OP(
 			cache_tensor<TT,DIM>&& kernel, 
 			cache_tensor<TT,DIM+1>&& stacked_diags, 
-			i32 fft_batch_size = 4, 
+			const Settings& settings = {4}, 
 			bool store_module = false)
-			: _kernel(std::move(kernel)), 
+			: 
+			_settings(settings),
+			_store_module(store_module),
+			_kernel(std::move(kernel)), 
 			_stacked_diags(std::move(stacked_diags)),
-			_fft_batch_size(fft_batch_size), 
-			_store_module(store_module)
+			_runner(std::remove_reference_t<decltype(*this)>::build_runner(_settings, store_module))
 		{
 		}
 
 		tensor<D,TT,DIM> operator()(tensor<D,TT,DIM>&& x)
 		{
 			auto didx = x.get_device_idx();
-
-			constexpr size_t kernelsize = decltype(_kernel.template operator[]<D>(didx, 0, Slice{}))::size();
-			static_assert(
-					kernelsize == DIM, "Kernel was wrong size"
-			);
-			constexpr size_t stacked_diagsize = decltype(_stacked_diags.template get<D>(didx))::size();
-			static_assert(
-				stacked_diagsize == DIM+1, "Stacked diag was wrong size"
-			);
 
 			return std::get<0>(_runner.run(
 				x,
@@ -96,22 +98,17 @@ namespace hasty {
 						STACKED_DIAG_PROTO_T>
 		>;
 
-		using THIS_TYPE_T = normal_toeplitz_type1_operator<D,TT,DIM>;
+		using THIS_TYPE_T = NORMAL_T_T1_OP<D,TT,DIM>;
 
-		static auto build_runner(i32 fft_batch_size, bool store_module) -> RUNNABLE_TRACE_FUNC_T
+		static auto build_runner(const Settings& settings, bool store_module) -> RUNNABLE_TRACE_FUNC_T
 		{
-			struct Settings {
-				i32 _fft_batch_size;
-				auto to_string() { return std::format("NT_T1_OP<{}>", _fft_batch_size); }
-			} settings;
-
 			if (trace::global_trace_cache.template contains_cached<TRACE_FUNC_T>(settings)) {
 				return trace::global_trace_cache.template get_cached_runnable_trace_function<TRACE_FUNC_T>(settings);
 			} else if (trace::global_trace_cache.template contains_file<TRACE_FUNC_T>(settings)) {
 				trace::global_trace_cache.template load_module<TRACE_FUNC_T>(settings);
 				return trace::global_trace_cache.template get_cached_runnable_trace_function<TRACE_FUNC_T>(settings);
 			} else {
-				auto trace_func = std::make_shared<TRACE_FUNC_T>(THIS_TYPE_T::build_trace_function(fft_batch_size));
+				auto trace_func = std::make_shared<TRACE_FUNC_T>(THIS_TYPE_T::build_trace_function(settings));
 				trace::global_trace_cache.cache_module(settings, std::move(trace_func));
 				if (store_module) {
 					trace::global_trace_cache.template save_module<TRACE_FUNC_T>(settings);
@@ -120,18 +117,17 @@ namespace hasty {
 			}
 		}
 
-		static auto build_trace_function(i32 fft_batch_size) -> TRACE_FUNC_T
+		static auto build_trace_function(const Settings& settings) -> TRACE_FUNC_T
 		{
 			INPUT_PROTO_T			 input("input");
 			KERNEL_PROTO_T			 kernel("kernel");
 			STACKED_DIAG_PROTO_T	 stacked_diag("stacked_diag");
 
-			TRACE_FUNC_T ret = trace::trace_function_factory<OUTPUT_PROTO_T>::make(
-				"normal_toeplitz_type1_operator",
-				input, kernel, stacked_diag
-			);
+			using TRACE_FUNC_BUILDER_T = trace::trace_function_builder<
+											typename TRACE_FUNC_T::ReturnTraits::Tuple, 
+											typename TRACE_FUNC_T::InputTraits::Tuple>;
 
-			ret.add_lines(std::format(R"ts(
+			static constexpr std::string_view code = R"ts(
 FORWARD_ENTRYPOINT(self, input, kernel, stacked_diag):
 	spatial_shp = input.shape #shp[1:]
 	expanded_shp = [2*s for s in spatial_shp]
@@ -158,24 +154,28 @@ FORWARD_ENTRYPOINT(self, input, kernel, stacked_diag):
 	out *= (1 / torch.prod(torch.tensor(spatial_shp)))
 	
 	return (out,)
-)ts", fft_batch_size));
+)ts";
 
-			ret.compile();
+			TRACE_FUNC_BUILDER_T builder(
+				class_name,
+				std::format(code, settings.fft_batch_size),
+				std::move(input), std::move(kernel), std::move(stacked_diag)
+			);
 
-			return ret;
+			builder.compile();
+
+			return TRACE_FUNC_T(class_name, std::move(builder.release_module()));
 		}
 
 	private:
+		Settings _settings;
+		bool _store_module;
+
 		cache_tensor<TT,DIM> _kernel;
 		cache_tensor<TT,DIM+1> _stacked_diags;
-		i32 _fft_batch_size;
-		bool _store_module;
 
 		RUNNABLE_TRACE_FUNC_T _runner;
 	};
-
-	export template<is_device D, is_fp_complex_tensor_type TT, size_t DIM>
-	using NT_T1_OP = normal_toeplitz_type1_operator<D,TT,DIM>;
 
 	/**
 	@brief	
@@ -194,27 +194,38 @@ FORWARD_ENTRYPOINT(self, input, kernel, stacked_diag):
 	
 	*/
 	export template<is_device D, is_fp_complex_tensor_type TT, size_t DIM>
-	class normal_toeplitz_type2_operator {
+	class NORMAL_T_T2_OP {
 	public:
+	
+		static constexpr std::string_view class_name = "NORMAL_T_T2_OP";
+
 		using device_type_t = D;
 		using input_tensor_type_t = TT;
 		using output_tensor_type_t = TT;
 		static constexpr std::integral_constant<size_t, DIM> input_rank_t = {};
 		static constexpr std::integral_constant<size_t, DIM> output_rank_t = {};
 
-		normal_toeplitz_type2_operator(
+		struct Settings {
+			i32 fft_batch_size;
+			auto to_string() const { return std::format("{}<{}>", class_name, fft_batch_size); }
+			auto name() const { return class_name; }
+		};
+
+		NORMAL_T_T2_OP(
 			cache_tensor<TT,DIM>&& kernel, 
 			cache_tensor<TT,DIM>&& x, 
-			i32 fft_batch_size = 4, 
+			const Settings& settings = {4}, 
 			bool store_module = false)
-			: _kernel(std::move(kernel)), 
+			: 
+			_settings(settings),
+			_store_module(store_module),
+			_kernel(std::move(kernel)), 
 			_x(std::move(x)),
-			_fft_batch_size(fft_batch_size), 
-			_store_module(store_module)
+			_runner(std::remove_reference_t<decltype(*this)>::build_runner(_settings, store_module))
 		{
 		}
 
-		tensor<D,TT,DIM> operator()(tensor<D,TT,DIM+1>&& stacked_diags)
+		tensor<D,TT,DIM+1> operator()(tensor<D,TT,DIM+1>&& stacked_diags)
 		{
 			auto didx = stacked_diags.get_device_idx();
 
@@ -231,7 +242,7 @@ FORWARD_ENTRYPOINT(self, input, kernel, stacked_diag):
 		using KERNEL_PROTO_T = trace::tensor_prototype<D,TT,DIM>;
 		using X_PROTO_T = trace::tensor_prototype<D,TT,DIM>;
 
-		using OUTPUT_PROTO_T = trace::tensor_prototype<D,TT,DIM>;
+		using OUTPUT_PROTO_T = trace::tensor_prototype<D,TT,DIM+1>;
 
 		using TRACE_FUNC_T = trace::trace_function<
 			std::tuple<OUTPUT_PROTO_T>, 
@@ -247,22 +258,17 @@ FORWARD_ENTRYPOINT(self, input, kernel, stacked_diag):
 						X_PROTO_T>
 		>;
 
-		using THIS_TYPE_T = normal_toeplitz_type2_operator<D,TT,DIM>;
+		using THIS_TYPE_T = NORMAL_T_T2_OP<D,TT,DIM>;
 
-		static auto build_runner(i32 fft_batch_size, bool store_module) -> RUNNABLE_TRACE_FUNC_T
+		static auto build_runner(const Settings& settings, bool store_module) -> RUNNABLE_TRACE_FUNC_T
 		{
-			struct Settings {
-				i32 _fft_batch_size;
-				auto to_string() { return std::format("NT_T2_OP<{}>", _fft_batch_size); }
-			} settings;
-
 			if (trace::global_trace_cache.template contains_cached<TRACE_FUNC_T>(settings)) {
 				return trace::global_trace_cache.template get_cached_runnable_trace_function<TRACE_FUNC_T>(settings);
 			} else if (trace::global_trace_cache.template contains_file<TRACE_FUNC_T>(settings)) {
 				trace::global_trace_cache.template load_module<TRACE_FUNC_T>(settings);
 				return trace::global_trace_cache.template get_cached_runnable_trace_function<TRACE_FUNC_T>(settings);
 			} else {
-				auto trace_func = std::make_shared<TRACE_FUNC_T>(THIS_TYPE_T::build_trace_function(fft_batch_size));
+				auto trace_func = std::make_shared<TRACE_FUNC_T>(THIS_TYPE_T::build_trace_function(settings));
 				trace::global_trace_cache.cache_module(settings, std::move(trace_func));
 				if (store_module) {
 					trace::global_trace_cache.template save_module<TRACE_FUNC_T>(settings);
@@ -271,18 +277,17 @@ FORWARD_ENTRYPOINT(self, input, kernel, stacked_diag):
 			}
 		}
 
-		static auto build_trace_function(i32 fft_batch_size) -> TRACE_FUNC_T
+		static auto build_trace_function(const Settings& settings) -> TRACE_FUNC_T
 		{
-			X_PROTO_T			 	x("x");
+			X_PROTO_T			 	 x("x");
 			KERNEL_PROTO_T			 kernel("kernel");
 			STACKED_DIAG_PROTO_T	 stacked_diag("stacked_diag");
 
-			TRACE_FUNC_T ret = trace::trace_function_factory<OUTPUT_PROTO_T>::make(
-				"normal_toeplitz_type1_operator",
-				stacked_diag, kernel, x
-			);
+			using TRACE_FUNC_BUILDER_T = trace::trace_function_builder<
+											typename TRACE_FUNC_T::ReturnTraits::Tuple, 
+											typename TRACE_FUNC_T::InputTraits::Tuple>;
 
-			ret.add_lines(std::format(R"ts(
+			static constexpr std::string_view code = R"ts(
 FORWARD_ENTRYPOINT(self, stacked_diag, kernel, x):
 	spatial_shp = x.shape #shp[1:]
 	expanded_shp = [2*s for s in spatial_shp]
@@ -309,26 +314,28 @@ FORWARD_ENTRYPOINT(self, stacked_diag, kernel, x):
 	out *= x.conj()
 	
 	return (out,)
-)ts", fft_batch_size));
+)ts";
 
-			ret.compile();
+			TRACE_FUNC_BUILDER_T builder(
+				class_name,
+				std::format(code, settings.fft_batch_size),
+				std::move(stacked_diag), std::move(kernel), std::move(x)
+			);
 
-			return ret;
+			builder.compile();
+
+			return TRACE_FUNC_T(class_name, std::move(builder.release_module()));
 		}
 
 	private:
+		Settings _settings;
+		bool _store_module;
+
 		cache_tensor<TT,DIM> _kernel;
 		cache_tensor<TT,DIM> _x;
-		i32 _fft_batch_size;
-		bool _store_module;
 
 		RUNNABLE_TRACE_FUNC_T _runner;
 	};
-
-	export template<is_device D, is_fp_complex_tensor_type TT, size_t DIM>
-	using NT_T2_OP = normal_toeplitz_type2_operator<D,TT,DIM>;
-
-
 
 
 
@@ -354,14 +361,24 @@ FORWARD_ENTRYPOINT(self, stacked_diag, kernel, x):
 	@tparam DIM Dimension.
 	*/
 	export template<is_device D, is_fp_complex_tensor_type TT, size_t DIM>
-	class normal_innerlooped_diagonal_toeplitz_type1_operator {
+	class NORMAL_IDT_T1_OP {
 	public:
+
+		using THIS_TYPE_T = NORMAL_IDT_T1_OP<D,TT,DIM>;
+
+		static constexpr std::string_view class_name = "NORMAL_IDT_T1_OP";
 
 		using device_type_t = D;
 		using input_tensor_type_t = TT;
 		using output_tensor_type_t = TT;
 		static constexpr std::integral_constant<size_t, DIM> input_rank_t = {};
 		static constexpr std::integral_constant<size_t, DIM> output_rank_t = {};
+
+		struct Settings {
+			i32 fft_batch_size;
+			auto to_string() const { return std::format("{}<{}>", class_name, fft_batch_size); }
+			auto name() const { return class_name; }
+		};
 
 		/**
 		@param kernels_kerneldiags vector of pairs of kernels and kernel diagonals \f[<T_l,D_l>\f]
@@ -371,19 +388,19 @@ FORWARD_ENTRYPOINT(self, stacked_diag, kernel, x):
 		@tparam TT Tensor type.
 		@tparam DIM Dimension.
 		*/
-		normal_innerlooped_diagonal_toeplitz_type1_operator(
+		NORMAL_IDT_T1_OP(
 			cache_tensor<TT,DIM+1>&& kernels, 
 			cache_tensor<TT,DIM+1>&& kerneldiags,
 			cache_tensor<TT,DIM+1>&& stacked_diags, 
-			i32 fft_batch_size = 4,
+			const THIS_TYPE_T::Settings& settings = {4},
 			bool store_module = false)
 			: 
+			_settings(settings),
+			_store_module(store_module),
 			_kernels(std::move(kernels)), 
 			_kerneldiags(std::move(kerneldiags)),
 			_stacked_diags(std::move(stacked_diags)),
-			_runner(std::remove_reference_t<decltype(*this)>::build_runner(fft_batch_size, store_module)),
-			_fft_batch_size(fft_batch_size),
-			_store_module(store_module)
+			_runner(std::remove_reference_t<decltype(*this)>::build_runner(_settings, store_module))
 		{
 		}
 
@@ -392,19 +409,6 @@ FORWARD_ENTRYPOINT(self, stacked_diag, kernel, x):
 		{
 			
 			auto didx = x.get_device_idx();
-
-			constexpr size_t kernelsize = decltype(_kernels.template operator[]<D>(didx, 0, Slice{}))::size();
-			static_assert(
-					kernelsize == DIM, "Kernel was wrong size"
-			);
-			constexpr size_t kerneldiagsize = decltype(_kerneldiags.template operator[]<D>(didx, 0, Slice{}))::size();
-			static_assert(
-				kerneldiagsize == DIM, "Kerneldiag was wrong size"
-			);
-			constexpr size_t stacked_diagsize = decltype(_stacked_diags.template get<D>(didx))::size();
-			static_assert(
-				stacked_diagsize == DIM+1, "Stacked diag was wrong size"
-			);
 
 			// The first term in the sum
 			tensor<D,TT,DIM> out = std::get<0>(_runner.run(
@@ -459,22 +463,15 @@ FORWARD_ENTRYPOINT(self, stacked_diag, kernel, x):
 						STACKED_DIAG_PROTO_T>
 		>;
 
-		using THIS_TYPE_T = normal_innerlooped_diagonal_toeplitz_type1_operator<D,TT,DIM>;
-
-		static auto build_runner(i32 fft_batch_size, bool store_module) -> RUNNABLE_TRACE_FUNC_T 
+		static auto build_runner(const THIS_TYPE_T::Settings& settings, bool store_module) -> RUNNABLE_TRACE_FUNC_T 
 		{
-			struct Settings {
-				i32 _fft_batch_size;
-				auto to_string() { return std::format("NIDT_T1_OP<{}>", _fft_batch_size); }
-			} settings;
-
 			if (trace::global_trace_cache.template contains_cached<TRACE_FUNC_T>(settings)) {
 				return trace::global_trace_cache.template get_cached_runnable_trace_function<TRACE_FUNC_T>(settings);
 			} else if (trace::global_trace_cache.template contains_file<TRACE_FUNC_T>(settings)) {
 				trace::global_trace_cache.template load_module<TRACE_FUNC_T>(settings);
 				return trace::global_trace_cache.template get_cached_runnable_trace_function<TRACE_FUNC_T>(settings);
 			} else {
-				auto trace_func = std::make_shared<TRACE_FUNC_T>(THIS_TYPE_T::build_trace_function(fft_batch_size));
+				auto trace_func = std::make_shared<TRACE_FUNC_T>(THIS_TYPE_T::build_trace_function(settings));
 				trace::global_trace_cache.cache_module(settings, std::move(trace_func));
 				if (store_module) {
 					trace::global_trace_cache.template save_module<TRACE_FUNC_T>(settings);
@@ -484,7 +481,7 @@ FORWARD_ENTRYPOINT(self, stacked_diag, kernel, x):
 
 		}
 
-		static auto build_trace_function(i32 fft_batch_size) -> TRACE_FUNC_T 
+		static auto build_trace_function(const THIS_TYPE_T::Settings& settings) -> TRACE_FUNC_T 
 		{
 			INPUT_PROTO_T             input("input");
 			KERNEL_PROTO_T            kernel("kernel");
@@ -493,11 +490,11 @@ FORWARD_ENTRYPOINT(self, stacked_diag, kernel, x):
 			
 			OUTPUT_PROTO_T            output("output");
 
-			TRACE_FUNC_T ret = trace::trace_function_factory<OUTPUT_PROTO_T>::make(
-									"normal_innerlooped_diagonal_toeplitz_type1_operator", 
-									input, kernel, diag, stacked_diag);
+			using TRACE_FUNC_BUILDER_T = trace::trace_function_builder<
+											typename TRACE_FUNC_T::ReturnTraits::Tuple, 
+											typename TRACE_FUNC_T::InputTraits::Tuple>;
 
-			ret.add_lines(std::format(R"ts(
+			static constexpr std::string_view code = R"ts(
 FORWARD_ENTRYPOINT(self, input, kernel, diag, stacked_diag):
 	spatial_shp = input.shape #shp[1:]
 	expanded_shp = [2*s for s in spatial_shp]
@@ -528,25 +525,29 @@ FORWARD_ENTRYPOINT(self, input, kernel, diag, stacked_diag):
 	out *= (1 / torch.prod(torch.tensor(spatial_shp)))
 	
 	return (out,)
-)ts", fft_batch_size));
+)ts";
 
-			ret.compile();
+			TRACE_FUNC_BUILDER_T builder(
+				class_name,
+				std::format(code, settings.fft_batch_size),
+				std::move(input), std::move(kernel), std::move(diag), std::move(stacked_diag)
+			);
 
-			return ret;
+			builder.compile();
+
+			return TRACE_FUNC_T(class_name, std::move(builder.release_module()));
 		}
 
 	private:
+		THIS_TYPE_T::Settings _settings;
+		bool _store_module;
+
 		cache_tensor<TT,DIM+1> _kernels;
 		cache_tensor<TT,DIM+1> _kerneldiags;
 		cache_tensor<TT,DIM+1> _stacked_diags;
-		i32 _fft_batch_size;
-		bool _store_module;
 
 		RUNNABLE_TRACE_FUNC_T _runner;
 	};
-
-	export template<is_device D, is_fp_complex_tensor_type TT, size_t DIM>
-	using NIDT_T1_OP = normal_innerlooped_diagonal_toeplitz_type1_operator<D,TT,DIM>;
 
 	/**
 	@brief	
@@ -565,14 +566,22 @@ FORWARD_ENTRYPOINT(self, input, kernel, diag, stacked_diag):
 	@tparam DIM Dimension.
 	*/
 	export template<is_device D, is_fp_complex_tensor_type TT, size_t DIM>
-	class normal_innerlooped_diagonal_toeplitz_type2_operator {
+	class NORMAL_IDT_T2_OP {
 	public:
+
+		static constexpr std::string_view class_name = "NORMAL_IDT_T2_OP";
 
 		using device_type_t = D;
 		using input_tensor_type_t = TT;
 		using output_tensor_type_t = TT;
 		static constexpr std::integral_constant<size_t, DIM+1> input_rank_t = {};
 		static constexpr std::integral_constant<size_t, DIM+1> output_rank_t = {};
+
+		struct Settings {
+			i32 fft_batch_size;
+			auto to_string() const { return std::format("{}<{}>", class_name, fft_batch_size); }
+			auto name() const { return class_name; }
+		};
 
 		/**
 		@param kernels_kerneldiags vector of pairs of kernels and kernel diagonals \f[<T_l,D_l>\f]
@@ -582,31 +591,31 @@ FORWARD_ENTRYPOINT(self, input, kernel, diag, stacked_diag):
 		@tparam TT Tensor type.
 		@tparam DIM Dimension.
 		*/
-		normal_innerlooped_diagonal_toeplitz_type2_operator(
+		NORMAL_IDT_T2_OP(
 			cache_tensor<TT,DIM+1>&& kernels, 
 			cache_tensor<TT,DIM+1>&& kerneldiags,
 			cache_tensor<TT,DIM>&& x, 
-			i32 fft_batch_size = 4,
+			const Settings& settings = {4},
 			bool store_module = false)
 			: 
+			_settings(settings),
+			_store_module(store_module),
 			_kernels(std::move(kernels)), 
 			_kerneldiags(std::move(kerneldiags)),
 			_x(std::move(x)),
-			_runner(std::remove_reference_t<decltype(*this)>::build_runner(fft_batch_size, store_module)),
-			_fft_batch_size(fft_batch_size),
-			_store_module(store_module)
+			_runner(std::remove_reference_t<decltype(*this)>::build_runner(_settings, store_module))
 		{
 		}
 
-		tensor<D,TT,DIM> operator()(tensor<D,TT,DIM>&& stacked_diag)
+		tensor<D,TT,DIM+1> operator()(tensor<D,TT,DIM+1>&& stacked_diag)
 		{
 			auto didx = stacked_diag.get_device_idx();
 
 			// The first term in the sum
-			tensor<D,TT,DIM> out = std::get<0>(_runner.run(
+			tensor<D,TT,DIM+1> out = std::get<0>(_runner.run(
 				stacked_diag, 
 				_kernels.template operator[]<D>(didx, 0, Slice{}),
-				_x.template operator[]<D>(didx),
+				_x.template get<D>(didx),
 				_kerneldiags.template operator[]<D>(didx, 0, Slice{})
 			));
 			
@@ -617,7 +626,7 @@ FORWARD_ENTRYPOINT(self, input, kernel, diag, stacked_diag):
 			// Loop over off kernels >= 1
 			for (int i = 1; i < _kernels.template shape<0>(); ++i) {
 
-				std::tuple<tensor<D,TT,DIM>> tensortup = _runner.run(
+				std::tuple<tensor<D,TT,DIM+1>> tensortup = _runner.run(
 					stacked_diag,
 					_kernels.template operator[]<D>(didx, i, Slice{}),
 					_x.template get<D>(didx),
@@ -637,7 +646,7 @@ FORWARD_ENTRYPOINT(self, input, kernel, diag, stacked_diag):
 		using X_PROTO_T = trace::tensor_prototype<D,TT,DIM>;
 		using DIAG_PROTO_T = trace::tensor_prototype<D,TT,DIM>;
 
-		using OUTPUT_PROTO_T = trace::tensor_prototype<D,TT,DIM>;
+		using OUTPUT_PROTO_T = trace::tensor_prototype<D,TT,DIM+1>;
 
 		using TRACE_FUNC_T = trace::trace_function<
 			std::tuple<OUTPUT_PROTO_T>, 
@@ -655,22 +664,17 @@ FORWARD_ENTRYPOINT(self, input, kernel, diag, stacked_diag):
 						DIAG_PROTO_T>
 		>;
 
-		using THIS_TYPE_T = normal_innerlooped_diagonal_toeplitz_type2_operator<D,TT,DIM>;
+		using THIS_TYPE_T = NORMAL_IDT_T2_OP<D,TT,DIM>;
 
-		static auto build_runner(i32 fft_batch_size, bool store_module) -> RUNNABLE_TRACE_FUNC_T 
+		static auto build_runner(const Settings& settings, bool store_module) -> RUNNABLE_TRACE_FUNC_T 
 		{
-			struct Settings {
-				i32 _fft_batch_size;
-				auto to_string() { return std::format("NIDT_T2_OP<{}>", _fft_batch_size); }
-			} settings;
-
 			if (trace::global_trace_cache.template contains_cached<TRACE_FUNC_T>(settings)) {
 				return trace::global_trace_cache.template get_cached_runnable_trace_function<TRACE_FUNC_T>(settings);
 			} else if (trace::global_trace_cache.template contains_file<TRACE_FUNC_T>(settings)) {
 				trace::global_trace_cache.template load_module<TRACE_FUNC_T>(settings);
 				return trace::global_trace_cache.template get_cached_runnable_trace_function<TRACE_FUNC_T>(settings);
 			} else {
-				auto trace_func = std::make_shared<TRACE_FUNC_T>(THIS_TYPE_T::build_trace_function(fft_batch_size));
+				auto trace_func = std::make_shared<TRACE_FUNC_T>(THIS_TYPE_T::build_trace_function(settings));
 				trace::global_trace_cache.cache_module(settings, std::move(trace_func));
 				if (store_module) {
 					trace::global_trace_cache.template save_module<TRACE_FUNC_T>(settings);
@@ -680,7 +684,7 @@ FORWARD_ENTRYPOINT(self, input, kernel, diag, stacked_diag):
 
 		}
 
-		static auto build_trace_function(i32 fft_batch_size) -> TRACE_FUNC_T 
+		static auto build_trace_function(const Settings& settings) -> TRACE_FUNC_T 
 		{
 			STACKED_DIAG_PROTO_T      stacked_diag("stacked_diag");
 			KERNEL_PROTO_T            kernel("kernel");
@@ -689,11 +693,11 @@ FORWARD_ENTRYPOINT(self, input, kernel, diag, stacked_diag):
 			
 			OUTPUT_PROTO_T            output("output");
 
-			TRACE_FUNC_T ret = trace::trace_function_factory<OUTPUT_PROTO_T>::make(
-									"normal_innerlooped_diagonal_toeplitz_type2_operator", 
-									stacked_diag, kernel, x, diag);
+			using TRACE_FUNC_BUILDER_T = trace::trace_function_builder<
+											typename TRACE_FUNC_T::ReturnTraits::Tuple, 
+											typename TRACE_FUNC_T::InputTraits::Tuple>;
 
-			ret.add_lines(std::format(R"ts(
+			static constexpr std::string_view code = R"ts(
 FORWARD_ENTRYPOINT(self, stacked_diag, kernel, x, diag):
 	spatial_shp = x.shape #shp[1:]
 	expanded_shp = [2*s for s in spatial_shp]
@@ -723,27 +727,29 @@ FORWARD_ENTRYPOINT(self, stacked_diag, kernel, x, diag):
 	out *= (1 / torch.prod(torch.tensor(spatial_shp)))
 	
 	return (out,)
-)ts", fft_batch_size));
+)ts";
 
-			ret.compile();
+			TRACE_FUNC_BUILDER_T builder(
+				class_name,
+				std::format(code, settings.fft_batch_size),
+				std::move(stacked_diag), std::move(kernel), std::move(x), std::move(diag)
+			);
 
-			return ret;
+			builder.compile();
+
+			return TRACE_FUNC_T(class_name, std::move(builder.release_module()));
 		}
 
 	private:
+		Settings _settings;
+		bool _store_module;
+
 		cache_tensor<TT,DIM+1> _kernels;
 		cache_tensor<TT,DIM+1> _kerneldiags;
 		cache_tensor<TT,DIM> _x;
-		i32 _fft_batch_size;
-		bool _store_module;
 
 		RUNNABLE_TRACE_FUNC_T _runner;
 	};
-
-	export template<is_device D, is_fp_complex_tensor_type TT, size_t DIM>
-	using NIDT_T2_OP = normal_innerlooped_diagonal_toeplitz_type2_operator<D,TT,DIM>;
-
-
 
 
 	/**
@@ -772,14 +778,22 @@ FORWARD_ENTRYPOINT(self, stacked_diag, kernel, x, diag):
 	@tparam DIM Dimension.
 	*/
 	export template<is_device D, is_fp_complex_tensor_type TT, size_t DIM>
-	class normal_innerlooped_diagonal_toeplitz_weighted_type1_operator {
+	class NORMAL_IDTW_T1_OP {
 	public:
  
+		static constexpr std::string_view class_name = "NORMAL_IDTW_T1_OP";
+
 		using device_type_t = D;
 		using input_tensor_type_t = TT;
 		using output_tensor_type_t = TT;
 		static constexpr std::integral_constant<size_t, DIM> input_rank_t = {};
 		static constexpr std::integral_constant<size_t, DIM> output_rank_t = {};
+
+		struct Settings {
+			i32 fft_batch_size;
+			auto to_string() const { return std::format("{}<{}>", class_name, fft_batch_size); }
+			auto name() const { return class_name; }
+		};
 
 		/**
 		@param kernels_kerneldiags vector of pairs of kernels and kernel diagonals \f[<T_l,D_l>\f]
@@ -789,22 +803,22 @@ FORWARD_ENTRYPOINT(self, stacked_diag, kernel, x, diag):
 		@tparam TT Tensor type.
 		@tparam DIM Dimension.
 		*/
-		normal_innerlooped_diagonal_toeplitz_weighted_type1_operator(
+		NORMAL_IDTW_T1_OP(
 			cache_tensor<TT,DIM+1>&& kernels, 
 			cache_tensor<TT,DIM+1>&& kerneldiags,
 			cache_tensor<TT,DIM+1>&& stacked_diags, 
 			cache_tensor<TT,2>&& weights, 
-			i32 fft_batch_size = 4,
+			const Settings& settings = {4},
 			bool store_module = false
 		)
 			: 
+			_settings(settings),
+			_store_module(store_module),
 			_kernels(std::move(kernels)),
 			_kerneldiags(std::move(kerneldiags)),
 			_stacked_diags(std::move(stacked_diags)),
 			_weights(std::move(weights)),
-			_runner(std::remove_reference_t<decltype(*this)>::build_runner(fft_batch_size)),
-			_fft_batch_size(fft_batch_size),
-			_store_module(store_module)
+			_runner(std::remove_reference_t<decltype(*this)>::build_runner(_settings, store_module))
 		{
 		}
 
@@ -870,22 +884,17 @@ FORWARD_ENTRYPOINT(self, stacked_diag, kernel, x, diag):
 						WEIGHTS_PROTO_T>
 		>;
 
-		using THIS_TYPE_T = normal_innerlooped_diagonal_toeplitz_weighted_type1_operator<D,TT,DIM>;
+		using THIS_TYPE_T = NORMAL_IDTW_T1_OP<D,TT,DIM>;
 
-		static auto build_runner(i32 fft_batch_size, bool store_module) -> RUNNABLE_TRACE_FUNC_T 
+		static auto build_runner(const Settings& settings, bool store_module) -> RUNNABLE_TRACE_FUNC_T 
 		{
-			struct Settings {
-				i32 _fft_batch_size;
-				auto to_string() { return std::format("NIDTW_T1_OP<{}>", _fft_batch_size); }
-			} settings;
-
 			if (trace::global_trace_cache.template contains_cached<TRACE_FUNC_T>(settings)) {
 				return trace::global_trace_cache.template get_cached_runnable_trace_function<TRACE_FUNC_T>(settings);
 			} else if (trace::global_trace_cache.template contains_file<TRACE_FUNC_T>(settings)) {
 				trace::global_trace_cache.template load_module<TRACE_FUNC_T>(settings);
 				return trace::global_trace_cache.template get_cached_runnable_trace_function<TRACE_FUNC_T>(settings);
 			} else {
-				auto trace_func = std::make_shared<TRACE_FUNC_T>(THIS_TYPE_T::build_trace_function(fft_batch_size));
+				auto trace_func = std::make_shared<TRACE_FUNC_T>(THIS_TYPE_T::build_trace_function(settings));
 				trace::global_trace_cache.cache_module(settings, std::move(trace_func));
 				if (store_module) {
 					trace::global_trace_cache.template save_module<TRACE_FUNC_T>(settings);
@@ -895,7 +904,7 @@ FORWARD_ENTRYPOINT(self, stacked_diag, kernel, x, diag):
 
 		}
 
-		static auto build_trace_function(i32 fft_batch_size) -> TRACE_FUNC_T {
+		static auto build_trace_function(const Settings& settings) -> TRACE_FUNC_T {
 
 			INPUT_PROTO_T             input("input");
 			KERNEL_PROTO_T            kernel("kernel");
@@ -903,14 +912,13 @@ FORWARD_ENTRYPOINT(self, stacked_diag, kernel, x, diag):
 			STACKED_DIAG_PROTO_T      stacked_diag("stacked_diag");
 			WEIGHTS_PROTO_T           weights("weights");
 
-			
 			OUTPUT_PROTO_T            output("output");
 
-			TRACE_FUNC_T ret = trace::trace_function_factory<OUTPUT_PROTO_T>::make(
-									"normal_innerlooped_diagonal_toeplitz_weighted_type1_operator", 
-									input, kernel, diag, stacked_diag, weights);
+			using TRACE_FUNC_BUILDER_T = trace::trace_function_builder<
+											typename TRACE_FUNC_T::ReturnTraits::Tuple, 
+											typename TRACE_FUNC_T::InputTraits::Tuple>;
 
-			ret.add_lines(std::format(R"ts(
+			static constexpr std::string_view code = R"ts(
 FORWARD_ENTRYPOINT(self, input, kernel, diag, stacked_diag, weights):
 	spatial_shp = input.shape #shp[1:]
 	expanded_shp = [2*s for s in spatial_shp]
@@ -946,27 +954,30 @@ FORWARD_ENTRYPOINT(self, input, kernel, diag, stacked_diag, weights):
 	out *= (1 / torch.prod(torch.tensor(spatial_shp)))
 	
 	return (out,)
-)ts", fft_batch_size));
+)ts";
 
-			ret.compile();
+			TRACE_FUNC_BUILDER_T builder(
+				class_name,
+				std::format(code, settings.fft_batch_size),
+				std::move(input), std::move(kernel), std::move(diag), std::move(stacked_diag), std::move(weights)
+			);
 
-			return ret;
+			builder.compile();
+
+			return TRACE_FUNC_T(class_name, std::move(builder.release_module()));
 		}
 
 	private:
+		Settings _settings;
+		bool _store_module;
+		
 		cache_tensor<TT,DIM+1> _kernels;
 		cache_tensor<TT,DIM+1> _kerneldiags;
 		cache_tensor<TT,DIM+1> _stacked_diags;
 		cache_tensor<TT,2> _weights;
-		i32 _fft_batch_size;
-		bool _store_module;
 
-		TRACE_FUNC_T _runner;
+		RUNNABLE_TRACE_FUNC_T _runner;
 	};
-
-	export template<is_device D, is_fp_complex_tensor_type TT, size_t DIM>
-	using NIDTW_T1_OP = normal_innerlooped_diagonal_toeplitz_weighted_type1_operator<D,TT,DIM>;
-
 
 	/**
 	@brief
@@ -987,36 +998,44 @@ FORWARD_ENTRYPOINT(self, input, kernel, diag, stacked_diag, weights):
 	@tparam DIM Dimension.
 	*/
 	export template<is_device D, is_fp_complex_tensor_type TT, size_t DIM>
-	class normal_innerlooped_diagonal_toeplitz_weighted_type2_operator {
+	class NORMAL_IDTW_T2_OP {
 	public:
- 
+
+		static constexpr std::string_view class_name = "NORMAL_IDTW_T2_OP";
+
 		using device_type_t = D;
 		using input_tensor_type_t = TT;
 		using output_tensor_type_t = TT;
 		static constexpr std::integral_constant<size_t, DIM+1> input_rank_t = {};
 		static constexpr std::integral_constant<size_t, DIM+1> output_rank_t = {};
 
+		struct Settings {
+			i32 fft_batch_size;
+			auto to_string() const { return std::format("{}<{}>", class_name, fft_batch_size); }
+			auto name() const { return class_name; }
+		};
+
 		/**
 		@tparam D Device type.
 		@tparam TT Tensor type.
 		@tparam DIM Dimension.
 		*/
-		normal_innerlooped_diagonal_toeplitz_weighted_type2_operator(
+		NORMAL_IDTW_T2_OP(
 			cache_tensor<TT,DIM+1>&& kernels, 
 			cache_tensor<TT,DIM+1>&& kerneldiags,
 			cache_tensor<TT,DIM>&& x, 
 			cache_tensor<TT,2>&& weights, 
-			i32 fft_batch_size = 4,
+			const Settings& settings = {4},
 			bool store_module = false
 		)
 			: 
+			_settings(settings),
+			_store_module(store_module),
 			_kernels(std::move(kernels)),
 			_kerneldiags(std::move(kerneldiags)),
 			_x(std::move(x)),
 			_weights(std::move(weights)),
-			_runner(std::remove_reference_t<decltype(*this)>::build_runner(fft_batch_size)),
-			_fft_batch_size(fft_batch_size),
-			_store_module(store_module)
+			_runner(std::remove_reference_t<decltype(*this)>::build_runner(_settings, store_module))
 		{
 		}
 
@@ -1025,7 +1044,7 @@ FORWARD_ENTRYPOINT(self, input, kernel, diag, stacked_diag, weights):
 			auto didx = stacked_diags.get_device_idx();
 
 			// The first term in the sum
-			tensor<D,TT,DIM> out = std::get<0>(_runner.run(
+			tensor<D,TT,DIM+1> out = std::get<0>(_runner.run(
 				stacked_diags,
 				_kernels.template operator[]<D>(didx, 0, Slice{}),
 				_kerneldiags.template operator[]<D>(didx, 0, Slice{}),
@@ -1039,7 +1058,7 @@ FORWARD_ENTRYPOINT(self, input, kernel, diag, stacked_diag, weights):
 
 			// Loop over off kernels >= 1
 			for (int i = 1; i < _kernels.template shape<0>(); ++i) {
-				std::tuple<tensor<D,TT,DIM>> tensortup = _runner.run(
+				std::tuple<tensor<D,TT,DIM+1>> tensortup = _runner.run(
 					stacked_diags,
 					_kernels.template operator[]<D>(didx, i, Slice{}),
 					_kerneldiags.template operator[]<D>(didx, i, Slice{}),
@@ -1061,7 +1080,7 @@ FORWARD_ENTRYPOINT(self, input, kernel, diag, stacked_diag, weights):
 		using X_PROTO_T = trace::tensor_prototype<D,TT,DIM>;
 		using WEIGHTS_PROTO_T = trace::tensor_prototype<D,TT,2>;
 
-		using OUTPUT_PROTO_T = trace::tensor_prototype<D,TT,DIM>;
+		using OUTPUT_PROTO_T = trace::tensor_prototype<D,TT,DIM+1>;
 
 		using TRACE_FUNC_T = trace::trace_function<
 			std::tuple<OUTPUT_PROTO_T>, 
@@ -1081,22 +1100,17 @@ FORWARD_ENTRYPOINT(self, input, kernel, diag, stacked_diag, weights):
 						WEIGHTS_PROTO_T>
 		>;
 
-		using THIS_TYPE_T = normal_innerlooped_diagonal_toeplitz_weighted_type2_operator<D,TT,DIM>;
+		using THIS_TYPE_T = NORMAL_IDTW_T2_OP<D,TT,DIM>;
 
-		static auto build_runner(i32 fft_batch_size, bool store_module) -> RUNNABLE_TRACE_FUNC_T 
+		static auto build_runner(const Settings& settings, bool store_module) -> RUNNABLE_TRACE_FUNC_T 
 		{
-			struct Settings {
-				i32 _fft_batch_size;
-				auto to_string() { return std::format("NIDTW_T2_OP<{}>", _fft_batch_size); }
-			} settings;
-
 			if (trace::global_trace_cache.template contains_cached<TRACE_FUNC_T>(settings)) {
 				return trace::global_trace_cache.template get_cached_runnable_trace_function<TRACE_FUNC_T>(settings);
 			} else if (trace::global_trace_cache.template contains_file<TRACE_FUNC_T>(settings)) {
 				trace::global_trace_cache.template load_module<TRACE_FUNC_T>(settings);
 				return trace::global_trace_cache.template get_cached_runnable_trace_function<TRACE_FUNC_T>(settings);
 			} else {
-				auto trace_func = std::make_shared<TRACE_FUNC_T>(THIS_TYPE_T::build_trace_function(fft_batch_size));
+				auto trace_func = std::make_shared<TRACE_FUNC_T>(THIS_TYPE_T::build_trace_function(settings));
 				trace::global_trace_cache.cache_module(settings, std::move(trace_func));
 				if (store_module) {
 					trace::global_trace_cache.template save_module<TRACE_FUNC_T>(settings);
@@ -1106,23 +1120,21 @@ FORWARD_ENTRYPOINT(self, input, kernel, diag, stacked_diag, weights):
 
 		}
 
-		static auto build_trace_function(i32 fft_batch_size) -> TRACE_FUNC_T {
+		static auto build_trace_function(const Settings& settings) -> TRACE_FUNC_T {
 
 			STACKED_DIAG_PROTO_T      stacked_diag("stacked_diag");
 			KERNEL_PROTO_T            kernel("kernel");
 			DIAG_PROTO_T              diag("diag");
 			X_PROTO_T             	  x("x");
 			WEIGHTS_PROTO_T           weights("weights");
-
 			
 			OUTPUT_PROTO_T            output("output");
 
-			TRACE_FUNC_T ret = trace::trace_function_factory<OUTPUT_PROTO_T>::make(
-									"normal_innerlooped_diagonal_toeplitz_weighted_type2_operator", 
-									stacked_diag, kernel, diag, x, weights
-								);
+			using TRACE_FUNC_BUILDER_T = trace::trace_function_builder<
+											typename TRACE_FUNC_T::ReturnTraits::Tuple, 
+											typename TRACE_FUNC_T::InputTraits::Tuple>;
 
-			ret.add_lines(std::format(R"ts(
+			static constexpr std::string_view code = R"ts(
 FORWARD_ENTRYPOINT(self, stacked_diag, kernel, diag, x, weights):
 	spatial_shp = x.shape #shp[1:]
 	expanded_shp = [2*s for s in spatial_shp]
@@ -1158,27 +1170,29 @@ FORWARD_ENTRYPOINT(self, stacked_diag, kernel, diag, x, weights):
 	out *= (1 / torch.prod(torch.tensor(spatial_shp)))
 	
 	return (out,)
-)ts", fft_batch_size));
+)ts";
 
-			ret.compile();
+			TRACE_FUNC_BUILDER_T builder(
+				class_name,
+				std::format(code, settings.fft_batch_size),
+				std::move(stacked_diag), std::move(kernel), std::move(diag), std::move(x), std::move(weights)
+			);
 
-			return ret;
+			builder.compile();
+
+			return TRACE_FUNC_T(class_name, std::move(builder.release_module()));
 		}
 
 	private:
+		Settings _settings;
+		bool _store_module;
+		
 		cache_tensor<TT,DIM+1> _kernels;
 		cache_tensor<TT,DIM+1> _kerneldiags;
 		cache_tensor<TT,DIM> _x;
 		cache_tensor<TT,2> _weights;
-		i32 _fft_batch_size;
-		bool _store_module;
 
-		TRACE_FUNC_T _runner;
+		RUNNABLE_TRACE_FUNC_T _runner;
 	};
-
-	export template<is_device D, is_fp_complex_tensor_type TT, size_t DIM>
-	using NIDTW_T2_OP = normal_innerlooped_diagonal_toeplitz_weighted_type2_operator<D,TT,DIM>;
-
-
 
 }

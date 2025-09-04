@@ -31,32 +31,35 @@ namespace hasty {
 		trace::tensor_prototype<D,real_t<TT>,0> rzold("rzold");
 		trace::tensor_prototype<D,b8_t,0> restart("restart");
 
-		auto cg1 = trace::trace_function_factory<decltype(x), decltype(r)>::make("cg_step1", x,p,Ap,r);
-
-		cg1.add_lines(
-std::format(R"ts(
+		auto cg1_builder = trace::trace_function_builder_factory<decltype(x), decltype(r)>::make(
+						"cg_step1", 
+						std::format(R"ts(
+FORWARD_ENTRYPOINT(self, x, p, Ap, r):
 	pAp = torch.real(torch.vdot(p.flatten(),Ap.flatten()))
 	alpha = rzold / pAp
 	x += p * alpha
 	r -= Ap * alpha
 	return (x, r)
-)ts"));
+		)ts"), x,p,Ap,r);
 
-		cg1.compile();
+		cg1_builder.compile();
+		auto cg1 = cg1_builder.build_trace_function();
 
-		auto cg2 = trace::trace_function_factory<decltype(p), decltype(rzold)>::make("cg_step2", z,r,p,rzold,restart);
-
-		cg2.add_lines(
-std::format(R"ts(
+		auto cg2_builder = trace::trace_function_builder_factory<decltype(p), decltype(rzold)>::make(
+						"cg_step2", 
+						std::format(R"ts(
+FORWARD_ENTRYPOINT(self, z, r, p, rzold, restart):
 	rznew = torch.real(torch.vdot(r.flatten(),z.flatten()))
 	if restart.item():
 		p = z
 	else:
 		p = z + p * (rznew / rzold)
 	return (p, rznew)
-)ts"));
+)ts"), z,r,p,rzold,restart);
 
-		cg2.compile();
+		cg2_builder.compile();
+		auto cg2 = cg2_builder.build_trace_function();
+
 
 		auto cgl = [cg1=std::move(cg1), cg2=std::move(cg2), A=std::move(A), P=std::move(P), 
 					max_inner_iter, max_outer_iter, tol]
@@ -127,11 +130,10 @@ std::format(R"ts(
 		trace::tensor_prototype<D,TT,R> r("r");
 		trace::tensor_prototype<D,real_t<TT>,0> rzold("rzold");
 
-		auto cg = trace::trace_function_factory<decltype(x), decltype(r), 
-						decltype(p), decltype(rzold)>::make("cg_step", x,p,Ap,r);
-
-		cg.add_lines(
-std::format(R"ts(
+		auto cg_builder = trace::trace_function_builder_factory<decltype(x), decltype(r), decltype(p), decltype(rzold)>::make(
+					"cg_step", 
+					std::format(R"ts(
+FORWARD_ENTRYPOINT(self, x, p, Ap, r):
 	pAp = torch.real(torch.vdot(p.flatten(),Ap.flatten()))
 	alpha = rzold / pAp
 	x += p * alpha
@@ -141,9 +143,9 @@ std::format(R"ts(
 	p = r + p * (rznew / rzold)
 	
 	return x, r, p, rznew
-)ts"));
-
-		cg.compile();
+)ts"), x,p,Ap,r);
+		cg_builder.compile();
+		auto cg = cg_builder.build_trace_function();
 
 		auto cgl = [cg = std::move(cg), A = std::move(A), max_iter, tol]
 						(tensor<D,TT,R>& x, const tensor<D,TT,R>& b) 

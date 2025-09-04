@@ -19,10 +19,10 @@ namespace hasty {
 		trace::tensor_prototype<D,TT,DIM> xmeanproto("xmean");
 		trace::tensor_prototype<D,TT,DIM> output("output");
 
-		auto runner = trace::trace_function_factory<decltype(output)>::make(
-						"magnitude_reg_gradient_stepper", xproto, maskproto, xmeanproto);
-
-		runner.add_lines(std::format(R"ts(
+		auto builder = trace::trace_function_builder_factory<decltype(output)>::make(
+						"magnitude_reg_gradient_stepper", 
+						xproto, maskproto, xmeanproto,
+						std::format(R"ts(
 	with torch.inference_mode():
 		output = torch.zeros_like(x)
 
@@ -38,8 +38,8 @@ namespace hasty {
 
 		return output
 )ts", 2));
-
-		runner.compile();
+		builder.compile();
+		auto runner = builder.build_trace_function();
 
 		using INP1 = const tensor<D,TT,DIM>&;
 		using INP2 = const tensor<D,b8_t,DIM>&;

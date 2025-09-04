@@ -155,6 +155,10 @@ namespace hasty {
             return _block->shape[R];
         }
 
+        cache_tensor<TT,RANK> copy() const {
+            return *this;
+        }
+
         /*
         @brief Be careful with this operator, if asked device is cpu it will return a view of the tensor,
         if cuda is asked for and the tensor is already cuda backed, it will return a view of the tensor,
@@ -167,6 +171,9 @@ namespace hasty {
         requires less_than_or_equal<N, RANK> && less_than<0, RANK>
         auto operator[](device_idx didx, const std::array<Slice, N>& slices) const -> tensor<D, TT, RANK>
         {
+            if (!_block)
+                throw std::runtime_error("operator[]: cache_tensor is not initialized");
+
             std::unique_lock<std::mutex> lock(_block->mutex);
 
             if constexpr(std::is_same_v<D,cpu_t>) {
@@ -192,6 +199,9 @@ namespace hasty {
         requires less_than<0, RANK>
         auto operator[](device_idx didx, std::tuple<Idx...> indices) const -> tensor<D, TT, RANK>
         {
+            if (!_block)
+                throw std::runtime_error("operator[]: cache_tensor is not initialized");
+
             std::unique_lock<std::mutex> lock(_block->mutex);
 
             if constexpr(std::is_same_v<D,cpu_t>) {
@@ -217,6 +227,9 @@ namespace hasty {
         requires less_than<0, RANK>
         auto operator[](device_idx didx, Idx... indices) const
         {
+            if (!_block)
+                throw std::runtime_error("operator[]: cache_tensor is not initialized");
+
             std::unique_lock<std::mutex> lock(_block->mutex);
 
             if constexpr(std::is_same_v<D,cpu_t>) {
@@ -234,6 +247,9 @@ namespace hasty {
         template<class D>
         auto operator[](device_idx didx, const tensor<D, b8_t, RANK>& mask) const -> tensor<D, TT, 1>
         {
+            if (!_block)
+                throw std::runtime_error("operator[]: cache_tensor is not initialized");
+            
             std::unique_lock<std::mutex> lock(_block->mutex);
 
             if constexpr(std::is_same_v<D,cpu_t>) {
@@ -250,6 +266,9 @@ namespace hasty {
 
         template<is_device D>
         auto get_ptr(device_idx idx = device_idx::CPU) -> sptr<tensor<D,TT,RANK>> {
+            if (!_block)
+                throw std::runtime_error("get_ptr: cache_tensor is not initialized");
+            
             std::unique_lock<std::mutex> lock(_block->mutex);
 
             if constexpr(std::is_same_v<D,cpu_t>) {
@@ -261,6 +280,9 @@ namespace hasty {
 
         template<is_device D>
         auto get(device_idx idx = device_idx::CPU) -> tensor<D,TT,RANK> {
+            if (!_block)
+                throw std::runtime_error("get: cache_tensor is not initialized");
+
             std::unique_lock<std::mutex> lock(_block->mutex);
 
             if constexpr(std::is_same_v<D,cpu_t>) {
@@ -271,21 +293,29 @@ namespace hasty {
         }
 
         void cache() {
+            if (!_block)
+                throw std::runtime_error("cache: cache_tensor is not initialized");
             std::unique_lock<std::mutex> lock(_block->mutex);
             cache_disk();
         }
 
         void free_cpu() {
+            if (!_block)
+                throw std::runtime_error("free_cpu: cache_tensor is not initialized");
             std::unique_lock<std::mutex> lock(_block->mutex);
             _block->tensor_cpu = nullptr;
         }
 
         void free(device_idx idx) {
+            if (!_block)
+                throw std::runtime_error("free: cache_tensor is not initialized");
             std::unique_lock<std::mutex> lock(_block->mutex);
             _block->cuda_tensors[i32(idx)] = nullptr;
         }
 
         void uncache() {
+            if (!_block)
+                throw std::runtime_error("uncache: cache_tensor is not initialized");
             std::unique_lock<std::mutex> lock(_block->mutex);
             uncache_disk();
         }

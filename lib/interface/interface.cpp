@@ -8,6 +8,7 @@ import nufft;
 
 import mri;
 import trace;
+import trace_cache;
 
 namespace ffi {
 
@@ -216,7 +217,7 @@ namespace ffi {
 		auto input = hasty::make_rand_tensor<cuda_t,c64_t,3>(hasty::span<3>({xres, yres, zres}), device_idx::CUDA0);
 
 		//sense_normal_image_offresonance_diagonal<cuda_t, c64_t, 3> sense(smaps, diagonal, kernels, ratemap_diagonals);
-		NIDT_T1_OP<cuda_t, c64_t, 3> normal_sense(
+		NORMAL_IDT_T1_OP<cuda_t, c64_t, 3> normal_sense(
 			std::move(kernels), 
 			std::move(kerneldiags),
 			std::move(smaps)
@@ -304,12 +305,13 @@ namespace ffi {
 		);
 
 
-		NIDTW_T1_OP<cuda_t, c64_t, 3> normal_sense(
+		NORMAL_IDTW_T1_OP<cuda_t, c64_t, 3> normal_sense(
 			std::move(kernels), 
 			std::move(kerneldiags),
 			std::move(smaps),
 			std::move(coilweights),
-			1
+			{1}
+
 		);
 
 		auto output = normal_sense(std::move(input));
@@ -333,13 +335,15 @@ namespace ffi {
 		using namespace hasty;
 
 		cache_dir = "/home/turbotage/Documents/hasty_cache/";
+		trace::module_cache_dir = cache_dir / "modules/";
 
-		int xres = 320;
-		int yres = 320;
-		int zres = 320;
+		int xres = 256;
+		int yres = 256;
+		int zres = 256;
 		int ncoils = 24;
 		int offresonance_n = 6;
 
+		device_idx didx = device_idx::CUDA0;
 		
 		cache_tensor<c64_t, 3> phase_offset{
 			make_rand_tensor<cpu_t,c64_t,3>(span<3>({xres, yres, zres})), 
@@ -401,12 +405,12 @@ namespace ffi {
 		{
 			auto start = std::chrono::high_resolution_clock::now();
 
-			NT_T1_OP<cuda_t, c64_t, 3> normal_sense1(
-				kernel,
-				smaps,
-				2
+			NORMAL_T_T1_OP<cuda_t, c64_t, 3> normal_sense1(
+				kernel.copy(),
+				smaps.copy(),
+				{2}
 			);
-			normal_sense1(image);
+			normal_sense1(image.template get<cuda_t>(didx));
 
 			auto end = std::chrono::high_resolution_clock::now();
 			std::chrono::duration<double> duration = end - start;
@@ -415,12 +419,12 @@ namespace ffi {
 		{
 			auto start = std::chrono::high_resolution_clock::now();
 
-			NT_T2_OP<cuda_t, c64_t, 3> normal_sense2(
-				kernel,
-				image,
-				2
+			NORMAL_T_T2_OP<cuda_t, c64_t, 3> normal_sense2(
+				kernel.copy(),
+				image.copy(),
+				{2}
 			);
-			normal_sense2(smaps);
+			normal_sense2(smaps.template get<cuda_t>(didx));
 
 			auto end = std::chrono::high_resolution_clock::now();
 			std::chrono::duration<double> duration = end - start;
@@ -430,13 +434,13 @@ namespace ffi {
 		{
 			auto start = std::chrono::high_resolution_clock::now();
 
-			NIDT_T1_OP<cuda_t,c64_t,3> normal_sense1(
-				kernels,
-				kerneldiags,
-				smaps,
-				2
+			NORMAL_IDT_T1_OP<cuda_t,c64_t,3> normal_sense1(
+				kernels.copy(),
+				kerneldiags.copy(),
+				smaps.copy(),
+				{2}
 			);
-			normal_sense1(image);
+			normal_sense1(image.template get<cuda_t>(didx));
 
 			auto end = std::chrono::high_resolution_clock::now();
 			std::chrono::duration<double> duration = end - start;
@@ -445,13 +449,13 @@ namespace ffi {
 		{
 			auto start = std::chrono::high_resolution_clock::now();
 
-			NIDT_T2_OP<cuda_t,c64_t,3> normal_sense2(
-				kernels,
-				kerneldiags,
-				image,
-				2
+			NORMAL_IDT_T2_OP<cuda_t,c64_t,3> normal_sense2(
+				kernels.copy(),
+				kerneldiags.copy(),
+				image.copy(),
+				{2}
 			);
-			normal_sense2(smaps);
+			normal_sense2(smaps.template get<cuda_t>(didx));
 
 			auto end = std::chrono::high_resolution_clock::now();
 			std::chrono::duration<double> duration = end - start;
@@ -461,14 +465,14 @@ namespace ffi {
 		{
 			auto start = std::chrono::high_resolution_clock::now();
 
-			NIDTW_T1_OP normal_sense1(
-				kernels,
-				kerneldiags,
-				smaps,
-				coilweights,
-				2
+			NORMAL_IDTW_T1_OP<cuda_t,c64_t,3> normal_sense1(
+				kernels.copy(),
+				kerneldiags.copy(),
+				smaps.copy(),
+				coilweights.copy(),
+				{2}
 			);
-			normal_sense1(image);
+			normal_sense1(image.template get<cuda_t>(didx));
 
 			auto end = std::chrono::high_resolution_clock::now();
 			std::chrono::duration<double> duration = end - start;
@@ -477,14 +481,14 @@ namespace ffi {
 		{
 			auto start = std::chrono::high_resolution_clock::now();
 
-			NIDTW_T2_OP normal_sense2(
-				kernels,
-				kerneldiags,
-				image,
-				coilweights,
-				2
+			NORMAL_IDTW_T2_OP<cuda_t,c64_t,3> normal_sense2(
+				kernels.copy(),
+				kerneldiags.copy(),
+				image.copy(),
+				coilweights.copy(),
+				{2}
 			);
-			normal_sense2(smaps);
+			normal_sense2(smaps.template get<cuda_t>(didx));
 
 			auto end = std::chrono::high_resolution_clock::now();
 			std::chrono::duration<double> duration = end - start;
@@ -503,34 +507,39 @@ namespace ffi {
 		using T2 = trace::tensor_prototype<cuda_t, c64_t, 2>;
 		using T3 = trace::tensor_prototype_vector<cuda_t, f32_t, 3>;
 
+		T1 t1("t1");
+		T2 t2("t2");
+		T3 t3("t3");
+
 		using OUT_T1 = trace::tensor_prototype<cuda_t, f32_t,1>;
 		using OUT_T2 = trace::tensor_prototype_vector<cpu_t, c64_t, 2>;
 
-		auto func = trace::trace_function_factory<OUT_T1, OUT_T2>::make(
-							"func", T1("t1"), T2("t2"), T3("t3"));
-
-		func.add_lines(R"ts(
+		auto builder = trace::trace_function_builder_factory<OUT_T1, OUT_T2>::make(
+							"func",
+							R"ts(
 def somecomp(self, t):
 	return torch.sin(t) + torch.sin(2*t)
 
-FORWARD_ENTRYPOINT(self, func, t1, t2, t3):
+FORWARD_ENTRYPOINT(self, t1, t2, t3):
 	a = []
 	for t in t3:
 		temp = (t[:,:,0] + t2) + t1[:,None].to(t2.device)
 		a.append(self.somecomp(temp).cpu())
 
 	return (a[0][:,0].to(t2.device),a)
-		)ts");
+		)ts", t1, t2, t3);
 
-		func.compile();
+		builder.compile();
 
-		std::cout << "Uncompiled:" << func.uncompiled_str() << std::endl;
+		auto trace_func = builder.build_trace_function();
 
-		std::cout << "Compiled:" << func.compiled_str() << std::endl;
+		auto runner = trace_func.get_runnable();
+
+		std::cout << "Uncompiled:" << builder.uncompiled_str() << std::endl;
+
+		std::cout << "Compiled:" << builder.compiled_str() << std::endl;
 
 		//std::vector<hasty::tensor<hasty::empty_strong_typedef<hasty::cuda_>, hasty::strong_typedef<float, hasty::f32_>, 3>> &
-		//
-
 
 		auto in1 = make_rand_tensor<cpu_t,f32_t,1>(span<1>({10}));
 		auto in2 = make_rand_tensor<cuda_t,c64_t,2>(span<2>({10,10}), device_idx::CUDA0);
@@ -546,7 +555,7 @@ FORWARD_ENTRYPOINT(self, func, t1, t2, t3):
 		std::cout << in3[1].str() << std::endl;
 		std::cout << in3[2].str() << std::endl;
 
-		auto a = func.run(std::move(in1), std::move(in2), std::move(in3));
+		auto a = runner.run(std::move(in1), std::move(in2), std::move(in3));
 
 		std::cout << std::get<0>(a).str() << std::endl;
 		std::cout << std::get<1>(a)[0].str() << std::endl;

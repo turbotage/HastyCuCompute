@@ -16,6 +16,7 @@ add_library(HastyCuCompute SHARED
     "lib/interface/interface.cpp"
     "lib/interface/py_interface.cpp"
     "lib/trace/trace.cpp"
+    "lib/trace/trace_cache.cpp"
 )
 target_compile_features(HastyCuCompute 
     PRIVATE cxx_std_23

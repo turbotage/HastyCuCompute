@@ -1,7 +1,9 @@
 module;
 
 #include "pch.hpp"
+#include <pstl/pstl_config.h>
 #include <ratio>
+#include <type_traits>
 
 export module trace;
 
@@ -162,51 +164,22 @@ namespace hasty {
 		export template<typename... U>
 		struct runnable_trace_function;
 
-		export template<is_any_tensor_prototype... ReturnTt, is_any_tensor_prototype... InputTt>
-		struct runnable_trace_function<std::tuple<ReturnTt...>, std::tuple<InputTt...>> {
-		private:
-			const trace_function<std::tuple<ReturnTt...>, std::tuple<InputTt...>>& _trace_func;
-		public:
-
-			runnable_trace_function(const trace_function<std::tuple<ReturnTt...>, std::tuple<InputTt...>>& trace_func)
-				: _trace_func(trace_func)
-			{}
-
-			template<is_tensor_or_vector_of_tensors ...Ts>
-			auto run(Ts&&... tts) const -> std::tuple<any_tensor_prototype_conversion_t<ReturnTt>...> {
-				return _trace_func.run(std::forward<Ts>(tts)...);
-			}
-		};
+		export template<typename... U>
+		struct trace_function_builder;
 
 		export template<is_any_tensor_prototype... ReturnTt, is_any_tensor_prototype... InputTt>
 		struct trace_function<std::tuple<ReturnTt...>, std::tuple<InputTt...>> {
 		private:
 			std::string _funcname;
-			std::string _tracestr;
-			std::string _forwardname;
-			std::string _compiled;
-			bool _loaded;
-			//std::shared_ptr<CompilationUnit> _cu;
 			std::unique_ptr<CompilationModule> _mod;
-			std::tuple<InputTt...> _trace_tensors;
 		public:
 
 			using ReturnTraits = TupleTraits<ReturnTt...>;
 			using InputTraits = TupleTraits<InputTt...>;
 
-			trace_function(const std::string& funcname, InputTt&&... tts)
+			trace_function(std::string_view funcname, std::unique_ptr<CompilationModule>&& mod)
 				: _funcname(funcname),
-				_mod(nullptr), 
-				_trace_tensors(std::forward<InputTt>(tts)...),
-				_loaded(false)
-			{
-				reset();
-			}
-
-			trace_function(const std::string& funcname, std::unique_ptr<CompilationModule>&& mod)
-				: _funcname(funcname),
-				_mod(std::move(mod)),
-				_loaded(true)
+				_mod(std::move(mod))
 			{
 			}
 
@@ -214,101 +187,16 @@ namespace hasty {
 				return *_mod;
 			}
 
-			void reset() {
-				_tracestr = "";
-				_mod = nullptr;
-
-				std::string variables = "self, " + for_sequence<sizeof...(InputTt)>([this](auto i, std::string& currentstr){
-					auto& itt = std::get<i>(_trace_tensors);
-
-					currentstr += itt.str() + ": ";
-
-					if constexpr(is_tensor_prototype<decltype(itt)>) {
-						currentstr += "Tensor";
-					} else if constexpr(is_tensor_prototype_vector<decltype(itt)>) {
-						currentstr += "List[Tensor]";
-					} else if constexpr(!is_any_tensor_prototype<decltype(itt)>) {
-						static_assert(false, "Invalid type");
-					}
-
-					if constexpr(i < sizeof...(InputTt) - 1) {
-						currentstr += ",";
-					}
-				}, std::string(""));
-
-				if constexpr(sizeof...(ReturnTt) == 0) {
-					_tracestr = std::format("def forward({}):", variables);
-					return;
-				}
-
-				std::string returnvars = "";
-				if constexpr(sizeof...(ReturnTt) >= 1) {
-
-					returnvars += " -> Tuple[";
-
-					returnvars += for_sequence<sizeof...(ReturnTt)>([this](auto i, std::string& currentstr){
-						
-						using RET_T = typename ReturnTraits::template Nth<i>;
-
-						if constexpr(is_tensor_prototype<RET_T>) {
-							currentstr += "Tensor";
-						} else if constexpr(is_tensor_prototype_vector<RET_T>) {
-							currentstr += "List[Tensor]";
-						} else if constexpr(!is_any_tensor_prototype<RET_T>) {
-							static_assert(false, "Invalid type");
-						}
-
-						if constexpr((i < sizeof...(ReturnTt) - 1) || (sizeof...(ReturnTt) == 1)) {
-							currentstr += ",";
-						}
-					}, std::string(""));
-
-					returnvars += "]";
-
-				}
-
-				_forwardname = std::format("def forward({}){}:", variables, returnvars);
-
-			}
-
-			void add_line(const std::string& line)
+			auto get_runnable() const 
+				-> runnable_trace_function<typename ReturnTraits::Tuple, typename InputTraits::Tuple> 
 			{
-				_tracestr += "\n\t" + line;
-			}
-
-			void add_lines(const std::string& lines)
-			{
-				//_tracestr += "\n" + lines;
-				_tracestr += lines;
-			}
-			
-			const std::string& uncompiled_str() const {
-				return _tracestr;
-			}
-
-			const std::string& compiled_str() const {
-				return _compiled;
-			}
-
-			void compile() {
-				if (_mod != nullptr) {
-					return;
-				}
-
-				_compiled = util::replace_line(_tracestr, "FORWARD_ENTRYPOINT", _forwardname);
-
-				_mod = std::make_unique<CompilationModule>(_funcname);
-				_mod->define(_compiled);
-
-				*_mod = torch::jit::freeze(*_mod);
-				*_mod = torch::jit::optimize_for_inference(*_mod);
-			}
-
-			auto get_runnable() const -> runnable_trace_function<ReturnTt..., InputTt...> {
 				if (_mod == nullptr) {
 					throw std::runtime_error("Module not compiled");
 				}
-				return runnable_trace_function<ReturnTt..., InputTt...>(*this);
+				return runnable_trace_function<
+							typename ReturnTraits::Tuple, 
+							typename InputTraits::Tuple
+							>(*this);
 			}
 
 			template<is_tensor_or_vector_of_tensors ...Ts>
@@ -465,36 +353,198 @@ namespace hasty {
 
 		};
 
-		
+		export template<is_any_tensor_prototype... ReturnTt, is_any_tensor_prototype... InputTt>
+		struct runnable_trace_function<std::tuple<ReturnTt...>, std::tuple<InputTt...>> {
+		private:
+			const trace_function<std::tuple<ReturnTt...>, std::tuple<InputTt...>>& _trace_func;
+		public:
+
+			runnable_trace_function(const trace_function<std::tuple<ReturnTt...>, std::tuple<InputTt...>>& trace_func)
+				: _trace_func(trace_func)
+			{}
+
+			template<is_tensor_or_vector_of_tensors ...Ts>
+			auto run(Ts&&... tts) const -> std::tuple<any_tensor_prototype_conversion_t<ReturnTt>...> {
+				return _trace_func.run(std::forward<Ts>(tts)...);
+			}
+		};
+
+		export template<is_any_tensor_prototype... ReturnTt, is_any_tensor_prototype... InputTt>
+		struct trace_function_builder<std::tuple<ReturnTt...>, std::tuple<InputTt...>> {
+		private:
+			std::string _funcname;
+			std::string _tracestr;
+			std::string _forwardname;
+			std::string _compiled;
+
+			std::unique_ptr<CompilationModule> _mod;
+
+			std::tuple<InputTt...> _trace_tensors;
+		public:
+			using ReturnTraits = TupleTraits<ReturnTt...>;
+			using InputTraits = TupleTraits<InputTt...>;
+
+			trace_function_builder(
+				std::string_view funcname,
+				std::string_view code,
+				InputTt&&... tts
+			)
+				: 
+				_funcname(funcname),
+				_tracestr(code),
+				_trace_tensors(
+					std::forward<InputTt>(tts)...
+				)
+			{
+				reset();
+			}
+
+			trace_function_builder(
+				std::string_view funcname,
+				std::string_view code,
+				const InputTt&... tts
+			)
+				: 
+				_funcname(funcname),
+				_tracestr(code),
+				_trace_tensors(tts...)
+			{
+				reset();
+			}
+			
+
+			void reset() {
+				_tracestr = "";
+				_mod = nullptr;
+
+				std::string variables = "self, " + for_sequence<sizeof...(InputTt)>([this](auto i, std::string& currentstr){
+					auto& itt = std::get<i>(_trace_tensors);
+
+					currentstr += itt.str() + ": ";
+
+					if constexpr(is_tensor_prototype<decltype(itt)>) {
+						currentstr += "Tensor";
+					} else if constexpr(is_tensor_prototype_vector<decltype(itt)>) {
+						currentstr += "List[Tensor]";
+					} else if constexpr(!is_any_tensor_prototype<decltype(itt)>) {
+						static_assert(false, "Invalid type");
+					}
+
+					if constexpr(i < sizeof...(InputTt) - 1) {
+						currentstr += ",";
+					}
+				}, std::string(""));
+
+				if constexpr(sizeof...(ReturnTt) == 0) {
+					_tracestr = std::format("def forward({}):", variables);
+					return;
+				}
+
+				std::string returnvars = "";
+				if constexpr(sizeof...(ReturnTt) >= 1) {
+
+					returnvars += " -> Tuple[";
+
+					returnvars += for_sequence<sizeof...(ReturnTt)>([this](auto i, std::string& currentstr){
+						
+						using RET_T = typename ReturnTraits::template Nth<i>;
+
+						if constexpr(is_tensor_prototype<RET_T>) {
+							currentstr += "Tensor";
+						} else if constexpr(is_tensor_prototype_vector<RET_T>) {
+							currentstr += "List[Tensor]";
+						} else if constexpr(!is_any_tensor_prototype<RET_T>) {
+							static_assert(false, "Invalid type");
+						}
+
+						if constexpr((i < sizeof...(ReturnTt) - 1) || (sizeof...(ReturnTt) == 1)) {
+							currentstr += ",";
+						}
+					}, std::string(""));
+
+					returnvars += "]";
+
+				}
+
+				_forwardname = std::format("def forward({}){}:", variables, returnvars);
+
+			}
+
+			const std::string& uncompiled_str() const {
+				return _tracestr;
+			}
+
+			const std::string& compiled_str() const {
+				return _compiled;
+			}
+
+			void compile() {
+				if (_mod != nullptr) {
+					return;
+				}
+
+				_compiled = util::replace_line(_tracestr, "FORWARD_ENTRYPOINT", _forwardname);
+
+				_mod = std::make_unique<CompilationModule>(_funcname);
+				_mod->define(_compiled);
+
+				*_mod = torch::jit::freeze(*_mod);
+				*_mod = torch::jit::optimize_for_inference(*_mod);
+			}
+
+			const CompilationModule& get_module() const {
+				if (_mod == nullptr) {
+					throw std::runtime_error("Module not compiled");
+				}
+				return *_mod;
+			}
+
+			std::unique_ptr<CompilationModule> release_module() {
+				return std::move(_mod);
+			}
+
+			auto build_trace_function()	
+				-> trace_function<std::tuple<ReturnTt...>, std::tuple<InputTt...>> 
+			{
+				if (_mod == nullptr) {
+					throw std::runtime_error("Module not compiled");
+				}
+				return trace_function<std::tuple<ReturnTt...>, std::tuple<InputTt...>>(_funcname, std::move(_mod));
+			}
+
+		};
+
+		export template<is_any_tensor_prototype... ReturnTt>
+		struct trace_function_builder_factory {
+
+			template<is_any_tensor_prototype... InputTt>
+			static auto make(std::string_view funcname, std::string_view code, InputTt&... tts)
+				-> trace_function_builder<std::tuple<ReturnTt...>, std::tuple<std::decay_t<InputTt>...>> 
+			{
+				return trace_function_builder<std::tuple<ReturnTt...>, std::tuple<std::decay_t<InputTt>...>>(
+					funcname, code, std::forward<const InputTt>(tts)...
+				);
+			}
+
+			template<is_any_tensor_prototype... InputTt>
+			static auto make_unique(std::string_view funcname, std::string_view code, InputTt&&... tts)
+				-> uptr<trace_function_builder<std::tuple<ReturnTt...>, std::tuple<std::decay_t<InputTt>...>>>
+			{
+				return std::make_unique<trace_function_builder<std::tuple<ReturnTt...>, std::tuple<std::decay_t<InputTt>...>>>(
+					funcname, code, std::forward<InputTt>(tts)...
+				);
+			}
+		};
+
+
 		export template<typename T>
 		concept is_trace_function = requires {
-			std::derived_from<T, hasty::trace::trace_function<typename T::ReturnTraits, typename T::InputTraits>>;
+			std::derived_from<T, hasty::trace::trace_function<typename T::ReturnTraits::Tuple, typename T::InputTraits::Tuple>>;
 		};
 
 		export template<typename T>
 		concept is_runnable_trace_function = requires {
-			std::derived_from<T, hasty::trace::runnable_trace_function<typename T::ReturnTraits, typename T::InputTraits>>;
-		};
-
-		export template<is_any_tensor_prototype... ReturnTt>
-		struct trace_function_factory {
-
-			template<is_any_tensor_prototype... InputTt>
-			static auto make(const std::string& funcname, InputTt&&... tts) ->
-				trace_function<std::tuple<ReturnTt...>, std::tuple<std::decay_t<InputTt>...>> 
-			{
-				return trace_function<std::tuple<ReturnTt...>, std::tuple<std::decay_t<InputTt>...>>(
-					funcname, std::forward<std::decay_t<InputTt>>(tts)...);
-			}
-
-			template<is_any_tensor_prototype... InputTt>
-			static auto make_unique(const std::string& funcname, InputTt&&... tts) ->
-				uptr<trace_function<std::tuple<ReturnTt...>, std::tuple<std::decay_t<InputTt>...>>>
-			{
-				return std::make_unique<trace_function<std::tuple<ReturnTt...>, std::tuple<std::decay_t<InputTt>...>>>(
-					funcname, std::forward<std::decay_t<InputTt>>(tts)...);
-			}
-
+			std::derived_from<T, hasty::trace::runnable_trace_function<typename T::ReturnTraits::Tuple, typename T::InputTraits::Tuple>>;
 		};
 
 	}

@@ -13,7 +13,7 @@ namespace hasty {
 
     export template<typename T>
     concept is_stringable = requires(const T& t) {
-        { std::to_string(t) } -> std::convertible_to<std::string>;
+        { t.to_string() } -> std::convertible_to<std::string>;
     };
 
     export template<typename T>
