@@ -376,6 +376,8 @@ namespace hasty {
 			std::string _tracestr;
 			std::string _forwardname;
 			std::string _compiled;
+			bool _freeze = true;
+			bool _optimize_for_inference = true;
 
 			std::unique_ptr<CompilationModule> _mod;
 
@@ -394,7 +396,9 @@ namespace hasty {
 				_tracestr(code),
 				_trace_tensors(
 					std::forward<InputTt>(tts)...
-				)
+				),
+				_freeze(true),
+				_optimize_for_inference(true)
 			{
 				reset();
 			}
@@ -407,14 +411,15 @@ namespace hasty {
 				: 
 				_funcname(funcname),
 				_tracestr(code),
-				_trace_tensors(tts...)
+				_trace_tensors(tts...),
+				_freeze(true),
+				_optimize_for_inference(true)
 			{
 				reset();
 			}
 			
 
 			void reset() {
-				_tracestr = "";
 				_mod = nullptr;
 
 				std::string variables = "self, " + for_sequence<sizeof...(InputTt)>([this](auto i, std::string& currentstr){
@@ -468,6 +473,9 @@ namespace hasty {
 
 				_forwardname = std::format("def forward({}){}:", variables, returnvars);
 
+				_compiled = util::replace_line(_tracestr, "FORWARD_ENTRYPOINT", _forwardname);
+
+
 			}
 
 			const std::string& uncompiled_str() const {
@@ -478,18 +486,27 @@ namespace hasty {
 				return _compiled;
 			}
 
+			void freeze(bool v) {
+				_freeze = v;
+			}
+
+			void optimize_for_inference(bool v) {
+				_optimize_for_inference = v;
+			}
+
 			void compile() {
 				if (_mod != nullptr) {
 					return;
 				}
-
-				_compiled = util::replace_line(_tracestr, "FORWARD_ENTRYPOINT", _forwardname);
-
 				_mod = std::make_unique<CompilationModule>(_funcname);
 				_mod->define(_compiled);
 
-				*_mod = torch::jit::freeze(*_mod);
-				*_mod = torch::jit::optimize_for_inference(*_mod);
+				if (_freeze) {
+					*_mod = torch::jit::freeze(*_mod);
+				}
+				if (_optimize_for_inference) {
+					*_mod = torch::jit::optimize_for_inference(*_mod);
+				}
 			}
 
 			const CompilationModule& get_module() const {

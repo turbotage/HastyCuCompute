@@ -159,180 +159,10 @@ namespace ffi {
 	}
 
 
-	at::Tensor test_offresonance_operator() {
-
-		using namespace hasty;
-
-		hasty::cache_dir = "/home/turbotage/Documents/hasty_cache/";
-
-		int xres = 320;
-		int yres = 320;
-		int zres = 320;
-		int ncoils = 24;
-		int offresonance_n = 6;
-
-		
-		hasty::cache_tensor<c64_t, 3> phase_offset{
-			hasty::make_rand_tensor<cpu_t,c64_t,3>(hasty::span<3>({xres, yres, zres})), 
-			std::hash<std::string>{}("phase_offset")
-		};
-		// This is our stacked diagonals
-		hasty::cache_tensor<c64_t, 4> smaps{
-			hasty::make_rand_tensor<cpu_t,c64_t,4>(hasty::span<4>({ncoils, xres, yres, zres})),
-			std::hash<std::string>{}("smaps")   
-		};
-
-		hasty::cache_tensor<c64_t,4> kernels;
-		hasty::cache_tensor<c64_t,4> kerneldiags;
-		{
-			std::vector<hasty::tensor<cpu_t,c64_t,3>> kernelvec;
-			std::vector<hasty::tensor<cpu_t,c64_t,3>> kerneldiagvec;
-			for (int i = 0; i < offresonance_n; ++i) {
-				// Toeplitz kernel
-
-				kernelvec.push_back(
-					hasty::make_rand_tensor<cpu_t,c64_t,3>(hasty::span<3>({2*xres, 2*yres, 2*zres}))
-				);
-
-				auto ratemap = hasty::make_rand_tensor<cpu_t,c64_t,3>(hasty::span<3>({xres, yres, zres}));
-
-				// Ratemap diagonal * Phase offset diagonal
-				kerneldiagvec.push_back(
-					phase_offset.template get<cpu_t>() * ratemap
-				);
-			}
-
-			kernels = hasty::cache_tensor(
-				hasty::stack<0>(kernelvec),
-				std::hash<std::string>{}("kernels")
-			);
-
-			kerneldiags = hasty::cache_tensor(
-				hasty::stack<0>(kerneldiagvec),
-				std::hash<std::string>{}("kerneldiag")
-			);
-
-		}
-
-		auto input = hasty::make_rand_tensor<cuda_t,c64_t,3>(hasty::span<3>({xres, yres, zres}), device_idx::CUDA0);
-
-		//sense_normal_image_offresonance_diagonal<cuda_t, c64_t, 3> sense(smaps, diagonal, kernels, ratemap_diagonals);
-		NORMAL_IDT_T1_OP<cuda_t, c64_t, 3> normal_sense(
-			std::move(kernels), 
-			std::move(kerneldiags),
-			std::move(smaps)
-		);
-
-		auto output = normal_sense(std::move(input));
-
-		auto start = std::chrono::high_resolution_clock::now();
-
-		for (int i = 0; i < 100; ++i) {
-			input += output;
-			output = normal_sense(std::move(input));
-		}
-
-		auto end = std::chrono::high_resolution_clock::now();
-
-		std::chrono::duration<double> duration = end - start;
-		std::cout << "Time taken: " << duration.count() << " seconds" << std::endl;
-
-		return output.get_tensor();
-	}
-
-	at::Tensor test_whitten_offresonance_operator() {
-
-		using namespace hasty;
-
-		cache_dir = "/home/turbotage/Documents/hasty_cache/";
-
-		int xres = 256;
-		int yres = 256;
-		int zres = 256;
-		int ncoils = 24;
-		int offresonance_n = 6;
-
-		
-		cache_tensor<c64_t, 3> phase_offset{
-			make_rand_tensor<cpu_t,c64_t,3>(span<3>({xres, yres, zres})), 
-			std::hash<std::string>{}("phase_offset")
-		};
-		// This is our stacked diagonals
-		cache_tensor<c64_t, 4> smaps{
-			make_rand_tensor<cpu_t,c64_t,4>(span<4>({ncoils, xres, yres, zres})),
-			std::hash<std::string>{}("smaps")   
-		};
-
-		cache_tensor<c64_t,4> kernels;
-		cache_tensor<c64_t,4> kerneldiags;
-		{
-			std::vector<tensor<cpu_t,c64_t,3>> kernelvec;
-			std::vector<tensor<cpu_t,c64_t,3>> kerneldiagvec;
-			for (int i = 0; i < offresonance_n; ++i) {
-				// Toeplitz kernel
-
-				kernelvec.push_back(
-					make_rand_tensor<cpu_t,c64_t,3>(span<3>({2*xres, 2*yres, 2*zres}))
-				);
-
-				auto ratemap = make_rand_tensor<cpu_t,c64_t,3>(span<3>({xres, yres, zres}));
-	
-				// Ratemap diagonal * Phase offset diagonal
-				kerneldiagvec.push_back(
-					phase_offset.template get<cpu_t>() * ratemap
-				);
-			}
-
-			kernels = cache_tensor(
-				stack<0>(kernelvec),
-				std::hash<std::string>{}("kernels")
-			);
-
-			kerneldiags = cache_tensor(
-				stack<0>(kerneldiagvec),
-				std::hash<std::string>{}("kerneldiag")
-			);
-
-		}
-
-		cache_tensor<c64_t, 2> coilweights = cache_tensor(
-			make_rand_tensor<cpu_t,c64_t,2>(span<2>({ncoils, ncoils})),
-			std::hash<std::string>{}("coilweights")
-		);
-
-		auto input = make_rand_tensor<cuda_t,c64_t,3>(
-			span<3>({xres, yres, zres}), device_idx::CUDA0
-		);
-
-
-		NORMAL_IDTW_T1_OP<cuda_t, c64_t, 3> normal_sense(
-			std::move(kernels), 
-			std::move(kerneldiags),
-			std::move(smaps),
-			std::move(coilweights),
-			{1}
-
-		);
-
-		auto output = normal_sense(std::move(input));
-
-		auto start = std::chrono::high_resolution_clock::now();
-
-		for (int i = 0; i < 10; ++i) {
-			input += output;
-			output = normal_sense(std::move(input));
-		}
-
-		auto end = std::chrono::high_resolution_clock::now();
-
-		std::chrono::duration<double> duration = end - start;
-		std::cout << "Time taken: " << duration.count() << " seconds" << std::endl;
-
-		return output.get_tensor();
-	}
-
 	at::Tensor test_normal_operators() {
 		using namespace hasty;
+
+		c10::InferenceMode im_guard{};
 
 		cache_dir = "/home/turbotage/Documents/hasty_cache/";
 		trace::module_cache_dir = cache_dir / "modules/";
@@ -410,10 +240,24 @@ namespace ffi {
 				smaps.copy(),
 				{2}
 			);
-			normal_sense1(image.template get<cuda_t>(didx));
-
 			auto end = std::chrono::high_resolution_clock::now();
 			std::chrono::duration<double> duration = end - start;
+			std::cout << "NT_T1_OP build: " << duration.count() << " seconds" << std::endl;
+
+			start = std::chrono::high_resolution_clock::now();
+
+			normal_sense1(image.template get<cuda_t>(didx));
+
+			end = std::chrono::high_resolution_clock::now();
+			duration = end - start;
+			std::cout << "NT_T1_OP: " << duration.count() << " seconds" << std::endl;
+
+			start = std::chrono::high_resolution_clock::now();
+
+			normal_sense1(image.template get<cuda_t>(didx));
+
+			end = std::chrono::high_resolution_clock::now();
+			duration = end - start;
 			std::cout << "NT_T1_OP: " << duration.count() << " seconds" << std::endl;
 		}
 		{
@@ -424,10 +268,24 @@ namespace ffi {
 				image.copy(),
 				{2}
 			);
-			normal_sense2(smaps.template get<cuda_t>(didx));
-
 			auto end = std::chrono::high_resolution_clock::now();
 			std::chrono::duration<double> duration = end - start;
+			std::cout << "NT_T2_OP build: " << duration.count() << " seconds" << std::endl;
+
+			start = std::chrono::high_resolution_clock::now();
+
+			normal_sense2(smaps.template get<cuda_t>(didx));
+
+			end = std::chrono::high_resolution_clock::now();
+			duration = end - start;
+			std::cout << "NT_T2_OP: " << duration.count() << " seconds" << std::endl;
+
+			start = std::chrono::high_resolution_clock::now();
+
+			normal_sense2(smaps.template get<cuda_t>(didx));
+
+			end = std::chrono::high_resolution_clock::now();
+			duration = end - start;
 			std::cout << "NT_T2_OP: " << duration.count() << " seconds" << std::endl;
 		}
 
@@ -440,10 +298,24 @@ namespace ffi {
 				smaps.copy(),
 				{2}
 			);
-			normal_sense1(image.template get<cuda_t>(didx));
-
 			auto end = std::chrono::high_resolution_clock::now();
 			std::chrono::duration<double> duration = end - start;
+			std::cout << "NIDT_T1_OP build: " << duration.count() << " seconds" << std::endl;
+			
+			start = std::chrono::high_resolution_clock::now();
+
+			normal_sense1(image.template get<cuda_t>(didx));
+
+			end = std::chrono::high_resolution_clock::now();
+			duration = end - start;
+			std::cout << "NIDT_T1_OP: " << duration.count() << " seconds" << std::endl;
+
+			start = std::chrono::high_resolution_clock::now();
+
+			normal_sense1(image.template get<cuda_t>(didx));
+
+			end = std::chrono::high_resolution_clock::now();
+			duration = end - start;
 			std::cout << "NIDT_T1_OP: " << duration.count() << " seconds" << std::endl;
 		}
 		{
@@ -455,10 +327,24 @@ namespace ffi {
 				image.copy(),
 				{2}
 			);
-			normal_sense2(smaps.template get<cuda_t>(didx));
-
 			auto end = std::chrono::high_resolution_clock::now();
 			std::chrono::duration<double> duration = end - start;
+			std::cout << "NIDT_T2_OP build: " << duration.count() << " seconds" << std::endl;
+
+			start = std::chrono::high_resolution_clock::now();
+
+			normal_sense2(smaps.template get<cuda_t>(didx));
+
+			end = std::chrono::high_resolution_clock::now();
+			duration = end - start;
+			std::cout << "NIDT_T2_OP: " << duration.count() << " seconds" << std::endl;
+
+			start = std::chrono::high_resolution_clock::now();
+
+			normal_sense2(smaps.template get<cuda_t>(didx));
+
+			end = std::chrono::high_resolution_clock::now();
+			duration = end - start;
 			std::cout << "NIDT_T2_OP: " << duration.count() << " seconds" << std::endl;
 		}
 
@@ -472,10 +358,24 @@ namespace ffi {
 				coilweights.copy(),
 				{2}
 			);
-			normal_sense1(image.template get<cuda_t>(didx));
-
 			auto end = std::chrono::high_resolution_clock::now();
 			std::chrono::duration<double> duration = end - start;
+			std::cout << "NIDTW_T1_OP build: " << duration.count() << " seconds" << std::endl;
+
+			start = std::chrono::high_resolution_clock::now();
+
+			normal_sense1(image.template get<cuda_t>(didx));
+
+			end = std::chrono::high_resolution_clock::now();
+			duration = end - start;
+			std::cout << "NIDTW_T1_OP: " << duration.count() << " seconds" << std::endl;
+
+			start = std::chrono::high_resolution_clock::now();
+
+			normal_sense1(image.template get<cuda_t>(didx));
+
+			end = std::chrono::high_resolution_clock::now();
+			duration = end - start;
 			std::cout << "NIDTW_T1_OP: " << duration.count() << " seconds" << std::endl;
 		}
 		{
@@ -488,10 +388,24 @@ namespace ffi {
 				coilweights.copy(),
 				{2}
 			);
-			normal_sense2(smaps.template get<cuda_t>(didx));
-
 			auto end = std::chrono::high_resolution_clock::now();
 			std::chrono::duration<double> duration = end - start;
+			std::cout << "NIDTW_T2_OP build: " << duration.count() << " seconds" << std::endl;
+
+			start = std::chrono::high_resolution_clock::now();
+
+			normal_sense2(smaps.template get<cuda_t>(didx));
+
+			end = std::chrono::high_resolution_clock::now();
+			duration = end - start;
+			std::cout << "NIDTW_T2_OP: " << duration.count() << " seconds" << std::endl;
+
+			start = std::chrono::high_resolution_clock::now();
+
+			normal_sense2(smaps.template get<cuda_t>(didx));
+
+			end = std::chrono::high_resolution_clock::now();
+			duration = end - start;
 			std::cout << "NIDTW_T2_OP: " << duration.count() << " seconds" << std::endl;
 		}
 

@@ -155,6 +155,13 @@ namespace hasty {
             return _block->shape[R];
         }
 
+        std::array<int64_t, RANK> shape() const
+        {
+            if (!_block)
+                throw std::runtime_error("shape: cache_tensor is not initialized");
+            return _block->shape;
+        }
+
         cache_tensor<TT,RANK> copy() const {
             return *this;
         }
