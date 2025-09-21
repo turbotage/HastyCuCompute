@@ -26,7 +26,7 @@ def benchmark_fft(N, iters=5):
     print(f"cuFFT avg time: {time_cufft:.3f} ms")
 
     # --- VkFFT (via pyvkfft) ---
-    fft = VkFFTApp(x.shape, dtype=np.complex64)
+    fft = VkFFTApp(x.shape, dtype=np.complex64, inplace=False)
     y = cp.empty_like(x)
 
     # warmup

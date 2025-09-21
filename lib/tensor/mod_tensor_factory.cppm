@@ -44,6 +44,15 @@ namespace hasty {
 
     export template<is_device D, is_tensor_type TT, size_t RANK>
     tensor<D,TT,RANK> make_empty_tensor(span<RANK> shape, device_idx didx = device_idx::CPU) {
+        if constexpr (std::is_same_v<D, cuda_t>) {
+            if (didx == device_idx::CPU) {
+                throw std::runtime_error("make_empty_tensor: cannot make empty tensor on CPU with CUDA device type");
+            }
+        } else {
+            if (didx != device_idx::CPU) {
+                throw std::runtime_error("make_empty_tensor: cannot make empty tensor on non-CPU device with non-CUDA device type");
+            }
+        }
         at::TensorOptions opts = at::TensorOptions(scalar_type_func<TT>(
                 )).device(c10::Device(device_type_func<D>(), i32(didx)));
         return tensor<D,TT,RANK>(shape, std::move(at::empty(shape.to_arr_ref(), opts)));
@@ -51,6 +60,15 @@ namespace hasty {
 
     export template<is_device D, is_tensor_type TT, size_t RANK>
     tensor<D,TT,RANK> make_ones_tensor(span<RANK> shape, device_idx didx = device_idx::CPU) {
+        if constexpr (std::is_same_v<D, cuda_t>) {
+            if (didx == device_idx::CPU) {
+                throw std::runtime_error("make_ones_tensor: cannot make ones tensor on CPU with CUDA device type");
+            }
+        } else {
+            if (didx != device_idx::CPU) {
+                throw std::runtime_error("make_ones_tensor: cannot make ones tensor on non-CPU device with non-CUDA device type");
+            }
+        }
         at::TensorOptions opts = at::TensorOptions(scalar_type_func<TT>(
                 )).device(c10::Device(device_type_func<D>(), i32(didx)));
         return tensor<D,TT,RANK>(shape, std::move(at::ones(shape.to_arr_ref(), opts)));
@@ -58,6 +76,15 @@ namespace hasty {
 
     export template<is_device D, is_tensor_type TT, size_t RANK>
     tensor<D,TT,RANK> make_zeros_tensor(span<RANK> shape, device_idx didx = device_idx::CPU) {
+        if constexpr (std::is_same_v<D, cuda_t>) {
+            if (didx == device_idx::CPU) {
+                throw std::runtime_error("make_zeros_tensor: cannot make zeros tensor on CPU with CUDA device type");
+            }
+        } else {
+            if (didx != device_idx::CPU) {
+                throw std::runtime_error("make_zeros_tensor: cannot make zeros tensor on non-CPU device with non-CUDA device type");
+            }
+        }
         at::TensorOptions opts = at::TensorOptions(scalar_type_func<TT>(
                 )).device(c10::Device(device_type_func<D>(), i32(didx)));
         return tensor<D,TT,RANK>(shape, std::move(at::zeros(shape.to_arr_ref(), opts)));
@@ -65,6 +92,15 @@ namespace hasty {
 
     export template<is_device D, is_tensor_type TT, size_t RANK>
     tensor<D,TT,RANK> make_rand_tensor(span<RANK> shape, device_idx didx = device_idx::CPU) {
+        if constexpr (std::is_same_v<D, cuda_t>) {
+            if (didx == device_idx::CPU) {
+                throw std::runtime_error("make_rand_tensor: cannot make rand tensor on CPU with CUDA device type");
+            }
+        } else {
+            if (didx != device_idx::CPU) {
+                throw std::runtime_error("make_rand_tensor: cannot make rand tensor on non-CPU device with non-CUDA device type");
+            }
+        }
         at::TensorOptions opts = at::TensorOptions(scalar_type_func<TT>(
                 )).device(c10::Device(device_type_func<D>(), i32(didx)));
         return tensor<D,TT,RANK>(shape, std::move(at::rand(shape.to_arr_ref(), opts)));
@@ -113,7 +149,7 @@ namespace hasty {
     }
 
     export template<is_device D, is_tensor_type TT, size_t RANK>
-    auto make_tensor_unique(at::Tensor tensorin) -> uptr<tensor<D,TT,RANK>>
+    auto make_tensor_unique(TensorBackend tensorin) -> uptr<tensor<D,TT,RANK>>
     {
         if (tensorin.ndimension() != RANK)
             throw std::runtime_error("make_tensor: tensor.ndimension() did not match RANK");
@@ -122,7 +158,7 @@ namespace hasty {
             throw std::runtime_error("make_tensor: tensor.dtype() did not match templated any_fp FP");
 
         struct creator : tensor<D,TT,RANK> {
-            creator(std::initializer_list<int64_t> a, at::Tensor b)
+            creator(std::initializer_list<int64_t> a, TensorBackend b)
                 : tensor<D,TT,RANK>(a, std::move(b)) {}
         };
 

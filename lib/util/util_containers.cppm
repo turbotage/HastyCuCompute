@@ -46,20 +46,22 @@ namespace hasty {
         vset& operator=(vset&& other) noexcept = default;
 
 
-        bool insert(const T& value) {
-            if (!contains(value)) {
+        std::pair<std::reference_wrapper<T>,bool> insert(const T& value) {
+            auto it = std::find(data_.begin(), data_.end(), value);
+            if (it == data_.end()) {
                 data_.push_back(value);
-                return true;
+                return {data_.back(), true};
             }
-            return false;
+            return {*it, false};
         }
 
-        bool insert(T&& value) {
-            if (!contains(value)) {
+        std::pair<std::reference_wrapper<T>,bool> insert(T&& value) {
+            auto it = std::find(data_.begin(), data_.end(), value);
+            if (it == data_.end()) {
                 data_.push_back(std::move(value));
-                return true;
+                return {data_.back(), true};
             }
-            return false;
+            return {*it, false};
         }
 
         void insert_without_check(const T& value) {
@@ -74,11 +76,29 @@ namespace hasty {
             return std::find(data_.begin(), data_.end(), value) != data_.end();
         }
 
-        void erase(const T& value) {
+        T& get(const T& value) {
+            auto it = std::find(data_.begin(), data_.end(), value);
+            if (it != data_.end()) {
+                return *it;
+            }
+            throw std::out_of_range("Value not found in vector_set");
+        }
+
+        const T& get(const T& value) const {
+            auto it = std::find(data_.begin(), data_.end(), value);
+            if (it != data_.end()) {
+                return *it;
+            }
+            throw std::out_of_range("Value not found in vector_set");
+        }
+
+        bool erase(const T& value) {
             auto it = std::find(data_.begin(), data_.end(), value);
             if (it != data_.end()) {
                 data_.erase(it);
+                return true;
             }
+            return false;
         }
 
         void reserve(size_t new_capacity) {

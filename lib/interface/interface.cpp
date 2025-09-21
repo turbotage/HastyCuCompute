@@ -4,14 +4,13 @@
 import util;
 import tensor;
 import hdf5;
-import nufft;
+import fft;
 
 import mri;
 import trace;
 import trace_cache;
 
 namespace ffi {
-
 
 	std::vector<at::Tensor> test_simple_invert() {
 		c10::InferenceMode im_guard{};
@@ -145,7 +144,7 @@ namespace ffi {
 
 			auto start = std::chrono::high_resolution_clock::now();
 
-			auto output = nufft_backward_cpu_over_cuda(span<3>({320, 320, 320}), input, coords_gpu);        
+			auto output = fft::nufft_backward_cpu_over_cuda(span<3>({320, 320, 320}), input, coords_gpu);        
 
 			auto end = std::chrono::high_resolution_clock::now();
 
@@ -158,7 +157,6 @@ namespace ffi {
 		return output_tensors;
 	}
 
-
 	at::Tensor test_normal_operators() {
 		using namespace hasty;
 
@@ -167,11 +165,12 @@ namespace ffi {
 		cache_dir = "/home/turbotage/Documents/hasty_cache/";
 		trace::module_cache_dir = cache_dir / "modules/";
 
-		int xres = 256;
-		int yres = 256;
-		int zres = 256;
+		int xres = 320;
+		int yres = 320;
+		int zres = 320;
 		int ncoils = 24;
 		int offresonance_n = 6;
+		int batch_fft = 1;
 
 		device_idx didx = device_idx::CUDA0;
 		
@@ -237,25 +236,28 @@ namespace ffi {
 
 			NORMAL_T_T1_OP<cuda_t, c64_t, 3> normal_sense1(
 				kernel.copy(),
-				smaps.copy(),
-				{2}
+				smaps.copy()
 			);
 			auto end = std::chrono::high_resolution_clock::now();
 			std::chrono::duration<double> duration = end - start;
 			std::cout << "NT_T1_OP build: " << duration.count() << " seconds" << std::endl;
 
+			hasty::synchronize(didx);
 			start = std::chrono::high_resolution_clock::now();
 
 			normal_sense1(image.template get<cuda_t>(didx));
 
+			hasty::synchronize(didx);
 			end = std::chrono::high_resolution_clock::now();
 			duration = end - start;
 			std::cout << "NT_T1_OP: " << duration.count() << " seconds" << std::endl;
 
+			hasty::synchronize(didx);
 			start = std::chrono::high_resolution_clock::now();
 
 			normal_sense1(image.template get<cuda_t>(didx));
 
+			hasty::synchronize(didx);
 			end = std::chrono::high_resolution_clock::now();
 			duration = end - start;
 			std::cout << "NT_T1_OP: " << duration.count() << " seconds" << std::endl;
@@ -265,25 +267,28 @@ namespace ffi {
 
 			NORMAL_T_T2_OP<cuda_t, c64_t, 3> normal_sense2(
 				kernel.copy(),
-				image.copy(),
-				{2}
+				image.copy()
 			);
 			auto end = std::chrono::high_resolution_clock::now();
 			std::chrono::duration<double> duration = end - start;
 			std::cout << "NT_T2_OP build: " << duration.count() << " seconds" << std::endl;
 
+			hasty::synchronize(didx);
 			start = std::chrono::high_resolution_clock::now();
 
 			normal_sense2(smaps.template get<cuda_t>(didx));
 
+			hasty::synchronize(didx);
 			end = std::chrono::high_resolution_clock::now();
 			duration = end - start;
 			std::cout << "NT_T2_OP: " << duration.count() << " seconds" << std::endl;
 
+			hasty::synchronize(didx);
 			start = std::chrono::high_resolution_clock::now();
 
 			normal_sense2(smaps.template get<cuda_t>(didx));
 
+			hasty::synchronize(didx);
 			end = std::chrono::high_resolution_clock::now();
 			duration = end - start;
 			std::cout << "NT_T2_OP: " << duration.count() << " seconds" << std::endl;
@@ -295,25 +300,28 @@ namespace ffi {
 			NORMAL_IDT_T1_OP<cuda_t,c64_t,3> normal_sense1(
 				kernels.copy(),
 				kerneldiags.copy(),
-				smaps.copy(),
-				{2}
+				smaps.copy()
 			);
 			auto end = std::chrono::high_resolution_clock::now();
 			std::chrono::duration<double> duration = end - start;
 			std::cout << "NIDT_T1_OP build: " << duration.count() << " seconds" << std::endl;
 			
+			hasty::synchronize(didx);
 			start = std::chrono::high_resolution_clock::now();
 
 			normal_sense1(image.template get<cuda_t>(didx));
 
+			hasty::synchronize(didx);
 			end = std::chrono::high_resolution_clock::now();
 			duration = end - start;
 			std::cout << "NIDT_T1_OP: " << duration.count() << " seconds" << std::endl;
 
+			hasty::synchronize(didx);
 			start = std::chrono::high_resolution_clock::now();
 
 			normal_sense1(image.template get<cuda_t>(didx));
 
+			hasty::synchronize(didx);
 			end = std::chrono::high_resolution_clock::now();
 			duration = end - start;
 			std::cout << "NIDT_T1_OP: " << duration.count() << " seconds" << std::endl;
@@ -324,25 +332,28 @@ namespace ffi {
 			NORMAL_IDT_T2_OP<cuda_t,c64_t,3> normal_sense2(
 				kernels.copy(),
 				kerneldiags.copy(),
-				image.copy(),
-				{2}
+				image.copy()
 			);
 			auto end = std::chrono::high_resolution_clock::now();
 			std::chrono::duration<double> duration = end - start;
 			std::cout << "NIDT_T2_OP build: " << duration.count() << " seconds" << std::endl;
 
+			hasty::synchronize(didx);
 			start = std::chrono::high_resolution_clock::now();
 
 			normal_sense2(smaps.template get<cuda_t>(didx));
 
+			hasty::synchronize(didx);
 			end = std::chrono::high_resolution_clock::now();
 			duration = end - start;
 			std::cout << "NIDT_T2_OP: " << duration.count() << " seconds" << std::endl;
 
+			hasty::synchronize(didx);
 			start = std::chrono::high_resolution_clock::now();
 
 			normal_sense2(smaps.template get<cuda_t>(didx));
 
+			hasty::synchronize(didx);
 			end = std::chrono::high_resolution_clock::now();
 			duration = end - start;
 			std::cout << "NIDT_T2_OP: " << duration.count() << " seconds" << std::endl;
@@ -355,25 +366,28 @@ namespace ffi {
 				kernels.copy(),
 				kerneldiags.copy(),
 				smaps.copy(),
-				coilweights.copy(),
-				{2}
+				coilweights.copy()
 			);
 			auto end = std::chrono::high_resolution_clock::now();
 			std::chrono::duration<double> duration = end - start;
 			std::cout << "NIDTW_T1_OP build: " << duration.count() << " seconds" << std::endl;
 
+			hasty::synchronize(didx);
 			start = std::chrono::high_resolution_clock::now();
 
 			normal_sense1(image.template get<cuda_t>(didx));
 
+			hasty::synchronize(didx);
 			end = std::chrono::high_resolution_clock::now();
 			duration = end - start;
 			std::cout << "NIDTW_T1_OP: " << duration.count() << " seconds" << std::endl;
 
+			hasty::synchronize(didx);
 			start = std::chrono::high_resolution_clock::now();
 
 			normal_sense1(image.template get<cuda_t>(didx));
 
+			hasty::synchronize(didx);
 			end = std::chrono::high_resolution_clock::now();
 			duration = end - start;
 			std::cout << "NIDTW_T1_OP: " << duration.count() << " seconds" << std::endl;
@@ -385,25 +399,28 @@ namespace ffi {
 				kernels.copy(),
 				kerneldiags.copy(),
 				image.copy(),
-				coilweights.copy(),
-				{2}
+				coilweights.copy()
 			);
 			auto end = std::chrono::high_resolution_clock::now();
 			std::chrono::duration<double> duration = end - start;
 			std::cout << "NIDTW_T2_OP build: " << duration.count() << " seconds" << std::endl;
 
+			hasty::synchronize(didx);
 			start = std::chrono::high_resolution_clock::now();
 
 			normal_sense2(smaps.template get<cuda_t>(didx));
 
+			hasty::synchronize(didx);
 			end = std::chrono::high_resolution_clock::now();
 			duration = end - start;
 			std::cout << "NIDTW_T2_OP: " << duration.count() << " seconds" << std::endl;
 
+			hasty::synchronize(didx);
 			start = std::chrono::high_resolution_clock::now();
 
 			normal_sense2(smaps.template get<cuda_t>(didx));
 
+			hasty::synchronize(didx);
 			end = std::chrono::high_resolution_clock::now();
 			duration = end - start;
 			std::cout << "NIDTW_T2_OP: " << duration.count() << " seconds" << std::endl;
@@ -412,12 +429,11 @@ namespace ffi {
 		return at::rand({1,1,1});
 	}
 
-
 	void test_prototype_stuff() {
 
 		using namespace hasty;
 
-		using T1 = trace::tensor_prototype<cpu_t, f32_t, 1>;
+		using T1 = trace::tensor_prototype<cuda_t, f32_t, 1>;
 		using T2 = trace::tensor_prototype<cuda_t, c64_t, 2>;
 		using T3 = trace::tensor_prototype_vector<cuda_t, f32_t, 3>;
 
@@ -426,21 +442,19 @@ namespace ffi {
 		T3 t3("t3");
 
 		using OUT_T1 = trace::tensor_prototype<cuda_t, f32_t,1>;
-		using OUT_T2 = trace::tensor_prototype_vector<cpu_t, c64_t, 2>;
+		using OUT_T2 = trace::tensor_prototype_vector<cuda_t, c64_t, 2>;
 
 		auto builder = trace::trace_function_builder_factory<OUT_T1, OUT_T2>::make(
 							"func",
 							R"ts(
-def somecomp(self, t):
-	return torch.sin(t) + torch.sin(2*t)
-
 FORWARD_ENTRYPOINT(self, t1, t2, t3):
 	a = []
 	for t in t3:
-		temp = (t[:,:,0] + t2) + t1[:,None].to(t2.device)
-		a.append(self.somecomp(temp).cpu())
+		temp = (t[:,:,0] + t2) + t1[:,None]
+		temp = torch.sin(temp) + torch.sin(2*temp)
+		a.append(temp)
 
-	return (a[0][:,0].to(t2.device),a)
+	return (a[0][:,0],a)
 		)ts", t1, t2, t3);
 
 		builder.compile();
@@ -455,12 +469,12 @@ FORWARD_ENTRYPOINT(self, t1, t2, t3):
 
 		//std::vector<hasty::tensor<hasty::empty_strong_typedef<hasty::cuda_>, hasty::strong_typedef<float, hasty::f32_>, 3>> &
 
-		auto in1 = make_rand_tensor<cpu_t,f32_t,1>(span<1>({10}));
+		auto in1 = make_rand_tensor<cuda_t,f32_t,1>(span<1>({10}), device_idx::CUDA0);
 		auto in2 = make_rand_tensor<cuda_t,c64_t,2>(span<2>({10,10}), device_idx::CUDA0);
 		auto in3 = std::vector<tensor<cuda_t,f32_t,3>>{
-			make_rand_tensor<cuda_t,f32_t,3>(span<3>({10,10,10})),
-			make_rand_tensor<cuda_t,f32_t,3>(span<3>({10,10,10})),
-			make_rand_tensor<cuda_t,f32_t,3>(span<3>({10,10,10}))
+			make_rand_tensor<cuda_t,f32_t,3>(span<3>({10,10,10}), device_idx::CUDA0),
+			make_rand_tensor<cuda_t,f32_t,3>(span<3>({10,10,10}), device_idx::CUDA0),
+			make_rand_tensor<cuda_t,f32_t,3>(span<3>({10,10,10}), device_idx::CUDA0)
 		};
 
 		std::cout << in1.str() << std::endl;
@@ -477,7 +491,16 @@ FORWARD_ENTRYPOINT(self, t1, t2, t3):
 		std::cout << std::get<1>(a)[2].str() << std::endl;
 	}
 
-
+	void jit_checking() {
+		auto ops = torch::jit::getAllOperators();
+		for (const auto& op : ops) {
+			const auto& schema = op->schema();
+			if (schema.name().find("hasty_fft") != std::string::npos) {
+				std::cout << schema << std::endl;
+			}
+		}
+	}
+	
 }
 
 

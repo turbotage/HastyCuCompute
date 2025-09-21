@@ -21,4 +21,10 @@ namespace hasty {
     export template<is_device D1, is_tensor_type TT1, size_t R>
     tensor<D1,TT1,R> exp(const tensor<D1,TT1,R>& t);
 
+    export template<size_t SUMDIM, is_device D1, is_tensor_type TT1, size_t R>
+    tensor<D1,TT1,R-1> sum(const tensor<D1,TT1,R>& t);
+
+    export template<is_device D1, is_tensor_type TT1, size_t R>
+    tensor<D1,TT1,0> sum(const tensor<D1,TT1,R>& t);
+
 }

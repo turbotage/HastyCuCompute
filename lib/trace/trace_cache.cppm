@@ -28,7 +28,7 @@ namespace hasty {
 			void cache_module(const Settings& settings, std::shared_ptr<Func> func) {
 				std::lock_guard<std::mutex> lock(_cache_mutex);
 
-				Key key{settings.to_string(), typeid(Func)};
+				Key key{std::string(settings.to_string()), typeid(Func)};
 				Storage storage;
 				storage.trace_function = std::move(func);
 
@@ -46,7 +46,7 @@ namespace hasty {
 			{
 				std::lock_guard<std::mutex> lock(_cache_mutex);
 
-				Key key{settings.to_string(), typeid(Func)};
+				Key key{std::string(settings.to_string()), typeid(Func)};
 				if (_module_cache.contains(key)) {
 					auto& storage = _module_cache.at(key);
 					return std::static_pointer_cast<Func>(storage.trace_function);
@@ -60,7 +60,7 @@ namespace hasty {
 			{
 				std::lock_guard<std::mutex> lock(_cache_mutex);
 
-				Key key{settings.to_string(), typeid(Func)};
+				Key key{std::string(settings.to_string()), typeid(Func)};
 				if (_module_cache.contains(key)) {
 					auto& storage = _module_cache.at(key);
 					return std::static_pointer_cast<Func>(storage.trace_function)->get_runnable();
@@ -71,7 +71,7 @@ namespace hasty {
 			template<is_trace_function Func, is_tc_settings Settings>
 			bool contains_cached(const Settings& settings) const {
 				std::lock_guard<std::mutex> lock(_cache_mutex);
-				Key key{settings.to_string(), typeid(Func)};
+				Key key{std::string(settings.to_string()), typeid(Func)};
 				return _module_cache.contains(key);
 			}
 
@@ -115,7 +115,7 @@ namespace hasty {
 													settings.to_string(), 
 													typeid(Func).name());
 
-				Key key{settings.to_string(), typeid(Func)};
+				Key key{std::string(settings.to_string()), typeid(Func)};
 				{
 					std::lock_guard<std::mutex> lock(_cache_mutex);
 					auto it = _module_cache.find(key);

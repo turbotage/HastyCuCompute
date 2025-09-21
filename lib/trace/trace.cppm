@@ -44,18 +44,6 @@ namespace hasty {
 		concept is_tensor_prototype = requires(T t) {
 			[]<is_device D, is_tensor_type TT, size_t RANK>(tensor_prototype<D,TT,RANK>&){}(t);
 		};
-		/*
-		export template<typename T>
-		concept is_tensor_prototype = requires(T t) {
-			typename T::device_type_t;
-			typename T::tensor_type_t;
-			{ T::size() } -> std::convertible_to<size_t>;
-			requires std::is_same_v<T,
-				tensor_prototype<typename T::device_type_t, typename T::tensor_type_t, T::size()>
-			>;
-		};
-		*/
-
 
 		template<typename T>
 		struct tensor_prototype_conversion;
@@ -108,17 +96,6 @@ namespace hasty {
 		concept is_tensor_prototype_vector = requires(T t) {
 			[]<is_device D, is_tensor_type TT, size_t RANK>(tensor_prototype_vector<D,TT,RANK>&){}(t);
 		};
-		/*
-		export template<typename T>
-		concept is_tensor_prototype_vector = requires(T t) {
-			typename T::device_type_t;
-			typename T::tensor_type_t;
-			{ T::size() } -> std::convertible_to<size_t>;
-			requires std::is_same_v<T,
-				tensor_prototype_vector<typename T::device_type_t, typename T::tensor_type_t, T::size()>
-			>;
-		};
-		*/
 
 		template <typename T>
 		struct tensor_prototype_vector_conversion;
@@ -282,72 +259,75 @@ namespace hasty {
 					}
 				};
 
-				if (ret_ivalue.isTensor()) {
-					auto& ret = std::get<0>(rets);
-					using RET_T = std::remove_reference_t<decltype(ret)>;
-
-					if (sizeof...(ReturnTt) > 1) {
-						throw std::runtime_error("ReturnTt indicated multiple return values, but only one was returned");
-					}
-					if (!is_tensor_prototype<RET_T>) {
-						throw std::runtime_error("ReturnTt was not a tensor prototype when return value was tensor");
-					}
-
-					TensorBackend ret_tensor = std::move(ret_ivalue.toTensor());
-					check_device_type.template operator()<typename RET_T::device_type_t>(ret_tensor);
-					ret.assign(span<RET_T::size()>(ret_tensor.sizes()), std::move(ret_tensor));
-				} else if (ret_ivalue.isTuple()) {
-					auto tuple_ptr = std::move(ret_ivalue.toTuple());
-					auto& elements = tuple_ptr->elements();
-					
-					if (sizeof...(ReturnTt) != elements.size()) {
-						throw std::runtime_error("Number of return values did not match number of elements in return type tuple");
-					}
-
-					for_sequence<sizeof...(ReturnTt)>([&](auto i) {
-						auto& ret = std::get<i>(rets);
+				if constexpr (sizeof...(ReturnTt) != 0) {
+					if (ret_ivalue.isTensor()) {
+						auto& ret = std::get<0>(rets);
 						using RET_T = std::remove_reference_t<decltype(ret)>;
 
-						auto& tup_ret = elements[i];
-
-						if constexpr(is_vector_of_tensors<RET_T>) {
-							if (!tup_ret.isTensorList()) {
-								throw std::runtime_error("Expected list, got something else");
-							}
-							auto tensor_list = tup_ret.toTensorList();
-							ret.resize(tensor_list.size());
-
-							for (int j = 0; j < tensor_list.size(); ++j) {
-								TensorBackend ret_tensor = std::move(tensor_list[j]);
-								check_device_type.template operator()<typename RET_T::value_type::device_type_t>(ret_tensor);
-								ret[j].assign(span<RET_T::value_type::size()>(ret_tensor.sizes()), std::move(ret_tensor));
-							}
-						} else if constexpr(is_tensor<RET_T>) {
-							if (!tup_ret.isTensor()) {
-								throw std::runtime_error("Expected tensor, got something else");
-							}
-
-							TensorBackend ret_tensor = std::move(tup_ret.toTensor());
-							check_device_type.template operator()<typename RET_T::device_type_t>(ret_tensor);
-							ret.assign(span<RET_T::size()>(ret_tensor.sizes()), std::move(ret_tensor));
-						} else if constexpr(!is_tensor_or_vector_of_tensors<RET_T>) {
-							/*
-							using TP = tensor_prototype_vector<cuda_t, f32_t, 2>;
-							using TR = any_tensor_prototype_conversion_t<TP>;
-							using H0 = TR::something;
-							using H = RET_T::something;
-							*/
-							static_assert(false, ""); // This should never happen...
+						if (sizeof...(ReturnTt) > 1) {
+							throw std::runtime_error("ReturnTt indicated multiple return values, but only one was returned");
 						}
-					});
-				} else if (ret_ivalue.isNone()) {
-					if (sizeof...(ReturnTt) != 0) {
+						if (!is_tensor_prototype<RET_T>) {
+							throw std::runtime_error("ReturnTt was not a tensor prototype when return value was tensor");
+						}
+
+						TensorBackend ret_tensor = std::move(ret_ivalue.toTensor());
+						check_device_type.template operator()<typename RET_T::device_type_t>(ret_tensor);
+						ret.assign(span<RET_T::size()>(ret_tensor.sizes()), std::move(ret_tensor));
+					} else if (ret_ivalue.isTuple()) {
+						auto tuple_ptr = std::move(ret_ivalue.toTuple());
+						auto& elements = tuple_ptr->elements();
+						
+						if (sizeof...(ReturnTt) != elements.size()) {
+							throw std::runtime_error("Number of return values did not match number of elements in return type tuple");
+						}
+
+						for_sequence<sizeof...(ReturnTt)>([&](auto i) {
+							auto& ret = std::get<i>(rets);
+							using RET_T = std::remove_reference_t<decltype(ret)>;
+
+							auto& tup_ret = elements[i];
+
+							if constexpr(is_vector_of_tensors<RET_T>) {
+								if (!tup_ret.isTensorList()) {
+									throw std::runtime_error("Expected list, got something else");
+								}
+								auto tensor_list = tup_ret.toTensorList();
+								ret.resize(tensor_list.size());
+
+								for (int j = 0; j < tensor_list.size(); ++j) {
+									TensorBackend ret_tensor = std::move(tensor_list[j]);
+									check_device_type.template operator()<typename RET_T::value_type::device_type_t>(ret_tensor);
+									ret[j].assign(span<RET_T::value_type::size()>(ret_tensor.sizes()), std::move(ret_tensor));
+								}
+							} else if constexpr(is_tensor<RET_T>) {
+								if (!tup_ret.isTensor()) {
+									throw std::runtime_error("Expected tensor, got something else");
+								}
+
+								TensorBackend ret_tensor = std::move(tup_ret.toTensor());
+								check_device_type.template operator()<typename RET_T::device_type_t>(ret_tensor);
+								ret.assign(span<RET_T::size()>(ret_tensor.sizes()), std::move(ret_tensor));
+							} else if constexpr(!is_tensor_or_vector_of_tensors<RET_T>) {
+								/*
+								using TP = tensor_prototype_vector<cuda_t, f32_t, 2>;
+								using TR = any_tensor_prototype_conversion_t<TP>;
+								using H0 = TR::something;
+								using H = RET_T::something;
+								*/
+								static_assert(false, ""); // This should never happen...
+							}
+						});
+					} else if (ret_ivalue.isNone()) {
 						throw std::runtime_error("Expected return values, got None");
+					} else {
+						throw std::runtime_error("Invalid return type");
 					}
 				} else {
-					throw std::runtime_error("Invalid return type");
+					if (!ret_ivalue.isNone()) {
+						throw std::runtime_error("ReturnTt indicated no return values, but something was returned");
+					}
 				}
-				
 				return rets;
 			}
 
@@ -468,7 +448,8 @@ namespace hasty {
 					}, std::string(""));
 
 					returnvars += "]";
-
+				} else {
+					
 				}
 
 				_forwardname = std::format("def forward({}){}:", variables, returnvars);

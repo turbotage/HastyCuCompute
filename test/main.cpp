@@ -9,9 +9,19 @@ int main() {
 
     //auto ret = ffi::test_whitten_offresonance_operator();
 
-    auto ret = ffi::test_normal_operators();
+    {
+        ffi::jit_checking();
+    }
+
+    {
+        auto ret = ffi::test_normal_operators();
+    }
     
-    ffi::test_prototype_stuff();
+    {
+        ffi::test_prototype_stuff();
+    }
+
+    std::cout <<  "Goodbye, World!" << std::endl;
 
     return 0;
 

@@ -253,9 +253,13 @@ namespace hasty {
         using base_t = decltype(T::strong_value);
 
         template<typename T>
+        using refw = std::reference_wrapper<T>;
+
+        template<typename T>
         using optrefw = std::optional<std::reference_wrapper<T>>;
 
-
+        template<typename T>
+        using optcrefw = std::optional<std::reference_wrapper<const T>>;
         
 
     }

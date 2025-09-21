@@ -6,7 +6,7 @@ export module mri:forward;
 
 import util;
 import tensor;
-import nufft;
+import fft;
 import threading;
 
 namespace hasty {
@@ -45,7 +45,7 @@ namespace hasty {
 		bool free_nufft_plan = true
 	) -> tensor<cpu_t,TT,2>
 	{
-		using NP_T = nufft_plan<cuda_t,TTC,DIM,nufft_type::FORWARD>;
+		using NP_T = fft::nufft_plan<cuda_t,TTC,DIM,fft::nufft_type::FORWARD>;
 		int interp_steps = bil.template shape<0>();
 
 		auto spatial_dim = image.shape();
@@ -60,12 +60,12 @@ namespace hasty {
 			device_idx didx = store.get_ref_throw<device_idx>("device_idx");
 
 			if (!store.exist("nufft_plan")) {
-				nufft_opts<cuda_t,TTC,DIM> options;
+				fft::nufft_opts<cuda_t,TTC,DIM> options;
 				options.device_idx = i32(didx);
 				options.nmodes = spatial_dim;
 				options.ntransf = 1;
-				options.method = nufft_method_cuda::DEFAULT;
-				options.upsamp = nufft_upsamp_cuda::DEFAULT;
+				options.method = fft::nufft_method_cuda::DEFAULT;
+				options.upsamp = fft::nufft_upsamp_cuda::DEFAULT;
 				if (std::is_same_v<TT, f32_t>) {
 					options.tol = 1e-6;
 				} else {

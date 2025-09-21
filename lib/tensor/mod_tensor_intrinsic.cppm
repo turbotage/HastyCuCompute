@@ -321,6 +321,16 @@ namespace hasty {
 		template<is_device D1, is_tensor_type TT1, size_t R>
 		friend tensor<D,TT1,0> vdot(const tensor<D1,TT1,R>& lhs, const tensor<D1,TT1,R>& rhs);
 
+		template<is_device D1, is_tensor_type TT1, size_t R>
+		friend tensor<D1,TT1,R> exp(const tensor<D1,TT1,R>& t);
+
+		template<size_t SUMDIM, is_device D1, is_tensor_type TT1, size_t R>
+		requires less_than<SUMDIM, R>
+		friend tensor<D1,TT1,R-1> sum(const tensor<D1,TT1,R>& t);
+
+		template<is_device D1, is_tensor_type TT1, size_t R>
+		friend tensor<D1,TT1,0> sum(const tensor<D1,TT1,R>& t);
+
 	};
 	
 	export template<typename T>

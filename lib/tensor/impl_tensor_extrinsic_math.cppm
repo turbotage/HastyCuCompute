@@ -87,4 +87,27 @@ namespace hasty {
         return tensor<D1,TT1,R>(span<R>(newtensor.sizes()), std::move(newtensor));
     }
 
+    export template<size_t SUMDIM, is_device D1, is_tensor_type TT1, size_t R>
+    requires less_than<SUMDIM, R>
+    tensor<D1,TT1,R-1> sum(const tensor<D1,TT1,R>& t) 
+    {
+        std::array<int64_t, R-1> newshape;
+        for_sequence<R>([&newshape, &t](auto i) {
+            if constexpr(i < SUMDIM) {
+                newshape[i] = t.template shape<i>();
+            } else if constexpr(i > SUMDIM) {
+                newshape[i - 1] = t.template shape<i>();
+            }
+        });
+        at::Tensor newtensor = t._pimpl->underlying_tensor.sum(SUMDIM);
+        return tensor<D1,TT1,R-1>(newshape, std::move(newtensor));
+    }
+
+    export template<is_device D1, is_tensor_type TT1, size_t R>
+    tensor<D1,TT1,0> sum(const tensor<D1,TT1,R>& t) 
+    {
+        at::Tensor newtensor = t._pimpl->underlying_tensor.sum();
+        return tensor<D1,TT1,0>({}, std::move(newtensor));
+    }
+
 }

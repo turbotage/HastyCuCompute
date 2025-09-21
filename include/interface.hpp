@@ -16,5 +16,7 @@ namespace ffi {
 
     LIB_EXPORT void test_trace_function();
 
+    LIB_EXPORT void jit_checking();
+
 }
 

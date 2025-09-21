@@ -6,6 +6,8 @@ set(CMAKE_EXPERIMENTAL_CXX_IMPORT_STD "d0edc3af-4c50-42ea-a356-e2862fe7a444")
 
 project("HastyCuCompute" VERSION 0.1 LANGUAGES CXX)
 
+set_property(GLOBAL PROPERTY CTEST_TARGETS_ADDED 1)
+
 message("Hello ${pybind11_DIR}")
 # Add the unsupported compiler flag explicitly
 add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:-allow-unsupported-compiler>)
@@ -17,6 +19,8 @@ add_library(HastyCuCompute SHARED
     "lib/interface/py_interface.cpp"
     "lib/trace/trace.cpp"
     "lib/trace/trace_cache.cpp"
+    "lib/fft/fft.cpp"
+    "lib/fft/vkfft.cpp"
 )
 target_compile_features(HastyCuCompute 
     PRIVATE cxx_std_23
@@ -41,8 +45,10 @@ include(FetchContent)
 target_sources(HastyCuCompute
     PUBLIC 
         FILE_SET CXX_MODULES FILES
-            "lib/fft/nufft.cppm"
             "lib/fft/fft.cppm"
+            "lib/fft/nufft.cppm"
+            "lib/fft/toeplitz.cppm"
+            "lib/fft/vkfft.cppm"
             "lib/mri/adjoint.cppm"
             "lib/mri/forward.cppm"
             "lib/mri/misc.cppm"
@@ -79,13 +85,50 @@ target_sources(HastyCuCompute
             "lib/threading.cppm"
             "lib/trace/trace.cppm"
             "lib/trace/trace_cache.cppm"
+            "lib/nvrtc/nvrtc.cppm"
 )
 
+set(DB_PRODUCTION_MODE ON)
+FetchContent_Declare(
+  battery-embed
+  GIT_REPOSITORY https://github.com/batterycenter/embed.git
+  GIT_TAG        v1.2.19
+)
+FetchContent_MakeAvailable(battery-embed)
+
+b_embed(HastyCuCompute "lib/fft/kernels/toeplitz_load_2D.cu")
+b_embed(HastyCuCompute "lib/fft/kernels/toeplitz_load_3D.cu")
+
+get_target_property(_incs HastyCuCompute INTERFACE_INCLUDE_DIRECTORIES)
+list(REMOVE_ITEM _incs "${EMBED_BINARY_DIR}/autogen/hastycucompute/include")
+set_target_properties(HastyCuCompute PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${_incs}")
+
 find_package(CUDAToolkit REQUIRED)
+
+target_include_directories(HastyCuCompute
+    PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/external/vkFFT"  # folder with VkFFT headers
+)
+target_compile_definitions(HastyCuCompute PRIVATE VKFFT_BACKEND=1)
 
 target_link_libraries(HastyCuCompute PRIVATE CUDA::toolkit)
 target_link_libraries(HastyCuCompute PRIVATE CUDA::nvrtc)
 target_link_libraries(HastyCuCompute PRIVATE CUDA::cudart)
+target_link_libraries(HastyCuCompute PRIVATE CUDA::cufft)
+target_link_libraries(HastyCuCompute PRIVATE CUDA::cuda_driver)
+
+get_target_property(NVRTC_PATH CUDA::nvrtc LOCATION)
+get_target_property(CUDART_PATH CUDA::cudart LOCATION)
+
+get_filename_component(NVRTC_FILENAME "${NVRTC_PATH}" NAME)
+get_filename_component(CUDART_FILENAME "${CUDART_PATH}" NAME)
+
+add_custom_command(TARGET HastyCuCompute POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${NVRTC_PATH}" "$<TARGET_FILE_DIR:HastyCuCompute>/${NVRTC_FILENAME}"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CUDART_PATH}" "$<TARGET_FILE_DIR:HastyCuCompute>/${CUDART_FILENAME}"
+)
 
 # this gives access to cufinufft
 set(FINUFFT_USE_CUDA ON CACHE BOOL "" FORCE)
@@ -105,6 +148,20 @@ target_link_libraries(HastyCuCompute PRIVATE $<BUILD_INTERFACE:finufft>)
 target_link_libraries(HastyCuCompute PRIVATE $<BUILD_INTERFACE:cufinufft>)
 
 set_target_properties(cufinufft PROPERTIES EXPORT_EXCLUDE TRUE)
+set_target_properties(finufft PROPERTIES EXPORT_EXCLUDE TRUE)
+
+
+FetchContent_Declare(
+  fmt
+  GIT_REPOSITORY https://github.com/fmtlib/fmt
+  GIT_TAG        12.0.0
+) # 10.2.1
+FetchContent_MakeAvailable(fmt)
+
+target_link_libraries(HastyCuCompute PRIVATE $<BUILD_INTERFACE:fmt::fmt>)
+
+set_target_properties(fmt PROPERTIES EXPORT_EXCLUDE TRUE)
+
 
 
 find_package(Torch REQUIRED)
@@ -206,6 +263,31 @@ target_link_libraries(HastySmallTests PRIVATE
     c++ 
     c++abi
 )
+################# VKFFT TESTS ####################
+add_executable(VKFFTTest "test/fft_tests.cpp")
+target_compile_features(VKFFTTest 
+    PRIVATE cxx_std_23
+    INTERFACE cxx_std_23
+)
+set_target_properties(VKFFTTest PROPERTIES
+    CXX_STANDARD 23
+    CXX_STANDARD_REQUIRED ON
+    CXX_SCAN_FOR_MODULES ON
+    #CXX_MODULE_STD ON
+)
+
+target_include_directories(VKFFTTest
+    PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/external/vkFFT"  # folder with VkFFT headers
+)
+target_compile_definitions(VKFFTTest PRIVATE VKFFT_BACKEND=1)
+
+target_link_libraries(VKFFTTest PRIVATE CUDA::toolkit)
+target_link_libraries(VKFFTTest PRIVATE CUDA::nvrtc)
+target_link_libraries(VKFFTTest PRIVATE CUDA::cudart)
+target_link_libraries(VKFFTTest PRIVATE CUDA::cufft)
+target_link_libraries(VKFFTTest PRIVATE CUDA::cuda_driver)
+
 
 ################ INSTALL ####################
 include(GNUInstallDirs)
@@ -227,6 +309,8 @@ install(EXPORT HastyCuComputeTargets
     NAMESPACE HastyCuCompute::
     DESTINATION lib/cmake/HastyCuCompute
 )
+
+install(FILES "${NVRTC_PATH}" "${CUDART_PATH}" DESTINATION lib)
 
 # Install the include files
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
@@ -251,3 +335,10 @@ install(FILES
     "${CMAKE_CURRENT_BINARY_DIR}/HastyCuComputeConfigVersion.cmake"
     DESTINATION lib/cmake/HastyCuCompute
 )
+
+install(DIRECTORY ${finufft_SOURCE_DIR}/include/
+    DESTINATION include/finufft
+    FILES_MATCHING PATTERN "*.h"
+)
+
+install(CODE "file(REMOVE_RECURSE \"${CMAKE_INSTALL_PREFIX}/share/finufft/examples\")")
