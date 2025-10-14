@@ -3,6 +3,9 @@
 
 #include "interface.hpp"
 
+import std;
+import torch_base;
+
 namespace py = pybind11;
 
 #ifdef _WIN32
@@ -13,26 +16,26 @@ namespace py = pybind11;
 
 namespace {
 
-    at::Tensor from_buffer(const py::buffer& buf) {
-        c10::InferenceMode im_guard{};
+    hat::Tensor from_buffer(const py::buffer& buf) {
+        hat::InferenceMode im_guard{};
 
         py::buffer_info info = buf.request();
 
         std::cout << "Format: " << info.format << std::endl;
         // Determine the data type
-        at::ScalarType dtype;
+        hat::ScalarType dtype;
         if (info.format == py::format_descriptor<float>::format()) {
-            dtype = at::kFloat;
+            dtype = hat::kFloat;
         } else if (info.format == py::format_descriptor<double>::format()) {
-            dtype = at::kDouble;
+            dtype = hat::kDouble;
         } else if (info.format == py::format_descriptor<int>::format()) {
-            dtype = at::kInt;
+            dtype = hat::kInt;
         } else if (info.format == py::format_descriptor<int64_t>::format()) {
-            dtype = at::kLong;
+            dtype = hat::kLong;
         } else if (info.format == "Zf") { // Complex float
-            dtype = at::kComplexFloat;
+            dtype = hat::kComplexFloat;
         } else if (info.format == "Zd") { // Complex double
-            dtype = at::kComplexDouble;
+            dtype = hat::kComplexDouble;
         } else {
             throw std::runtime_error("Unsupported data type");
         }
@@ -44,33 +47,33 @@ namespace {
             strides_vec[i] = info.strides[i] / info.itemsize;
         }
         */
-        at::IntArrayRef shape(info.shape);
+        hat::IntArrayRef shape(info.shape);
         for (int i = 0; i < info.strides.size(); ++i) {
             info.strides[i] /= info.itemsize;
         }
-        at::IntArrayRef strides(info.strides);
+        hat::IntArrayRef strides(info.strides);
 
 
         // Create the tensor from the buffer
-        return at::from_blob(info.ptr, shape, strides, dtype);
+        return hat::from_blob(info.ptr, shape, strides, dtype);
     }
 
-    py::array from_tensor(at::Tensor ten) {
+    py::array from_tensor(hat::Tensor ten) {
         // Determine the format string
         std::string format;
-        if (ten.scalar_type() == at::kFloat) {
+        if (ten.scalar_type() == hat::kFloat) {
             format = py::format_descriptor<float>::format();
-        } else if (ten.scalar_type() == at::kDouble) {
+        } else if (ten.scalar_type() == hat::kDouble) {
             format = py::format_descriptor<double>::format();
-        } else if (ten.scalar_type() == at::kInt) {
+        } else if (ten.scalar_type() == hat::kInt) {
             format = py::format_descriptor<int>::format();
-        } else if (ten.scalar_type() == at::kLong) {
+        } else if (ten.scalar_type() == hat::kLong) {
             format = py::format_descriptor<int64_t>::format();
-        } else if (ten.scalar_type() == at::kComplexFloat) {
+        } else if (ten.scalar_type() == hat::kComplexFloat) {
             format = "Zf"; // Complex float
-        } else if (ten.scalar_type() == at::kComplexDouble) {
+        } else if (ten.scalar_type() == hat::kComplexDouble) {
             format = "Zd"; // Complex double
-        } else if (ten.scalar_type() == at::kBool) {
+        } else if (ten.scalar_type() == hat::kBool) {
             format = py::format_descriptor<bool>::format();
         } else {
             throw std::runtime_error("Unsupported data type");
@@ -89,8 +92,8 @@ namespace {
         auto dataptr = ten.data_ptr();
         auto dims = ten.dim();
 
-        auto capsule = py::capsule(new at::Tensor(std::move(ten)), [](void* p) {
-            delete static_cast<at::Tensor*>(p);
+        auto capsule = py::capsule(new hat::Tensor(std::move(ten)), [](void* p) {
+            delete static_cast<hat::Tensor*>(p);
         });
 
         // Create the buffer_info
@@ -111,11 +114,8 @@ namespace pyffi {
     std::vector<py::array> test_simple_invert() {
         std::vector<py::array> output_arrays;
         output_arrays.reserve(5);
-        auto tens = ffi::test_simple_invert();
-        for (int i = 0; i < tens.size(); ++i) {
-            output_arrays.push_back(std::move(from_tensor(std::move(tens[i]))));
-        }
-        return output_arrays;
+        ffi::test_simple_invert();
+        return {};
     }
 
 }

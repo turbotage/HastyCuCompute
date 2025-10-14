@@ -50,7 +50,7 @@ namespace hasty {
 
 		auto spatial_dim = image.shape();
 
-		int64_t number_of_datapts = coords[0].get().template shape<0>();
+		i64 number_of_datapts = coords[0].get().template shape<0>();
 
 		auto output = make_empty_tensor<cpu_t,TT,2>(span<2>{smaps.template shape<0>(), coords[0].template shape<0>()});
 

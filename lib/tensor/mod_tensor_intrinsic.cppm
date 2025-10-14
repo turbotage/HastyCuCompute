@@ -6,6 +6,7 @@ export module tensor:intrinsic;
 
 //import pch;
 
+import torch_base;
 import util;
 export import :base;
 
@@ -18,7 +19,7 @@ namespace hasty {
 
 		struct tensor_base {
 
-			tensor_base(const std::array<int64_t, RANK>& input_shape, TensorBackend input);
+			tensor_base(const std::array<i64, RANK>& input_shape, TensorBackend input);
 
 			tensor_base(span<RANK> input_shape, TensorBackend input);
 
@@ -30,7 +31,7 @@ namespace hasty {
 
 			device_idx get_device_idx() const;
 
-			std::array<int64_t, RANK> shape;
+			std::array<i64, RANK> shape;
 			TensorBackend underlying_tensor;
 		};
 
@@ -61,14 +62,14 @@ namespace hasty {
 
 		template<size_t R>
 		requires less_than<R, RANK>
-		int64_t shape() const;
+		i64 shape() const;
 
-		std::array<int64_t, RANK> shape() const;
+		std::array<i64, RANK> shape() const;
 
 		// Don't use this, use ::size() instead
-		constexpr int64_t ndim() const;
+		constexpr i64 ndim() const;
 
-		int64_t numel() const;
+		i64 numel() const;
 
 		std::string devicestr() const;
 
@@ -82,7 +83,7 @@ namespace hasty {
 
 		tensor<D, TT, RANK> clone() const;
 
-		tensor<D, TT, RANK+1> unsqueeze(int64_t dim);
+		tensor<D, TT, RANK+1> unsqueeze(i64 dim);
 
 		template<size_t R>
 		tensor<D, TT, R> view(span<R> shape);
@@ -101,7 +102,7 @@ namespace hasty {
 
 		tensor<D, TT, 1> masked_select(const tensor<D,b8_t,RANK>& mask) const;
 
-		void assign(std::array<int64_t, RANK>& input_shape, TensorBackend input);
+		void assign(std::array<i64, RANK>& input_shape, TensorBackend input);
 
 		void assign(span<RANK> input_shape, TensorBackend input);
 
@@ -127,7 +128,7 @@ namespace hasty {
 		requires (!std::is_same_v<DN, D> || !std::is_same_v<TTN, TT>)
 		tensor(tensor<DN, TTN, RANK>&& other, device_idx idx);
 
-		tensor(const std::array<int64_t, RANK>& input_shape, TensorBackend input);
+		tensor(const std::array<i64, RANK>& input_shape, TensorBackend input);
 
 		tensor(span<RANK> input_shape, TensorBackend input);
 
@@ -358,7 +359,7 @@ namespace hasty {
 
 		template<is_device D>
 		tensor<D, TT, 0> to_tensor() {
-			return tensor<D, TT, 0>({}, at::scalar_tensor(_val));
+			return tensor<D, TT, 0>({}, hat::scalar_tensor(_val));
 		}
 
 	private:

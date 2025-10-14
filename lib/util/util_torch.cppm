@@ -1,11 +1,12 @@
 module;
  
-#include "c10/cuda/CUDAStream.h"
 #include "pch.hpp"
 
 export module util:torch;
 
 //import pch;
+import std;
+import torch_base;
 
 import :idx;
 
@@ -13,37 +14,37 @@ namespace hasty {
 
     namespace tch {
         
-        export template<typename T>
-        c10::optional<T> torch_optional(const std::optional<T>& opt)
-        {
-            if (opt.has_value()) {
-                return c10::optional(opt.value());
-            }
-            return c10::nullopt;
-        }
+        // export template<typename T>
+        // c10::optional<T> torch_optional(const std::optional<T>& opt)
+        // {
+        //     if (opt.has_value()) {
+        //         return c10::optional(opt.value());
+        //     }
+        //     return c10::nullopt;
+        // }
 
-        export template<typename R, typename T>
-        c10::optional<R> torch_optional(const std::optional<T>& opt)
-        {
-            if (opt.has_value()) {
-                return c10::optional<R>(opt.value());
-            }
-            return c10::nullopt;
-        }
+        // export template<typename R, typename T>
+        // c10::optional<R> torch_optional(const std::optional<T>& opt)
+        // {
+        //     if (opt.has_value()) {
+        //         return c10::optional<R>(opt.value());
+        //     }
+        //     return c10::nullopt;
+        // }
 
         export template<index_type Idx>
-        at::indexing::TensorIndex torchidx(Idx idx) {
+        hat::indexing::TensorIndex torchidx(Idx idx) {
             if constexpr(std::is_same_v<Idx, None>) {
-                return at::indexing::None;
+                return hat::indexing::None;
             } 
             else if constexpr(std::is_same_v<Idx, Ellipsis>) {
-                return at::indexing::Ellipsis;
+                return hat::indexing::Ellipsis;
             }
             else if constexpr(std::is_same_v<Idx, Slice>) {
-                return at::indexing::Slice(
-                    torch_optional<c10::SymInt>(idx.start),
-                    torch_optional<c10::SymInt>(idx.end),
-                    torch_optional<c10::SymInt>(idx.step));
+                return hat::indexing::Slice(
+                    torch_optional<hc10::SymInt>(idx.start),
+                    torch_optional<hc10::SymInt>(idx.end),
+                    torch_optional<hc10::SymInt>(idx.step));
             } else if constexpr(std::is_integral_v<Idx>) {
                 return idx;
             } else {
@@ -53,7 +54,7 @@ namespace hasty {
 
         template<index_type... Idx, size_t... Is>
         auto torchidx_impl(std::tuple<Idx...> idxs, std::index_sequence<Is...>) {
-            return std::array<at::indexing::TensorIndex, sizeof...(Idx)>{torchidx(std::get<Is>(idxs))...};
+            return std::array<hat::indexing::TensorIndex, sizeof...(Idx)>{torchidx(std::get<Is>(idxs))...};
         }
 
         export template<index_type... Idx>
@@ -104,27 +105,27 @@ namespace hasty {
             }
         }
 
-        export std::vector<at::Stream> get_streams(const at::optional<std::vector<at::Stream>>& streams)
+        export std::vector<hat::Stream> get_streams(const std::optional<std::vector<hat::Stream>>& streams)
         {
             if (streams.has_value()) {
                 return *streams;
             }
             else {
-                return { at::cuda::getDefaultCUDAStream() };
+                return { hat::cuda::getDefaultCUDAStream() };
             }
         }
 
-		export std::vector<at::Stream> get_streams(const at::optional<at::ArrayRef<at::Stream>>& streams)
+		export std::vector<hat::Stream> get_streams(const hat::OptionalArrayRef<hat::Stream>& streams)
         {
             if (streams.has_value()) {
                 return (*streams).vec();
             }
             else {
-                return { c10::cuda::getDefaultCUDAStream() };
+                return { hat::cuda::getDefaultCUDAStream() };
             }
         }
 
-		export std::stringstream print_4d_xyz(const at::Tensor& toprint)
+		export std::stringstream print_4d_xyz(const hat::Tensor& toprint)
         {
             std::stringstream printer;
             printer.precision(2);
@@ -163,27 +164,27 @@ namespace hasty {
                         printer << "  [";
                         for (int x = 0; x < xlen; ++x) {
                             switch (toprint.dtype().toScalarType()) {
-                            case c10::ScalarType::Float:
+                            case hat::ScalarType::Float:
                                 value_printer(toprint.index({ t,z,y,x }).item<float>());
                             break;
-                            case c10::ScalarType::Double:
+                            case hat::ScalarType::Double:
                                 value_printer(toprint.index({ t,z,y,x }).item<float>());
                             break;
-                            case c10::ScalarType::ComplexFloat:
+                            case hat::ScalarType::ComplexFloat:
                             {
                                 float val;
-                                val = at::real(toprint.index({ t,z,y,x })).item<float>();
+                                val = hat::real(toprint.index({ t,z,y,x })).item<float>();
                                 printer << "("; value_printer(val); printer << ",";
-                                val = at::imag(toprint.index({ t,z,y,x })).item<float>();
+                                val = hat::imag(toprint.index({ t,z,y,x })).item<float>();
                                 value_printer(val); printer << ")";
                             }
                             break;
-                            case c10::ScalarType::ComplexDouble:
+                            case hat::ScalarType::ComplexDouble:
                             {
                                 double val;
-                                val = at::real(toprint.index({ t,z,y,x })).item<double>();
+                                val = hat::real(toprint.index({ t,z,y,x })).item<double>();
                                 printer << "("; value_printer(val); printer << ",";
-                                val = at::imag(toprint.index({ t,z,y,x })).item<double>();
+                                val = hat::imag(toprint.index({ t,z,y,x })).item<double>();
                                 value_printer(val); printer << ")";
                             }
                             break;
@@ -203,7 +204,7 @@ namespace hasty {
             return printer;
         }
 
-		export std::vector<int64_t> nmodes_from_tensor(const at::Tensor& tensor)
+		export std::vector<std::int64_t> nmodes_from_tensor(const hat::Tensor& tensor)
         {
             auto ret = tensor.sizes().vec();
             ret[0] = 1;
@@ -211,11 +212,11 @@ namespace hasty {
         }
 
 		export template<typename T>
-		std::vector<int64_t> argsort(const std::vector<T>& array) {
-			std::vector<int64_t> indices(array.size());
+		std::vector<std::int64_t> argsort(const std::vector<T>& array) {
+			std::vector<std::int64_t> indices(array.size());
 			std::iota(indices.begin(), indices.end(), 0);
 			std::sort(indices.begin(), indices.end(),
-				[&array](int64_t left, int64_t right) -> bool {
+				[&array](std::int64_t left, std::int64_t right) -> bool {
 					// sort indices according to corresponding array element
 					return array[left] < array[right];
 				});
@@ -223,15 +224,15 @@ namespace hasty {
 			return indices;
 		}
 
-		export at::ScalarType complex_type(at::ScalarType real_type, std::initializer_list<at::ScalarType> allowed_types)
+		export hat::ScalarType complex_type(hat::ScalarType real_type, std::initializer_list<hat::ScalarType> allowed_types)
         {
-            at::ScalarType complex_type;
-            if (real_type == at::ScalarType::Float)
-                complex_type = at::ScalarType::ComplexFloat;
-            else if (real_type == at::ScalarType::Double)
-                complex_type = at::ScalarType::ComplexDouble;
-            else if (real_type == at::ScalarType::Half)
-                complex_type = at::ScalarType::ComplexHalf;
+            hat::ScalarType complex_type;
+            if (real_type == hat::ScalarType::Float)
+                complex_type = hat::ScalarType::ComplexFloat;
+            else if (real_type == hat::ScalarType::Double)
+                complex_type = hat::ScalarType::ComplexDouble;
+            else if (real_type == hat::ScalarType::Half)
+                complex_type = hat::ScalarType::ComplexHalf;
             else
                 throw std::runtime_error("Type not implemented complex_type()");
 
@@ -246,15 +247,15 @@ namespace hasty {
         }
 
 
-		export at::ScalarType real_type(at::ScalarType complex_type, std::initializer_list<at::ScalarType> allowed_types)
+		export hat::ScalarType real_type(hat::ScalarType complex_type, std::initializer_list<hat::ScalarType> allowed_types)
         {
-            at::ScalarType real_type;
-            if (complex_type == at::ScalarType::ComplexFloat)
-                real_type = at::ScalarType::Float;
-            else if (complex_type == at::ScalarType::ComplexDouble)
-                real_type = at::ScalarType::Double;
-            else if (complex_type == at::ScalarType::ComplexHalf)
-                real_type = at::ScalarType::Half;
+            hat::ScalarType real_type;
+            if (complex_type == hat::ScalarType::ComplexFloat)
+                real_type = hat::ScalarType::Float;
+            else if (complex_type == hat::ScalarType::ComplexDouble)
+                real_type = hat::ScalarType::Double;
+            else if (complex_type == hat::ScalarType::ComplexHalf)
+                real_type = hat::ScalarType::Half;
             else
                 throw std::runtime_error("Type not implemented complex_type()");
 
@@ -269,7 +270,7 @@ namespace hasty {
         }
 
 		export template<typename T>
-		std::vector<T> apply_permutation(const std::vector<T>& v, const std::vector<int64_t>& indices)
+		std::vector<T> apply_permutation(const std::vector<T>& v, const std::vector<std::int64_t>& indices)
 		{
 			std::vector<T> v2(v.size());
 			for (size_t i = 0; i < v.size(); i++) {
@@ -278,66 +279,66 @@ namespace hasty {
 			return v2;
 		}
 
-		export at::Tensor upscale_with_zeropad(const at::Tensor& input, const std::vector<int64_t>& newsize)
+		export hat::Tensor upscale_with_zeropad(const hat::Tensor& input, const std::vector<std::int64_t>& newsize)
         {
 
-            std::vector<at::indexing::TensorIndex> slices;
+            std::vector<hat::indexing::TensorIndex> slices;
             for (int i = 0; i < input.ndimension(); ++i) {
                 auto inpsize = input.size(i);
                 if (inpsize > newsize[i]) {
                     throw std::runtime_error("Cannot upscale to smaller image in dim " + std::to_string(i));
                 }
-                slices.push_back(at::indexing::Slice(at::indexing::None, inpsize));
+                slices.push_back(hat::indexing::Slice(hat::indexing::None, inpsize));
             }
 
-            at::Tensor output = at::zeros(at::makeArrayRef(newsize), input.options());
-            output.index_put_(at::makeArrayRef(slices), input);
+            hat::Tensor output = hat::zeros(hat::makeArrayRef(newsize), input.options());
+            output.index_put_(hat::makeArrayRef(slices), input);
 
             return output;
         }
 
-		export at::Tensor upscale_with_zeropad(const at::Tensor& input, const at::ArrayRef<int64_t>& newsize)
+		export hat::Tensor upscale_with_zeropad(const hat::Tensor& input, const hat::ArrayRef<std::int64_t>& newsize)
         {
 
-            std::vector<at::indexing::TensorIndex> slices;
+            std::vector<hat::indexing::TensorIndex> slices;
             for (int i = 0; i < input.ndimension(); ++i) {
                 auto inpsize = input.size(i);
                 if (inpsize > newsize[i]) {
                     throw std::runtime_error("Cannot upscale to smaller image in dim " + std::to_string(i));
                 }
-                slices.push_back(at::indexing::Slice(at::indexing::None, inpsize));
+                slices.push_back(hat::indexing::Slice(hat::indexing::None, inpsize));
             }
 
-            at::Tensor output = at::zeros(at::makeArrayRef(newsize), input.options());
-            output.index_put_(at::makeArrayRef(slices), input);
+            hat::Tensor output = hat::zeros(hat::makeArrayRef(newsize), input.options());
+            output.index_put_(hat::makeArrayRef(slices), input);
 
             return output;
         }
 
-		export at::Tensor resize(const at::Tensor& input, const std::vector<int64_t>& newsize)
+		export hat::Tensor resize(const hat::Tensor& input, const std::vector<std::int64_t>& newsize)
         {
 
-            std::vector<at::indexing::TensorIndex> slices;
+            std::vector<hat::indexing::TensorIndex> slices;
             for (int i = 0; i < input.ndimension(); ++i) {
-                slices.push_back(at::indexing::Slice(at::indexing::None, std::min(newsize[i], input.size(i))));
+                slices.push_back(hat::indexing::Slice(hat::indexing::None, std::min(newsize[i], input.size(i))));
             }
 
-            at::Tensor output = at::zeros(at::makeArrayRef(newsize), input.options());
-            output.index_put_(at::makeArrayRef(slices), input);
+            hat::Tensor output = hat::zeros(hat::makeArrayRef(newsize), input.options());
+            output.index_put_(hat::makeArrayRef(slices), input);
 
             return output;
         }
 
-		export at::Tensor resize(const at::Tensor& input, const at::ArrayRef<int64_t>& newsize)
+		export hat::Tensor resize(const hat::Tensor& input, const hat::ArrayRef<std::int64_t>& newsize)
         {
 
-            std::vector<at::indexing::TensorIndex> slices;
+            std::vector<hat::indexing::TensorIndex> slices;
             for (int i = 0; i < input.ndimension(); ++i) {
-                slices.push_back(at::indexing::Slice(at::indexing::None, std::min(newsize[i], input.size(i))));
+                slices.push_back(hat::indexing::Slice(hat::indexing::None, std::min(newsize[i], input.size(i))));
             }
 
-            at::Tensor output = at::zeros(at::makeArrayRef(newsize), input.options());
-            output.index_put_(at::makeArrayRef(slices), input);
+            hat::Tensor output = hat::zeros(hat::makeArrayRef(newsize), input.options());
+            output.index_put_(hat::makeArrayRef(slices), input);
 
             return output;
         }

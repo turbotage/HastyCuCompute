@@ -1,5 +1,6 @@
 #include <interface.hpp>
 
+import std;
 
 int main() {
 
@@ -14,7 +15,7 @@ int main() {
     }
 
     {
-        auto ret = ffi::test_normal_operators();
+        ffi::test_normal_operators();
     }
     
     {

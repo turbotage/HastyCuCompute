@@ -12,7 +12,7 @@ namespace hasty {
 
 
     template<is_device D, is_tensor_type TT, size_t RANK>
-    tensor<D,TT,RANK>::tensor_base::tensor_base(const std::array<int64_t, RANK>& input_shape, TensorBackend input)
+    tensor<D,TT,RANK>::tensor_base::tensor_base(const std::array<i64, RANK>& input_shape, TensorBackend input)
         : shape(input_shape), underlying_tensor(std::move(input))
     {}
 
@@ -77,25 +77,27 @@ namespace hasty {
     template<is_device D, is_tensor_type TT, size_t RANK>
     template<size_t R>
     requires less_than<R, RANK>
-    int64_t tensor<D,TT,RANK>::shape() const { 
-        assert(_pimpl->shape[R] == _pimpl->underlying_tensor.size(R));    
+    i64 tensor<D,TT,RANK>::shape() const { 
+        if (_pimpl->shape[R] != _pimpl->underlying_tensor.size(R)) {
+            throw std::runtime_error("tensor::shape(): shape does not match underlying tensor size");
+        }
         return _pimpl->shape[R]; 
     }
 
     template<is_device D, is_tensor_type TT, size_t RANK>
-    std::array<int64_t, RANK> tensor<D,TT,RANK>::shape() const { 
+    std::array<i64, RANK> tensor<D,TT,RANK>::shape() const { 
         return _pimpl->shape; 
     }
 
     template<is_device D, is_tensor_type TT, size_t RANK>
-    constexpr int64_t tensor<D,TT,RANK>::ndim() const { 
+    constexpr i64 tensor<D,TT,RANK>::ndim() const { 
         assert(RANK == _pimpl->underlying_tensor.dim()); 
         return RANK; 
     }
 
     template<is_device D, is_tensor_type TT, size_t RANK>
-    int64_t tensor<D,TT,RANK>::numel() const { 
-        int64_t nelem = 1; 
+    i64 tensor<D,TT,RANK>::numel() const { 
+        i64 nelem = 1; 
         for_sequence<RANK>([&](auto i) { nelem *= _pimpl->shape[i]; });
         assert(nelem == _pimpl->underlying_tensor.numel());
         return nelem;
@@ -123,14 +125,14 @@ namespace hasty {
     }
 
     template<is_device D, is_tensor_type TT, size_t RANK>
-    tensor<D, TT, RANK+1> tensor<D,TT,RANK>::unsqueeze(int64_t dim) {
+    tensor<D, TT, RANK+1> tensor<D,TT,RANK>::unsqueeze(i64 dim) {
         //debug::print_memory_usage("Before unsqueeze(): ");
 
         TensorBackend tensorview = _pimpl->underlying_tensor.unsqueeze(dim);
         if (tensorview.data_ptr() != _pimpl->underlying_tensor.data_ptr()) {
             throw std::runtime_error("tensor::unsqueeze: tensorview data not pointing into underlying tensor");
         }
-        std::array<int64_t, RANK+1> new_shape;
+        std::array<i64, RANK+1> new_shape;
         for_sequence<RANK+1>([&](auto i) {
             if (i < dim) {
                 new_shape[i] = _pimpl->shape[i];
@@ -178,7 +180,7 @@ namespace hasty {
 
         if (idx == get_device_idx())
             throw std::runtime_error("tensor::to: tensor already on device");
-        at::Device didx = get_backend_device(idx);
+        hat::Device didx = get_backend_device(idx);
         return tensor<DN,TT,RANK>(_pimpl->shape, 
             std::move(_pimpl->underlying_tensor.to(didx)));
     }
@@ -186,20 +188,20 @@ namespace hasty {
     template<is_device D, is_tensor_type TT, size_t RANK>
     template<is_tensor_type TTN>
     tensor<D,TTN,RANK> tensor<D,TT,RANK>::to() {
-        at::ScalarType stype = scalar_type_func<TTN>();
+        hat::ScalarType stype = scalar_type_func<TTN>();
         return tensor<D,TTN,RANK>(_pimpl->shape, 
             std::move(_pimpl->underlying_tensor.to(stype)));
     }
 
     template<is_device D, is_tensor_type TT, size_t RANK>
     tensor<D, TT, 1> tensor<D,TT,RANK>::masked_select(const tensor<D,b8_t,RANK>& mask) const {
-        at::Tensor ret = _pimpl->underlying_tensor.masked_select(mask.get_tensor());
-        std::array<int64_t, 1> new_shape = {ret.size(0)};
+        hat::Tensor ret = _pimpl->underlying_tensor.masked_select(mask.get_tensor());
+        std::array<i64, 1> new_shape = {ret.size(0)};
         return tensor<D,TT,1>(new_shape, std::move(ret));
     }
 
     template<is_device D, is_tensor_type TT, size_t RANK>
-    void tensor<D,TT,RANK>::assign(std::array<int64_t, RANK>& input_shape, TensorBackend input) {
+    void tensor<D,TT,RANK>::assign(std::array<i64, RANK>& input_shape, TensorBackend input) {
         _pimpl = std::make_shared<tensor<D,TT,RANK>::tensor_base>(input_shape, std::move(input));
     }
 
@@ -216,8 +218,8 @@ namespace hasty {
             throw std::runtime_error("tensor::stack: cannot stack empty vector");
         }
 
-        std::array<int64_t, RANK1> oneshape;
-        std::array<int64_t, RANK1+1> new_shape;
+        std::array<i64, RANK1> oneshape;
+        std::array<i64, RANK1+1> new_shape;
         for_sequence<RANK1>([&](auto i) { 
             if (i == DIM) {
                 new_shape[i] = tensors.size();
@@ -232,7 +234,7 @@ namespace hasty {
             tensor_views.emplace_back(t.get_tensor());
         }
 
-        TensorBackend stacked_tensor = torch::stack(std::move(tensor_views), DIM);
+        TensorBackend stacked_tensor = hat::stack(std::move(tensor_views), DIM);
         return tensor<D1,TT1,RANK1+1>(new_shape, std::move(stacked_tensor));
     }
 
@@ -294,7 +296,7 @@ namespace hasty {
     }
 
     template<is_device D, is_tensor_type TT, size_t RANK>
-    tensor<D,TT,RANK>::tensor(const std::array<int64_t, RANK>& input_shape, TensorBackend input) 
+    tensor<D,TT,RANK>::tensor(const std::array<i64, RANK>& input_shape, TensorBackend input) 
         : _pimpl(std::make_shared<tensor<D,TT,RANK>::tensor_base>(input_shape, std::move(input)))
     {
         //debug::print_memory_usage("tensor::tensor(std::array, TensorBackend): ");

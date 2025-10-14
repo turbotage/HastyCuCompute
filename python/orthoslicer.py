@@ -1,5 +1,4 @@
 import numpy as np
-import h5py
 
 import weakref
 
@@ -574,10 +573,12 @@ def image_nd(img, max_clim=False):
 	slicer.show()
 
 if __name__ == '__main__':
-    with h5py.File('/home/turbotage/Documents/4DRecon/image_320.h5', 'r') as f:
-        data = f['image'][()]
+	import h5py
+	with h5py.File('/home/turbotage/Documents/4DRecon/image_320.h5', 'r') as f:
+		data = f['image'][()]
 
-    dataf = np.flip(data[None,...].transpose((2,3,4,0,1)), axis=2)
-    slicer = HastyOrthoSlicer(dataf[:,:,:,:,:])
+	dataf = np.flip(data[None,...].transpose((2,3,4,0,1)), axis=2)
+	slicer = HastyOrthoSlicer(dataf[:,:,:,:,:])
 
-    slicer.show()
+	slicer.show()
+	

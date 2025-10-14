@@ -5,6 +5,7 @@ module;
 export module util:meta;
 
 //import pch;
+import std;
 
 namespace hasty {
 

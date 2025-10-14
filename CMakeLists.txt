@@ -1,8 +1,9 @@
-cmake_minimum_required(VERSION 3.31 FATAL_ERROR)
+cmake_minimum_required(VERSION 4.0.0 FATAL_ERROR)
 
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
 set(CMAKE_EXPERIMENTAL_CXX_IMPORT_STD "d0edc3af-4c50-42ea-a356-e2862fe7a444")
+set(CMAKE_CXX_COMPILER_EXTERNAL_TOOLCHAIN "/opt/gcc-15")
 
 project("HastyCuCompute" VERSION 0.1 LANGUAGES CXX)
 
@@ -30,14 +31,14 @@ set_target_properties(HastyCuCompute PROPERTIES
     CXX_STANDARD 23
     CXX_STANDARD_REQUIRED ON
     CXX_SCAN_FOR_MODULES ON
-    #CXX_MODULE_STD ON
+    CXX_MODULE_STD ON
 )
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     target_compile_options(HastyCuCompute PRIVATE -ftime-trace)
 endif()
 
-target_link_libraries(HastyCuCompute PRIVATE c++ c++abi)
+#target_link_libraries(HastyCuCompute PRIVATE c++ c++abi)
 
 include(cmake/CPM.cmake)
 include(FetchContent)
@@ -45,6 +46,7 @@ include(FetchContent)
 target_sources(HastyCuCompute
     PUBLIC 
         FILE_SET CXX_MODULES FILES
+            "lib/extwrap/wrap_torch.cppm"
             "lib/fft/fft.cppm"
             "lib/fft/nufft.cppm"
             "lib/fft/toeplitz.cppm"
@@ -214,7 +216,6 @@ target_include_directories(HastyCuCompute PUBLIC
 )
 
 
-
 ################ HASTY-CU-TEST ####################
 
 add_executable(HastyCuTest "test/main.cpp")
@@ -228,7 +229,7 @@ set_target_properties(HastyCuTest PROPERTIES
     CXX_STANDARD 23
     CXX_STANDARD_REQUIRED ON
     CXX_SCAN_FOR_MODULES ON
-    #CXX_MODULE_STD ON
+    CXX_MODULE_STD ON
 )
 
 target_link_libraries(HastyCuTest PRIVATE
@@ -236,8 +237,6 @@ target_link_libraries(HastyCuTest PRIVATE
     ${TORCH_LIBRARIES}
     pybind11::headers
     Python3::Python
-    c++ 
-    c++abi
 )
 
 target_include_directories(HastyCuTest PRIVATE
@@ -260,8 +259,6 @@ target_link_libraries(HastySmallTests PRIVATE
     ${TORCH_LIBRARIES}
     pybind11::headers
     Python3::Python
-    c++ 
-    c++abi
 )
 ################# VKFFT TESTS ####################
 add_executable(VKFFTTest "test/fft_tests.cpp")

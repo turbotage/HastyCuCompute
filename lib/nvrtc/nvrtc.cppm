@@ -7,6 +7,8 @@ module;
 
 export module nvrtc;
 
+import std;
+
 namespace hasty {
     namespace nvrtc {
 

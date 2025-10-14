@@ -1,6 +1,7 @@
 #include "interface.hpp"
 #include "interface_includes.hpp"
 
+import torch_base;
 import util;
 import tensor;
 import hdf5;
@@ -12,9 +13,9 @@ import trace_cache;
 
 namespace ffi {
 
-	std::vector<at::Tensor> test_simple_invert() {
-		c10::InferenceMode im_guard{};
-		torch::NoGradGuard no_grad_guard;
+	void test_simple_invert() {
+		hat::InferenceMode im_guard{};
+		htorch::NoGradGuard no_grad_guard;
 
 		using namespace hasty;
 
@@ -42,7 +43,7 @@ namespace ffi {
 		auto tset = import_tensors(
 			"/home/turbotage/Documents/4DRecon/other_data/MRI_Raw.h5", matchers);
 
-		auto shape_getter = []<size_t R>(const at::Tensor& ten) -> std::array<i64,R> 
+		auto shape_getter = []<size_t R>(const hat::Tensor& ten) -> std::array<i64,R> 
 		{
 			if (ten.ndimension() != R) {
 				throw std::runtime_error("Invalid number of dimensions");
@@ -54,7 +55,7 @@ namespace ffi {
 			return shape;
 		};
 
-		std::vector<at::Tensor> output_tensors;
+		std::vector<hat::Tensor> output_tensors;
 		output_tensors.reserve(5);
 		for (int e = 0; e < 5; ++e) {
 
@@ -65,7 +66,7 @@ namespace ffi {
 
 			std::cout << "Starting encode " << e << std::endl;
 
-			at::Tensor temp = std::get<at::Tensor>(tset["/Kdata/KX_E" + std::to_string(e)]).flatten();
+			hat::Tensor temp = std::get<hat::Tensor>(tset["/Kdata/KX_E" + std::to_string(e)]).flatten();
 			temp *= (3.141592 / 160.0);
 			coords[0] = cache_tensor<f32_t,1>(
 				tensor<cpu_t,f32_t,1>(shape_getter.template operator()<1>(temp), temp),
@@ -73,7 +74,7 @@ namespace ffi {
 			);
 			tset.erase("/Kdata/KX_E" + std::to_string(e));
 
-			temp = std::get<at::Tensor>(tset["/Kdata/KY_E" + std::to_string(e)]).flatten();
+			temp = std::get<hat::Tensor>(tset["/Kdata/KY_E" + std::to_string(e)]).flatten();
 			temp *= (3.141592 / 160.0);
 			coords[1] = cache_tensor<f32_t,1>(
 				tensor<cpu_t,f32_t,1>(shape_getter.template operator()<1>(temp), temp),
@@ -81,7 +82,7 @@ namespace ffi {
 			);
 			tset.erase("/Kdata/KY_E" + std::to_string(e));
 
-			temp = std::get<at::Tensor>(tset["/Kdata/KZ_E" + std::to_string(e)]).flatten();
+			temp = std::get<hat::Tensor>(tset["/Kdata/KZ_E" + std::to_string(e)]).flatten();
 			temp *= (3.141592 / 160.0);
 			coords[2] = cache_tensor<f32_t,1>(
 				tensor<cpu_t,f32_t,1>(shape_getter.template operator()<1>(temp), temp),
@@ -89,27 +90,27 @@ namespace ffi {
 			);
 			tset.erase("/Kdata/KZ_E" + std::to_string(e));
 
-			temp = std::get<at::Tensor>(tset["/Kdata/KW_E" + std::to_string(e)]).flatten();
+			temp = std::get<hat::Tensor>(tset["/Kdata/KW_E" + std::to_string(e)]).flatten();
 			weights = cache_tensor<f32_t,1>(
 				tensor<cpu_t,f32_t,1>(shape_getter.template operator()<1>(temp), temp),
 				std::hash<std::string>{}("KW_E" + std::to_string(e))
 			);
 			tset.erase("/Kdata/KW_E" + std::to_string(e));
 
-			std::vector<at::Tensor> kdata_tensors;
+			std::vector<hat::Tensor> kdata_tensors;
 			kdata_tensors.reserve(48);
 			for (int c = 0; true; ++c) {
 				auto key = "/Kdata/KData_E" + std::to_string(e) + "_C" + std::to_string(c);
 				if (tset.find(key) == tset.end()) {
 					break;
 				}
-				temp = std::get<at::Tensor>(tset[key]).flatten();
+				temp = std::get<hat::Tensor>(tset[key]).flatten();
 
 				kdata_tensors.push_back(temp);
 			
 				tset.erase(key);
 			}
-			auto kdata_tensor = at::stack(kdata_tensors, 0);
+			auto kdata_tensor = hat::stack(kdata_tensors, 0);
 			kdata_tensors.clear();
 
 			kdata = cache_tensor<c64_t,2>(
@@ -154,13 +155,13 @@ namespace ffi {
 			output_tensors.push_back(output.get_tensor());
 		}
 
-		return output_tensors;
+		//return output_tensors;
 	}
 
-	at::Tensor test_normal_operators() {
+	void test_normal_operators() {
 		using namespace hasty;
 
-		c10::InferenceMode im_guard{};
+		hat::InferenceMode im_guard{};
 
 		cache_dir = "/home/turbotage/Documents/hasty_cache/";
 		trace::module_cache_dir = cache_dir / "modules/";
@@ -232,6 +233,12 @@ namespace ffi {
 		);
 
 		{
+			auto temp = make_rand_tensor<cuda_t,c64_t,0>({}, didx);
+		}
+
+		//util::print_cuda_memory(didx, "Before operators:", true);
+
+		{
 			auto start = std::chrono::high_resolution_clock::now();
 
 			NORMAL_T_T1_OP<cuda_t, c64_t, 3> normal_sense1(
@@ -242,15 +249,7 @@ namespace ffi {
 			std::chrono::duration<double> duration = end - start;
 			std::cout << "NT_T1_OP build: " << duration.count() << " seconds" << std::endl;
 
-			hasty::synchronize(didx);
-			start = std::chrono::high_resolution_clock::now();
-
-			normal_sense1(image.template get<cuda_t>(didx));
-
-			hasty::synchronize(didx);
-			end = std::chrono::high_resolution_clock::now();
-			duration = end - start;
-			std::cout << "NT_T1_OP: " << duration.count() << " seconds" << std::endl;
+			//util::print_cuda_memory(didx, "After NT_T1_OP build:", false);
 
 			hasty::synchronize(didx);
 			start = std::chrono::high_resolution_clock::now();
@@ -261,7 +260,20 @@ namespace ffi {
 			end = std::chrono::high_resolution_clock::now();
 			duration = end - start;
 			std::cout << "NT_T1_OP: " << duration.count() << " seconds" << std::endl;
+
+			hasty::synchronize(didx);
+			start = std::chrono::high_resolution_clock::now();
+
+			normal_sense1(image.template get<cuda_t>(didx));
+
+			hasty::synchronize(didx);
+			end = std::chrono::high_resolution_clock::now();
+			duration = end - start;
+			std::cout << "NT_T1_OP: " << duration.count() << " seconds" << std::endl;
+
+			//util::print_cuda_memory(didx, "After NT_T1_OP runs:", false);
 		}
+		//util::print_cuda_memory(didx, "Before NT_T2_OP build:", true);
 		{
 			auto start = std::chrono::high_resolution_clock::now();
 
@@ -273,15 +285,7 @@ namespace ffi {
 			std::chrono::duration<double> duration = end - start;
 			std::cout << "NT_T2_OP build: " << duration.count() << " seconds" << std::endl;
 
-			hasty::synchronize(didx);
-			start = std::chrono::high_resolution_clock::now();
-
-			normal_sense2(smaps.template get<cuda_t>(didx));
-
-			hasty::synchronize(didx);
-			end = std::chrono::high_resolution_clock::now();
-			duration = end - start;
-			std::cout << "NT_T2_OP: " << duration.count() << " seconds" << std::endl;
+			//util::print_cuda_memory(didx, "After NT_T2_OP build:", false);
 
 			hasty::synchronize(didx);
 			start = std::chrono::high_resolution_clock::now();
@@ -292,8 +296,20 @@ namespace ffi {
 			end = std::chrono::high_resolution_clock::now();
 			duration = end - start;
 			std::cout << "NT_T2_OP: " << duration.count() << " seconds" << std::endl;
+
+			hasty::synchronize(didx);
+			start = std::chrono::high_resolution_clock::now();
+
+			normal_sense2(smaps.template get<cuda_t>(didx));
+
+			hasty::synchronize(didx);
+			end = std::chrono::high_resolution_clock::now();
+			duration = end - start;
+			std::cout << "NT_T2_OP: " << duration.count() << " seconds" << std::endl;
+
+			//util::print_cuda_memory(didx, "After NT_T2_OP runs:", false);
 		}
-
+		//util::print_cuda_memory(didx, "Before NIDT builds:", true);
 		{
 			auto start = std::chrono::high_resolution_clock::now();
 
@@ -325,7 +341,9 @@ namespace ffi {
 			end = std::chrono::high_resolution_clock::now();
 			duration = end - start;
 			std::cout << "NIDT_T1_OP: " << duration.count() << " seconds" << std::endl;
+			//util::print_cuda_memory(didx, "After NIDT_T1_OP runs:", false);
 		}
+		//util::print_cuda_memory(didx, "Before NIDT_T2_OP build:", true);
 		{
 			auto start = std::chrono::high_resolution_clock::now();
 
@@ -358,7 +376,7 @@ namespace ffi {
 			duration = end - start;
 			std::cout << "NIDT_T2_OP: " << duration.count() << " seconds" << std::endl;
 		}
-
+		//util::print_cuda_memory(didx, "Before NIDTW_T1_OP build:", true);
 		{
 			auto start = std::chrono::high_resolution_clock::now();
 
@@ -392,6 +410,7 @@ namespace ffi {
 			duration = end - start;
 			std::cout << "NIDTW_T1_OP: " << duration.count() << " seconds" << std::endl;
 		}
+		//util::print_cuda_memory(didx, "Before NIDTW_T2_OP build:", true);
 		{
 			auto start = std::chrono::high_resolution_clock::now();
 
@@ -426,7 +445,7 @@ namespace ffi {
 			std::cout << "NIDTW_T2_OP: " << duration.count() << " seconds" << std::endl;
 		}
 
-		return at::rand({1,1,1});
+		//return at::rand({1,1,1});
 	}
 
 	void test_prototype_stuff() {
@@ -492,7 +511,7 @@ FORWARD_ENTRYPOINT(self, t1, t2, t3):
 	}
 
 	void jit_checking() {
-		auto ops = torch::jit::getAllOperators();
+		auto ops = htorch::jit::getAllOperators();
 		for (const auto& op : ops) {
 			const auto& schema = op->schema();
 			if (schema.name().find("hasty_fft") != std::string::npos) {

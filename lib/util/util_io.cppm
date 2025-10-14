@@ -4,11 +4,13 @@ module;
 
 export module util:io;
 
+import std;
+import torch_base;
 
 namespace hasty {
 
 
-    export void export_binary_tensor(at::Tensor tensor, const std::filesystem::path& path)
+    export void export_binary_tensor(hat::Tensor tensor, const std::filesystem::path& path)
     {
         try {
             std::ofstream file(path, std::ios::binary);
@@ -25,10 +27,10 @@ namespace hasty {
         }
     }
 
-    export auto import_binary_tensor(const std::filesystem::path& path, at::IntArrayRef sizes, at::ScalarType dtype) 
-        -> at::Tensor
+    export auto import_binary_tensor(const std::filesystem::path& path, hat::IntArrayRef sizes, hat::ScalarType dtype) 
+        -> hat::Tensor
     {
-        at::Tensor tt = at::empty(sizes, at::TensorOptions().dtype(dtype));
+        hat::Tensor tt = hat::empty(sizes, hat::TensorOptions().dtype(dtype));
         try {
             std::ifstream file(path, std::ios::binary | std::ios::in);
             if (!file.is_open()) {

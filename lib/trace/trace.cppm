@@ -1,20 +1,20 @@
 module;
 
 #include "pch.hpp"
-#include <pstl/pstl_config.h>
 #include <ratio>
 #include <type_traits>
 
 export module trace;
 
+import torch_base;
 import util;
 import tensor;
 
 namespace hasty {
 	namespace trace {
 		
-		export using CompilationUnit = torch::jit::CompilationUnit;
-    	export using CompilationModule = torch::jit::Module;
+		export using CompilationUnit = htorch::jit::CompilationUnit;
+    	export using CompilationModule = htorch::jit::Module;
 
 
 		// TENSOR PROTOTYPE
@@ -210,9 +210,9 @@ namespace hasty {
 
 				});
 
-				auto gettensorfunc = []<typename T>(T&& t) -> torch::jit::IValue {
+				auto gettensorfunc = []<typename T>(T&& t) -> htorch::jit::IValue {
 					if constexpr (is_vector_of_tensors<T>) {
-						std::vector<at::Tensor> rettensors;
+						std::vector<hat::Tensor> rettensors;
 						rettensors.reserve(t.size());
 						for (auto& tt : t) {
 							if (tt.ninstances() == 1) {
@@ -221,13 +221,13 @@ namespace hasty {
 								rettensors.emplace_back(tt.get_tensor());
 							}
 						}
-						return torch::jit::IValue(std::move(rettensors));
+						return htorch::jit::IValue(std::move(rettensors));
 					}
 					else if constexpr (is_tensor<T>) {
 						if (t.ninstances() == 1) {
-							return torch::jit::IValue(t.decay_to_tensor());
+							return htorch::jit::IValue(t.decay_to_tensor());
 						}
-						return torch::jit::IValue(t.get_tensor());
+						return htorch::jit::IValue(t.get_tensor());
 					} else if constexpr (!is_tensor_or_vector_of_tensors<T>) {
 						static_assert(false, ""); // Why do this trigger?
 					}
@@ -235,13 +235,13 @@ namespace hasty {
 
 				auto ttscopy = std::tuple(Ts(std::forward<Ts>(tts))...);
 				
-				std::vector<torch::jit::IValue> inputs;
+				std::vector<htorch::jit::IValue> inputs;
 				inputs.reserve(sizeof...(Ts));
 				for_sequence<sizeof...(Ts)>([&](auto i) {
 					inputs.emplace_back(gettensorfunc(std::get<i>(ttscopy)));
 				});
 
-				torch::jit::IValue ret_ivalue = (*_mod)(std::move(inputs));
+				htorch::jit::IValue ret_ivalue = (*_mod)(std::move(inputs));
 
 				std::tuple<any_tensor_prototype_conversion_t<ReturnTt>...> rets;
 
@@ -483,10 +483,10 @@ namespace hasty {
 				_mod->define(_compiled);
 
 				if (_freeze) {
-					*_mod = torch::jit::freeze(*_mod);
+					*_mod = htorch::jit::freeze(*_mod);
 				}
 				if (_optimize_for_inference) {
-					*_mod = torch::jit::optimize_for_inference(*_mod);
+					*_mod = htorch::jit::optimize_for_inference(*_mod);
 				}
 			}
 

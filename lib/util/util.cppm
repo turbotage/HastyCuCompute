@@ -5,6 +5,7 @@ module;
 export module util;
 
 //import pch;
+export import std;
 
 export import :concepts;
 export import :containers;
@@ -78,11 +79,11 @@ namespace hasty {
     };
 
     export void synchronize() {
-        torch::cuda::synchronize();
+        htorch::cuda::synchronize();
     }
 
     export void synchronize(device_idx idx) {
-        torch::cuda::synchronize(i32(idx));
+        htorch::cuda::synchronize(i32(idx));
     }
 
     namespace util {
@@ -93,7 +94,7 @@ namespace hasty {
             try {
                 return fut.get();
             }
-            catch (c10::Error& e) {
+            catch (hc10::Error& e) {
                 std::string err = e.what();
                 std::cerr << err << std::endl;
                 throw std::runtime_error(err);
@@ -115,7 +116,7 @@ namespace hasty {
             try {
                 return func();
             }
-            catch (c10::Error& e) {
+            catch (hc10::Error& e) {
                 std::string err = e.what();
                 std::cerr << err << std::endl;
                 throw std::runtime_error(err);
@@ -136,7 +137,7 @@ namespace hasty {
             try {
                 fut.get();
             }
-            catch (c10::Error& e) {
+            catch (hc10::Error& e) {
                 std::string err = e.what();
                 std::cerr << err << std::endl;
                 throw std::runtime_error(err);
@@ -157,7 +158,7 @@ namespace hasty {
             try {
                 func();
             }
-            catch (c10::Error& e) {
+            catch (hc10::Error& e) {
                 std::string err = e.what();
                 std::cerr << err << std::endl;
                 throw std::runtime_error(err);
@@ -170,6 +171,34 @@ namespace hasty {
             catch (...) {
                 std::cerr << "caught something strange: " << std::endl;
                 throw std::runtime_error("caught something strange: ");
+            }
+        }
+
+        export inline void print_cuda_memory(device_idx idx, const std::string& prepend = "", bool empty_cache = false) {
+            hasty::synchronize(idx);
+            auto devicestats = hat::cuda::CUDACachingAllocator::getDeviceStats((int)idx);
+
+            auto mb = [](size_t b){ return b / (1024.0 * 1024.0); };
+
+            std::println("{}, device: {}", prepend, (int)idx);
+
+            std::println("AGGREGATE: allocated: {}, reserved: {}",
+                    mb(devicestats.allocated_bytes[0].current),
+                    mb(devicestats.reserved_bytes[0].current)
+            );
+
+            std::println("SMALL_POOL: allocated: {}, reserved: {}",
+                    mb(devicestats.allocated_bytes[1].current),
+                    mb(devicestats.reserved_bytes[1].current)
+            );
+ 
+            std::println("LARGE_POOL: allocated: {}, reserved: {} \n",
+                    mb(devicestats.allocated_bytes[2].current),
+                    mb(devicestats.reserved_bytes[2].current)
+            );
+
+            if (empty_cache) {
+                hat::cuda::CUDACachingAllocator::emptyCache();
             }
         }
 

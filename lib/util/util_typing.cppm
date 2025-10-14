@@ -5,6 +5,8 @@ module;
 export module util:typing;
 
 //import pch;
+import std;
+import torch_base;
 
 namespace hasty {
 
@@ -31,13 +33,13 @@ namespace hasty {
         template<typename T>
         using opt = std::optional<T>;
 
-        using i8  = int8_t;
-        using i16 = int16_t;
-        using i32 = int32_t;
-        using i64 = int64_t;
-        using u16 = uint16_t;
-        using u32 = uint32_t;
-        using u64 = uint64_t;
+        using i8  = std::int8_t;
+        using i16 = std::int16_t;
+        using i32 = std::int32_t;
+        using i64 = std::int64_t;
+        using u16 = std::uint16_t;
+        using u32 = std::uint32_t;
+        using u64 = std::uint64_t;
         using f32 = float;
         using f64 = double;
         using c64 = std::complex<float>;
@@ -102,32 +104,32 @@ namespace hasty {
         concept is_bool_tensor_type = std::is_same_v<T, b8_t>;
 
         template<is_tensor_type TT>
-        constexpr at::ScalarType scalar_type_func() {
+        constexpr hat::ScalarType scalar_type_func() {
             if constexpr(std::is_same_v<TT, f32_t>) {
-                return at::ScalarType::Float;
+                return hat::ScalarType::Float;
             } else if constexpr(std::is_same_v<TT, f64_t>) {
-                return at::ScalarType::Double;
+                return hat::ScalarType::Double;
             } else if constexpr(std::is_same_v<TT, c64_t>) {
-                return at::ScalarType::ComplexFloat;
+                return hat::ScalarType::ComplexFloat;
             } else if constexpr(std::is_same_v<TT, c128_t>) {
-                return at::ScalarType::ComplexDouble;
+                return hat::ScalarType::ComplexDouble;
             } else if constexpr(std::is_same_v<TT, i32_t>) {
-                return at::ScalarType::Int;
+                return hat::ScalarType::Int;
             } else if constexpr(std::is_same_v<TT, i64_t>) {
-                return at::ScalarType::Long;
+                return hat::ScalarType::Long;
             } else if constexpr(std::is_same_v<TT, i16_t>) {
-                return at::ScalarType::Short;
+                return hat::ScalarType::Short;
             } else if constexpr(std::is_same_v<TT, b8_t>) {
-                return at::ScalarType::Bool;
+                return hat::ScalarType::Bool;
             }
         }
 
         template<is_device D>
-        constexpr at::DeviceType device_type_func() {
+        constexpr hat::DeviceType device_type_func() {
             if constexpr(std::is_same_v<D, cuda_t>) {
-                return at::DeviceType::CUDA;
+                return hat::DeviceType::CUDA;
             } else if constexpr(std::is_same_v<D, cpu_t>) {
-                return at::DeviceType::CPU;
+                return hat::DeviceType::CPU;
             }
         }
 

@@ -5,6 +5,7 @@ module;
 export module tensor:impl_intrinsic_inplace;
 //module tensor:impl_intrinsic_inplace;
 
+import torch_base;
 import util;
 import :intrinsic;
 
@@ -30,7 +31,7 @@ namespace hasty {
             _pimpl->underlying_tensor.fill_(val);
         }
         else {
-            auto cten = at::complex(at::scalar_tensor(val.real()), at::scalar_tensor(val.imag())); 
+            auto cten = hat::complex(hat::scalar_tensor(val.real()), hat::scalar_tensor(val.imag()));
             _pimpl->underlying_tensor.fill_(cten);
         }
     }
@@ -70,7 +71,7 @@ namespace hasty {
             _pimpl->underlying_tensor.masked_fill_(mask.get_tensor(), val);
         }
         else {
-            auto cten = at::complex(at::scalar_tensor(val.real()), at::scalar_tensor(val.imag())); 
+            auto cten = hat::complex(hat::scalar_tensor(val.real()), hat::scalar_tensor(val.imag()));
             _pimpl->underlying_tensor.masked_fill_(mask.get_tensor(), cten);
         }
     }
@@ -78,11 +79,11 @@ namespace hasty {
     template<is_device D, is_tensor_type TT, size_t RANK>
     void tensor<D,TT,RANK>::masked_add_(const tensor<D,b8_t,RANK>& mask, base_t<TT> val) {
         if constexpr(!is_fp_complex_tensor_type<TT>) {
-            auto adder = _pimpl->underlying_tensor.masked_select(mask.get_tensor()) + at::scalar_tensor(val);
+            auto adder = _pimpl->underlying_tensor.masked_select(mask.get_tensor()) + hat::scalar_tensor(val);
             _pimpl->underlying_tensor.masked_scatter_(mask.get_tensor(), adder);
         }
         else {
-            auto cten = at::complex(at::scalar_tensor(val.real()), at::scalar_tensor(val.imag()));
+            auto cten = hat::complex(hat::scalar_tensor(val.real()), hat::scalar_tensor(val.imag()));
             auto adder = _pimpl->underlying_tensor.masked_select(mask.get_tensor()) + cten;
             _pimpl->underlying_tensor.masked_scatter_(mask.get_tensor(), adder);
         }
@@ -97,11 +98,11 @@ namespace hasty {
     template<is_device D, is_tensor_type TT, size_t RANK>
     void tensor<D,TT,RANK>::masked_add_(const tensor<D,b8_t,RANK>& mask, const tensor<D,TT,1>& src, base_t<TT> alpha) {
         if constexpr(!is_fp_complex_tensor_type<TT>) {
-            auto adder = _pimpl->underlying_tensor.masked_select(mask.get_tensor()) + src.get_tensor() * at::scalar_tensor(alpha);
+            auto adder = _pimpl->underlying_tensor.masked_select(mask.get_tensor()) + src.get_tensor() * hat::scalar_tensor(alpha);
             _pimpl->underlying_tensor.masked_scatter_(mask.get_tensor(), adder);
         }
         else {
-            auto cten = at::complex(at::scalar_tensor(alpha.real()), at::scalar_tensor(alpha.imag()));
+            auto cten = hat::complex(hat::scalar_tensor(alpha.real()), hat::scalar_tensor(alpha.imag()));
             auto adder = _pimpl->underlying_tensor.masked_select(mask.get_tensor()) + src.get_tensor() * cten;
             _pimpl->underlying_tensor.masked_scatter_(mask.get_tensor(), adder);
         }

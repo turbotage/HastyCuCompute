@@ -6,6 +6,7 @@ module;
 export module threading;
 
 //import pch;
+import torch_base;
 import util;
 import tensor;
 
@@ -18,7 +19,7 @@ namespace hasty {
         }
     ) 
     {
-        i32 device_count = torch::cuda::device_count();
+        i32 device_count = hat::cuda::device_count();
         std::vector<device_idx> devices;
         devices.reserve(device_count);
         for (int idx = 0; idx < device_count; idx++) {

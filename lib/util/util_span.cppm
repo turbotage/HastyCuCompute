@@ -6,6 +6,8 @@ export module util:span;
 
 //import pch;
 
+import std;
+
 import :meta;
 import :typing;
 
@@ -23,7 +25,7 @@ namespace hasty {
         arbspan(const T* listptr)
             : _data(listptr) {}
 
-        arbspan(at::ArrayRef<T> arr)
+        arbspan(hat::ArrayRef<T> arr)
             : _data(arr.data())
         {}
 
@@ -35,8 +37,8 @@ namespace hasty {
         span(std::span<const T, N> span) 
             : _data(span.data()) {}
         */
-        at::ArrayRef<T> to_arr_ref() {
-            return at::ArrayRef<T>(_data, N);
+        hat::ArrayRef<T> to_arr_ref() {
+            return hat::ArrayRef<T>(_data, N);
         }
 
         std::array<T, N> to_arr() {
@@ -99,7 +101,7 @@ namespace hasty {
         span(const i64* listptr)
             : _data(listptr) {}
 
-        span(at::ArrayRef<i64> arr)
+        span(hat::ArrayRef<i64> arr)
             : _data(arr.data())
         {}
 
@@ -119,15 +121,15 @@ namespace hasty {
             return arr;
         }
 
-        at::ArrayRef<i64> to_arr_ref() {
-            return at::ArrayRef<i64>(_data, N);
+        hat::ArrayRef<i64> to_arr_ref() {
+            return hat::ArrayRef<i64>(_data, N);
         }
-        
-        at::OptionalArrayRef<i64> to_opt_arr_ref() {
+
+        hat::OptionalArrayRef<i64> to_opt_arr_ref() {
             if (N == 0) {
-                return at::nullopt;
+                return std::nullopt;
             }
-            return at::ArrayRef<i64>(_data, N);
+            return hat::ArrayRef<i64>(_data, N);
         }
 
         std::array<i64, N> to_arr() {

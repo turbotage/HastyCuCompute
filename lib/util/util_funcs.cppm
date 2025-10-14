@@ -1,11 +1,12 @@
 module;
 
 #include "pch.hpp"
-#include <sstream>
+//#include <cstdint>
 
 export module util:funcs;
 
 //import pch;
+import std;
 
 namespace hasty {
 
@@ -155,20 +156,20 @@ namespace hasty {
 			std::string ret;
 
 			auto powlam = [](std::uint64_t base, std::uint32_t exponent) {
-				uint64_t retnum = 1;
+				std::uint64_t retnum = 1;
 				for (int i = 0; i < exponent; ++i) {
 					retnum *= base;
 				}
 				return retnum;
 			};
 
-			uint64_t base = std::numeric_limits<uint64_t>::max();
-			uint64_t c = (uint64_t)num / base;
-			uint64_t rem = num % base;
+			std::uint64_t base = std::numeric_limits<std::uint64_t>::max();
+			std::uint64_t c = (std::uint64_t)num / base;
+			std::uint64_t rem = num % base;
 
 			for (int i = 10; i >= 0; --i) {
 				base = powlam(basec.size(), i);
-				c = (uint64_t)num / base;
+				c = (std::uint64_t)num / base;
 				rem = num % base;
 
 				if (c > 0)
@@ -204,7 +205,7 @@ namespace hasty {
 			auto& small = (shape1.size() > shape2.size()) ? shape2 : shape1;
 			auto& big = (shape1.size() > shape2.size()) ? shape1 : shape2;
 
-			std::vector<int64_t> ret(big.size());
+			std::vector<std::int64_t> ret(big.size());
 
 			auto retit = ret.rbegin();
 			auto smallit = small.rbegin();

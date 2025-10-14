@@ -28,11 +28,11 @@ namespace hasty {
     template<is_device D, is_tensor_type TT, size_t RANK>
     auto tensor<D,TT,RANK>::abs() const {
         if constexpr(is_fp32_tensor_type<TT>) {
-            auto ret = _pimpl->underlying_tensor.abs().to(at::ScalarType::Float);
+            auto ret = _pimpl->underlying_tensor.abs().to(hat::ScalarType::Float);
             return tensor<D, f32_t, RANK>(_pimpl->shape, std::move(ret));
         }
         else if constexpr(is_fp64_tensor_type<TT>) {
-            auto ret = _pimpl->underlying_tensor.abs().to(at::ScalarType::Double);
+            auto ret = _pimpl->underlying_tensor.abs().to(hat::ScalarType::Double);
             return tensor<D, f64_t, RANK>(_pimpl->shape, std::move(ret));
         }
         else if constexpr(is_int_tensor_type<TT>) {

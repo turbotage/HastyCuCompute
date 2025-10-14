@@ -1,10 +1,12 @@
 module;
 
 #include "pch.hpp"
+//#include <cstdint>
 
 export module util:idx;
 
 //import pch;
+import std;
 
 namespace hasty {
 
@@ -22,9 +24,9 @@ namespace hasty {
         template<std::integral I1, std::integral I2>
         Slice(I1 ival1, I2 ival2) : start(ival1), end(ival2) {}
 
-        std::optional<int64_t> start;
-        std::optional<int64_t> end;
-        std::optional<int64_t> step;
+        std::optional<std::int64_t> start;
+        std::optional<std::int64_t> end;
+        std::optional<std::int64_t> step;
     };
 
     export template<typename T>
@@ -33,7 +35,7 @@ namespace hasty {
                         || std::is_same_v<T, Slice>
                         || std::is_integral_v<T>;
 
-    export using TensorIndex = std::variant<None, Ellipsis, Slice, int64_t>;
+    export using TensorIndex = std::variant<None, Ellipsis, Slice, std::int64_t>;
 
     export template<size_t R, index_type... Idx>
     constexpr size_t get_slice_rank()

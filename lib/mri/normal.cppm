@@ -17,6 +17,12 @@ import fft;
 
 namespace hasty {
 	
+	template<is_device D, is_fp_complex_tensor_type TT, size_t DIM>
+	concept is_normal_op_compatible = 
+		std::is_same_v<TT, c64_t> 	&& 
+		(DIM >= 2) && (DIM <= 3) 	&&
+		std::is_same_v<D, cuda_t>;
+
 	/**
 	@brief	
 	Performs the operation:
@@ -34,6 +40,7 @@ namespace hasty {
 	
 	*/
 	export template<is_device D, is_fp_complex_tensor_type TT, size_t DIM>
+	requires is_normal_op_compatible<D,TT,DIM>
 	class NORMAL_T_T1_OP {
 	public:
 
@@ -101,6 +108,7 @@ namespace hasty {
 	
 	*/
 	export template<is_device D, is_fp_complex_tensor_type TT, size_t DIM>
+	requires is_normal_op_compatible<D,TT,DIM>
 	class NORMAL_T_T2_OP {
 	public:
 	
@@ -172,6 +180,7 @@ namespace hasty {
 	@tparam DIM Dimension.
 	*/
 	export template<is_device D, is_fp_complex_tensor_type TT, size_t DIM>
+	requires is_normal_op_compatible<D,TT,DIM>
 	class NORMAL_IDT_T1_OP {
 	public:
 
@@ -278,6 +287,7 @@ namespace hasty {
 	@tparam DIM Dimension.
 	*/
 	export template<is_device D, is_fp_complex_tensor_type TT, size_t DIM>
+	requires is_normal_op_compatible<D,TT,DIM>
 	class NORMAL_IDT_T2_OP {
 	public:
 
@@ -390,6 +400,7 @@ namespace hasty {
 	@tparam DIM Dimension.
 	*/
 	export template<is_device D, is_fp_complex_tensor_type TT, size_t DIM>
+	requires is_normal_op_compatible<D,TT,DIM>
 	class NORMAL_IDTW_T1_OP {
 	public:
  
@@ -538,9 +549,9 @@ namespace hasty {
 			static constexpr std::string_view code = R"ts(
 FORWARD_ENTRYPOINT(self, stack_out, stacked_diag, weights):
 	nstack = stacked_diag.shape[0]
-	stack_out = torch.mm(weights, stack_out.view(nstack, -1)).view_as(stack_out)
-	out = (stacked_diag.conj() * stack_out).sum(dim=0)
-	return (out,)
+	stack_out[:] = torch.mm(weights, stack_out.view(nstack, -1)).view_as(stack_out)
+	stack_out *= stacked_diag.conj()
+	return (stack_out.sum(dim=0),)
 		)ts";
 
 			TRACE_FUNC_BUILDER_T builder(
@@ -584,6 +595,7 @@ FORWARD_ENTRYPOINT(self, stack_out, stacked_diag, weights):
 	@tparam DIM Dimension.
 	*/
 	export template<is_device D, is_fp_complex_tensor_type TT, size_t DIM>
+	requires is_normal_op_compatible<D,TT,DIM>
 	class NORMAL_IDTW_T2_OP {
 	public:
 
@@ -727,7 +739,7 @@ FORWARD_ENTRYPOINT(self, stack_out, stacked_diag, weights):
 FORWARD_ENTRYPOINT(self, stack_out, weights):
 	nstack = stack_out.shape[0]
 	stack_out_shape = stack_out.shape
-	stack_out = torch.mm(weights, stack_out.view(nstack, -1)).view(stack_out_shape)
+	stack_out[:] = torch.mm(weights, stack_out.view(nstack, -1)).view(stack_out_shape)
 	return (stack_out,)
 )ts";
 

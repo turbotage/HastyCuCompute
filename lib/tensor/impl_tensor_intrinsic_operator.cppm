@@ -129,7 +129,7 @@ namespace hasty {
         if (tensorview.ndimension() != RANK)
             throw std::runtime_error("tensor::operator[]: tensorview.ndimension() did not match RETRANK");
 
-        std::array<int64_t, RANK> new_shape;
+        std::array<i64, RANK> new_shape;
         for_sequence<RANK>([&](auto i) {
             new_shape[i] = tensorview.size(i);
         });
@@ -165,7 +165,7 @@ namespace hasty {
             throw std::runtime_error("tensor::operator[]: tensorview.ndimension() did not match RETRANK");
         }
 
-        std::array<int64_t, RETRANK> new_shape;
+        std::array<i64, RETRANK> new_shape;
         for_sequence<RETRANK>([&](auto i) {
             new_shape[i] = tensorview.size(i);
         });
@@ -204,7 +204,7 @@ namespace hasty {
             throw std::runtime_error("tensor::operator[]: tensorview.ndimension() did not match RETRANK");
         }
 
-        std::array<int64_t, RETRANK> new_shape;
+        std::array<i64, RETRANK> new_shape;
         for_sequence<RETRANK>([&](auto i) {
             new_shape[i] = tensorview.size(i);
         });
@@ -218,7 +218,7 @@ namespace hasty {
     template<is_device D, is_tensor_type TT, size_t RANK>
     auto tensor<D,TT,RANK>::operator[](const tensor<D,b8_t,RANK>& mask) const -> tensor<D,TT,1> {
         TensorBackend ret = _pimpl->underlying_tensor.index(mask.get_tensor());
-        std::array<int64_t, 1> new_shape = {ret.size(0)};
+        std::array<i64, 1> new_shape = {ret.size(0)};
         return tensor<D,TT,1>(new_shape, std::move(ret));
     }
 

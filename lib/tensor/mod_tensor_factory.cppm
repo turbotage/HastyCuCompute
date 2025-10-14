@@ -4,6 +4,7 @@ module;
 
 export module tensor:factory;
 
+import torch_base;
 import util;
 import :intrinsic;
 
@@ -13,24 +14,24 @@ namespace hasty {
     class tensor_factory {
     public:
 
-        static tensor<D,TT,RANK> make(const std::array<int64_t, RANK>& input_shape, at::Tensor input) {
+        static tensor<D,TT,RANK> make(const std::array<i64, RANK>& input_shape, hat::Tensor input) {
             return tensor<D,TT,RANK>(input_shape, std::move(input));
         }
 
-        static tensor<D,TT,RANK> make(span<RANK> input_shape, at::Tensor input) {
+        static tensor<D,TT,RANK> make(span<RANK> input_shape, hat::Tensor input) {
             return tensor<D,TT,RANK>(input_shape, std::move(input));
         }
 
-        static uptr<tensor<D,TT,RANK>> make_unique(const std::array<int64_t, RANK>& input_shape, at::Tensor input) {
+        static uptr<tensor<D,TT,RANK>> make_unique(const std::array<i64, RANK>& input_shape, hat::Tensor input) {
             return std::make_unique<tensor<D,TT,RANK>>(input_shape, std::move(input));
         }
 
-        static uptr<tensor<D,TT,RANK>> make_unique(span<RANK> input_shape, at::Tensor input) {
+        static uptr<tensor<D,TT,RANK>> make_unique(span<RANK> input_shape, hat::Tensor input) {
             return std::make_unique<tensor<D,TT,RANK>>(input_shape, std::move(input));
         }
 
         static tensor<D,TT,0> make_scalar(base_t<TT> val) requires (RANK == 0) {
-            return tensor<D,TT,0>({}, at::scalar_tensor(val));
+            return tensor<D,TT,0>({}, hat::scalar_tensor(val));
         }
 
     };
@@ -53,9 +54,9 @@ namespace hasty {
                 throw std::runtime_error("make_empty_tensor: cannot make empty tensor on non-CPU device with non-CUDA device type");
             }
         }
-        at::TensorOptions opts = at::TensorOptions(scalar_type_func<TT>(
-                )).device(c10::Device(device_type_func<D>(), i32(didx)));
-        return tensor<D,TT,RANK>(shape, std::move(at::empty(shape.to_arr_ref(), opts)));
+        hat::TensorOptions opts = hat::TensorOptions(scalar_type_func<TT>(
+                )).device(hat::Device(device_type_func<D>(), i32(didx)));
+        return tensor<D,TT,RANK>(shape, std::move(hat::empty(shape.to_arr_ref(), opts)));
     }   
 
     export template<is_device D, is_tensor_type TT, size_t RANK>
@@ -69,9 +70,9 @@ namespace hasty {
                 throw std::runtime_error("make_ones_tensor: cannot make ones tensor on non-CPU device with non-CUDA device type");
             }
         }
-        at::TensorOptions opts = at::TensorOptions(scalar_type_func<TT>(
-                )).device(c10::Device(device_type_func<D>(), i32(didx)));
-        return tensor<D,TT,RANK>(shape, std::move(at::ones(shape.to_arr_ref(), opts)));
+        hat::TensorOptions opts = hat::TensorOptions(scalar_type_func<TT>(
+                )).device(hat::Device(device_type_func<D>(), i32(didx)));
+        return tensor<D,TT,RANK>(shape, std::move(hat::ones(shape.to_arr_ref(), opts)));
     }
 
     export template<is_device D, is_tensor_type TT, size_t RANK>
@@ -85,9 +86,9 @@ namespace hasty {
                 throw std::runtime_error("make_zeros_tensor: cannot make zeros tensor on non-CPU device with non-CUDA device type");
             }
         }
-        at::TensorOptions opts = at::TensorOptions(scalar_type_func<TT>(
-                )).device(c10::Device(device_type_func<D>(), i32(didx)));
-        return tensor<D,TT,RANK>(shape, std::move(at::zeros(shape.to_arr_ref(), opts)));
+        hat::TensorOptions opts = hat::TensorOptions(scalar_type_func<TT>(
+                )).device(hat::Device(device_type_func<D>(), i32(didx)));
+        return tensor<D,TT,RANK>(shape, std::move(hat::zeros(shape.to_arr_ref(), opts)));
     }
 
     export template<is_device D, is_tensor_type TT, size_t RANK>
@@ -101,9 +102,9 @@ namespace hasty {
                 throw std::runtime_error("make_rand_tensor: cannot make rand tensor on non-CPU device with non-CUDA device type");
             }
         }
-        at::TensorOptions opts = at::TensorOptions(scalar_type_func<TT>(
-                )).device(c10::Device(device_type_func<D>(), i32(didx)));
-        return tensor<D,TT,RANK>(shape, std::move(at::rand(shape.to_arr_ref(), opts)));
+        hat::TensorOptions opts = hat::TensorOptions(scalar_type_func<TT>(
+                )).device(hat::Device(device_type_func<D>(), i32(didx)));
+        return tensor<D,TT,RANK>(shape, std::move(hat::rand(shape.to_arr_ref(), opts)));
     }
 
     export template<is_device D, is_tensor_type TT, size_t RANK>
@@ -127,25 +128,25 @@ namespace hasty {
     export template<is_device D, is_tensor_type TT, size_t RANK>
     tensor<D,TT,RANK> make_empty_tensor_like(const tensor<D,TT,RANK>& other)
     {
-        return tensor<D,TT,RANK>(other.shape(), std::move(at::empty_like(other.get_tensor())));
+        return tensor<D,TT,RANK>(other.shape(), std::move(hat::empty_like(other.get_tensor())));
     }
 
     export template<is_device D, is_tensor_type TT, size_t RANK>
     tensor<D,TT,RANK> make_ones_tensor_like(const tensor<D,TT,RANK>& other)
     {
-        return tensor<D,TT,RANK>(other.shape(), std::move(at::ones_like(other.get_tensor())));
+        return tensor<D,TT,RANK>(other.shape(), std::move(hat::ones_like(other.get_tensor())));
     }
 
     export template<is_device D, is_tensor_type TT, size_t RANK>
     tensor<D,TT,RANK> make_zeros_tensor_like(const tensor<D,TT,RANK>& other)
     {
-        return tensor<D,TT,RANK>(other.shape(), std::move(at::zeros_like(other.get_tensor())));
+        return tensor<D,TT,RANK>(other.shape(), std::move(hat::zeros_like(other.get_tensor())));
     }
 
     export template<is_device D, is_tensor_type TT, size_t RANK>
     tensor<D,TT,RANK> make_rand_tensor_like(const tensor<D,TT,RANK>& other)
     {
-        return tensor<D,TT,RANK>(other.shape(), std::move(at::rand_like(other.get_tensor())));
+        return tensor<D,TT,RANK>(other.shape(), std::move(hat::rand_like(other.get_tensor())));
     }
 
     export template<is_device D, is_tensor_type TT, size_t RANK>
@@ -158,7 +159,7 @@ namespace hasty {
             throw std::runtime_error("make_tensor: tensor.dtype() did not match templated any_fp FP");
 
         struct creator : tensor<D,TT,RANK> {
-            creator(std::initializer_list<int64_t> a, TensorBackend b)
+            creator(std::initializer_list<i64> a, TensorBackend b)
                 : tensor<D,TT,RANK>(a, std::move(b)) {}
         };
 

@@ -4,6 +4,7 @@ module;
 
 export module trace_cache;
 
+import torch_base;
 import util;
 
 export import trace;
@@ -95,7 +96,7 @@ namespace hasty {
 					return;
 				}
 				
-				CompilationModule m_module = torch::jit::load(modpath.string());
+				CompilationModule m_module = htorch::jit::load(modpath.string());
 				auto module_ptr = std::make_unique<CompilationModule>(std::move(m_module));
 
 				auto trace_func_ptr = std::make_shared<Func>(

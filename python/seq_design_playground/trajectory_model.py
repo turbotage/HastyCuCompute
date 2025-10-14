@@ -1,5 +1,5 @@
 import torch
-from torch import nn
+import torch.nn as nn
 import mrinufft as mn
 import os
 import sys
@@ -22,21 +22,52 @@ class PNS:
 			self.chronaxie = chronaxie.to(device)
 			self.smin = smin.to(device)
 
-			t = torch.arange(self.nsamp, requires_grad=False)*grad_raster_time
-			self.pns_kernel = self.chronaxie.unsqueeze(-1) / torch.square(self.chronaxie.unsqueeze(-1) + t)
-			self.pns_kernel = self.pns_kernel / self.pns_kernel.sum(axis=-1, keepdim=True)
-			self.pns_kernel.requires_grad = False
-			self.max_pns = max_pns
+		t = torch.arange(self.nsamp, requires_grad=False, device=device)*grad_raster_time
+		# PNS kernel: chronaxie / (chronaxie + t)^2
+		# No normalization - kernel used as-is per literature
+		self.pns_kernel = self.chronaxie.unsqueeze(-1) / torch.square(t + self.chronaxie.unsqueeze(-1))
+		self.pns_kernel.requires_grad = False
+		# Store raster time for scaling during convolution
+		self.grad_raster_time_stored = grad_raster_time
+		self.max_pns = max_pns
 
 	def __call__(self, slew_waveform):
 		with self.device:
-			R = (1.0 / self.smin.view(1,3,1)) * torch.stack([torch.conv1d(
-								slew_waveform[:,i,:].unsqueeze(1), 
-								self.pns_kernel[i,:].view(1,1,self.nsamp),
-								padding='same'
-							) for i in range(3)], axis=1)
+			# PNS model: convolve each axis separately, then take magnitude
+			# slew_waveform shape: (nshots, 3, time)
+			
+			# Convolve each axis separately
+			convolved = []
+			for i in range(3):
+				# Extract slew for this axis: (nshots, 1, time)
+				slew_i = slew_waveform[:,i,:].unsqueeze(1)
+				
+				# Take absolute value (magnitude of slew on this axis)
+				slew_i_abs = torch.abs(slew_i)
+				
+				# For causal convolution: pad LEFT only (past values)
+				pad_left = self.nsamp - 1
+				slew_i_padded = torch.nn.functional.pad(slew_i_abs, (pad_left, 0), mode='constant', value=0)
+				
+				# NOTE: conv1d FLIPS the kernel, but we want correlation (no flip)
+				# So we need to flip the kernel before conv1d to cancel out the flip
+				kernel_flipped = torch.flip(self.pns_kernel[i,:], dims=[0]).view(1,1,self.nsamp)
+				
+				# Convolve absolute slew with PNS kernel (not normalized - per literature)
+				conv_result = torch.nn.functional.conv1d(
+					slew_i_padded, 
+					kernel_flipped,
+					padding=0
+				)
+				
+			# Scale by smin for this axis and grad_raster_time
+			# PNS = (Δt / S_min) * conv(|slew|, kernel)
+			# The Δt factor accounts for discrete time integration
+			convolved.append((self.grad_raster_time_stored / self.smin[i]) * conv_result)			# Stack along axis 1: (nshots, 3, time)
+			R = torch.cat(convolved, dim=1)
 
-			R = torch.sqrt(torch.square(R).sum(axis=1))
+			# Compute magnitude across all three axes
+			R = torch.sqrt(torch.square(R).sum(dim=1))  # (nshots, time)
 
 			return R
 
@@ -162,30 +193,68 @@ class TrajectoryModel(nn.Module):
 			return torch.sum(1+barrier) / grad_waveform.numel()
 	
 	def slew_bound_loss(self, slew_waveform, logt=1.0):
+		# Simple quadratic penalty for violations
 		sb = self.max_slew.view(1,3,1)
-		perc = torch.square(slew_waveform / sb)
-		if logt < 1.0:
-			return torch.sum(torch.pow(perc, 1.0 / logt)) / slew_waveform.numel()
-		else:
-			k1 = 1.0
-			r1 = 1.05
-			d = 80
-			p_2 = k1*((r1*perc) - torch.pow(r1*perc, d))
-			#print('Max Slew extent: ', slew_perc.max().item(), 'Mean Slew extent: ', slew_perc.mean().item())
-			barrier = (-1.0/logt)*torch.log(1+p_2)
-			return torch.sum(1+barrier) / slew_waveform.numel()
+		slew_mag = torch.abs(slew_waveform)
+		violation = torch.maximum(slew_mag - sb, torch.zeros_like(slew_mag))
+		penalty = torch.square(violation / sb)  # Normalized quadratic penalty
+		return torch.mean(penalty)
 
 	def pns_loss(self, slew_waveform, logt = 1.0):
 		pnsval = self.pns(slew_waveform)
-		if logt < 1.0:
-			return torch.sum(torch.pow(pnsval, 1.0 / logt)) / slew_waveform.numel()
+		
+		# Use simple quadratic penalty for severe violations
+		max_pns = self.pns.max_pns
+		perc = pnsval / max_pns
+		
+		# For severe violations (>1), use simpler quadratic penalty
+		# Barrier functions break down when constraints are badly violated
+		violation = torch.maximum(perc - 1.0, torch.zeros_like(perc))
+		penalty = torch.square(violation)  # Quadratic penalty on violations
+		
+		return torch.mean(penalty)
+
+		# if logt < 1.0:
+		# 	return torch.sum(torch.pow(pnsval, 1.0 / logt)) / slew_waveform.numel()
+		# else:
+		# 	k1 = 1.0
+		# 	r1 = 1.05
+		# 	d = 80
+		# 	p_2 = k1*((r1*pnsval) - torch.pow(r1*pnsval, d))
+		# 	barrier = (-1/logt)*torch.log(1+p_2)
+		# 	return torch.sum(1+barrier) / slew_waveform.numel()
+	
+	def pns_variance_loss(self, slew_waveform):
+		"""Encourage uniform PNS distribution - penalize variance in PNS values"""
+		pnsval = self.pns(slew_waveform)
+		# We want PNS to be more uniform across time
+		pns_mean = pnsval.mean()
+		pns_var = torch.mean(torch.square(pnsval - pns_mean))
+		return pns_var
+	
+	def pns_peak_reduction_loss(self, slew_waveform, percentile=95):
+		"""Specifically target the highest PNS values to reduce spikes"""
+		pnsval = self.pns(slew_waveform)
+		# Target top 5% of PNS values with strong penalty
+		# This encourages reducing peaks rather than just variance
+		threshold = torch.quantile(pnsval.flatten(), percentile / 100.0)
+		high_pns = pnsval[pnsval > threshold]
+		if high_pns.numel() > 0:
+			return torch.mean(torch.square(high_pns / self.pns.max_pns))
 		else:
-			k1 = 1.0
-			r1 = 1.05
-			d = 80
-			p_2 = k1*((r1*pnsval) - torch.pow(r1*pnsval, d))
-			barrier = (-1/logt)*torch.log(1+p_2)
-			return torch.sum(1+barrier) / slew_waveform.numel()
+			return torch.tensor(0.0, device=self.device)
+	
+	def kspace_smoothness_loss(self, kspace):
+		"""Penalize sharp changes in k-space trajectory (encourages smooth curves)"""
+		# Second derivative (curvature) penalty
+		kspace_diff1 = kspace[..., 1:] - kspace[..., :-1]  # First derivative
+		kspace_diff2 = kspace_diff1[..., 1:] - kspace_diff1[..., :-1]  # Second derivative
+		return torch.mean(torch.square(kspace_diff2))
+	
+	def slew_smoothness_loss(self, slew_waveform):
+		"""Penalize sharp changes in slew rate (encourages smooth slew)"""
+		slew_diff = slew_waveform[..., 1:] - slew_waveform[..., :-1]
+		return torch.mean(torch.square(slew_diff))
 	
 	def grad_edge_loss(self, grad_waveform):
 		return torch.sum(torch.square(grad_waveform[:,:,0] - self.grad_edges[0]) + torch.square(grad_waveform[:,:,-1] - self.grad_edges[1]))
@@ -301,15 +370,17 @@ if __name__ == "__main__":
 	pns = PNS(nsamp=nsamp-2, grad_raster_time=system.grad_raster_time, max_pns=0.905, device=device)
 	traj = TrajectoryModel(nshots, nsamp, kspace_guess=trajectory, pns=pns, device=device, grad_raster_time=system.grad_raster_time)
 
-	optimizer = torch.optim.SGD(traj.parameters(), lr=1e-6) #momentum=0.9)
-	max_iter = 800
+	optimizer = torch.optim.Adam(traj.parameters(), lr=1e-3)  # Increase learning rate to compensate for small gradients  # Use Adam with larger learning rate
+	max_iter = 40000
+	do_every_n = 5000
 	for i in range(max_iter):
-		if i % 100 == 0:
+		if i % do_every_n == 0:
 			meshpoints = traj.kspace_extent*torch.randn(500,3, device=device).clamp(-1,1)
 
 		kspace = traj()
 
-		grad, slew = traj.traj_to_grad(kspace*(1.0 / (0.1*i + 1.0)))
+		# Don't scale for gradient/slew calculation - use original trajectory
+		grad, slew = traj.traj_to_grad(kspace)
 
 		#logt = 0.1 + 0.9*((i / max_iter - max_iter/2)/max_iter)**2 + (i / (2*max_iter))**2
 		logt = 0.5
@@ -321,34 +392,91 @@ if __name__ == "__main__":
 		
 		kspace_bound_loss = traj.kspace_bound_loss(kspace, logt=logt)
 		
-		pns_loss = 10*traj.pns_loss(slew, logt=logt)
+		pns_loss = 1e6 * traj.pns_loss(slew, logt=logt)  # Increased another 10x - PNS still 2x over limit
+		
+		# Add smoothness regularization to encourage smooth PNS redistribution
+		pns_variance_loss = 1e4 * traj.pns_variance_loss(slew)  # Increased 2x
+		pns_peak_loss = 5e4 * traj.pns_peak_reduction_loss(slew, percentile=90)  # Increased 5x, target top 10% instead of 5%
+		kspace_smooth_loss = 1e2 * traj.kspace_smoothness_loss(kspace)  # Reduced - let PNS constraints dominate
+		slew_smooth_loss = 0.0 * traj.slew_smoothness_loss(slew)  # Disabled - let slew vary naturally
 		
 		grad_loss = traj.grad_bound_loss(grad, logt=logt)
+		slew_loss = 5e3 * traj.slew_bound_loss(slew, logt=logt)  # Increased 5x - still above 180 T/m/s limit
 
 		#grad_edge_loss = traj.grad_edge_loss(grad)
 		
 
-		loss = pns_loss + grad_loss + kspace_bound_loss #+ grad_loss + grad_edge_loss + kspace_spread_loss #+ mesh_loss
+		loss = pns_loss + pns_variance_loss + pns_peak_loss + kspace_smooth_loss + slew_smooth_loss + grad_loss + slew_loss + kspace_bound_loss
 
-		if i % 100 == 0:
+		if i % do_every_n == 0:
+			plot_index = 19
+
+			kspace_r = torch.square(kspace[plot_index,...]).detach().sum(dim=0).sqrt()
+			kspace_r /= kspace_r.max()
 			kspace_plot = torch.clone(kspace).detach().cpu().numpy()
 			kspace_plot = 0.5 * kspace_plot / np.abs(kspace_plot).max()
 			tu.show_trajectory(kspace_plot.transpose(0,2,1), 0, figure_size=15)
 
+			plt.figure()
+			plt.plot(kspace_plot[plot_index,0, :], 'r-*')
+			plt.plot(kspace_plot[plot_index,1, :], 'g-*')
+			plt.plot(kspace_plot[plot_index,2, :], 'b-*')
+			plt.title('Trajectory')
+			plt.show()
+
+			
+
+			pns_waveform = traj.pns(slew)
+			pns_max = pns_waveform[plot_index,...].max().detach()
+			kspace_r *= pns_max
+			kspace_r = kspace_r.cpu().numpy()
+
+			slew_r = torch.square(slew[plot_index,...]).detach().sum(dim=0).sqrt()
+			slew_r *= (pns_max / slew_r.max())
+
+			plt.figure()
+			plt.plot(pns_waveform[plot_index,:].detach().cpu().numpy(), 'm-')
+			plt.plot(kspace_r, 'k--')
+			plt.plot(slew_r.cpu().numpy(), 'b-')
+			plt.title('PNS waveform')
+			plt.show()
+
 			print(
-				'Iter: ', f"{100*(i / max_iter):.1f}",
+				'Iter %: ', f"{100*(i / max_iter):.1f}",
 				' loss: ', f"{loss.item():.3e}",
-				' PNS loss:', f"{pns_loss.item():.3e}", 
-				#' K-spread loss:', f"{kspace_spread_loss.item():.3e}", 
-				' K-bound loss:', f"{kspace_bound_loss.item():.3e}",
-				' Grad loss:', f"{grad_loss.item():.3e}",
-				#' Slew loss:', f"{slew_loss.item():.3e}",
-				#' Grad edge loss:', f"{grad_edge_loss.item():.3e}",
-				#' Mesh loss:', f"{mesh_loss.item():.3e}"
+				' PNS loss:', f"{pns_loss.item():.3e}",
+				' PNS var:', f"{pns_variance_loss.item():.3e}",
+				' PNS peak:', f"{pns_peak_loss.item():.3e}",
 			)
 			print(
-				'Max PNS: ', f"{pns(slew).max().item():.3e}",
-				' Mean PNS: ', f"{pns(slew).mean().item():.3e}"
+				' K-smooth:', f"{kspace_smooth_loss.item():.3e}",
+				' K-bound:', f"{kspace_bound_loss.item():.3e}",
+				' Grad loss:', f"{grad_loss.item():.3e}",
+				' Slew loss:', f"{slew_loss.item():.3e}",
+			)
+			pns_vals = pns(slew)
+			
+			# Show PNS distribution across trajectory segments
+			n_samples = pns_vals.shape[-1]
+			pns_early = pns_vals[..., :n_samples//3].max()  # First third
+			pns_mid = pns_vals[..., n_samples//3:2*n_samples//3].max()  # Middle third
+			pns_late = pns_vals[..., 2*n_samples//3:].max()  # Last third
+			
+			slew_mag = torch.sqrt(torch.square(slew).sum(dim=1))  # Magnitude across axes
+			slew_early = slew_mag[..., :n_samples//3].max()
+			slew_mid = slew_mag[..., n_samples//3:2*n_samples//3].max()
+			slew_late = slew_mag[..., 2*n_samples//3:].max()
+			
+			print(
+				'Max PNS: ', f"{pns_vals.max().item():.3e}",
+				' Mean PNS: ', f"{pns_vals.mean().item():.3e}",
+				' PNS > max:', f"{(pns_vals > pns.max_pns).sum().item()}",
+			)
+			print(
+				' PNS early/mid/late:', f"{pns_early.item():.3f}/{pns_mid.item():.3f}/{pns_late.item():.3f}",
+				' Slew early/mid/late:', f"{slew_early.item():.0f}/{slew_mid.item():.0f}/{slew_late.item():.0f}"
+			)
+			print(
 				' Max Grad: ', f"{torch.abs(grad).max().item():.3e}",
 				' Mean Grad: ', f"{torch.abs(grad).mean().item():.3e}",
 				' Max Slew: ', f"{torch.abs(slew).max().item():.3e}",
@@ -358,7 +486,30 @@ if __name__ == "__main__":
 
 		optimizer.zero_grad()
 		loss.backward()
+		
+		# Check gradient flow
+		if i % do_every_n == 0:
+			# Save old params
+			old_kspace = traj.kspace.data.clone()
+			
+		# Check gradient flow
+		if i % do_every_n == 0:
+			for name, param in traj.named_parameters():
+				if param.grad is not None:
+					print(f"{name} grad: mean={param.grad.abs().mean().item():.6e}, max={param.grad.abs().max().item():.6e}")
+				else:
+					print(f"{name} grad: None")
+		
+		# Clip gradients to prevent instability (may be limiting updates - try without)
+		#torch.nn.utils.clip_grad_norm_(traj.parameters(), max_norm=1.0)
+		
 		optimizer.step()
+		
+		# Check parameter changes
+		if i % do_every_n == 0:
+			param_change = (traj.kspace.data - old_kspace).abs()
+			print(f"Param change: mean={param_change.mean().item():.6e}, max={param_change.max().item():.6e}")
+			print('')
 		#with torch.no_grad():
 			#for param in traj.parameters():
 				#param[:,0].clamp_(-traj.max_slew[0], traj.max_slew[0])

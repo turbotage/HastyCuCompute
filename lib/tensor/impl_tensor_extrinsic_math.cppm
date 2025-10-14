@@ -5,6 +5,7 @@ module;
 export module tensor:impl_extrinsic_math;
 //module tensor:impl_extrinsic_math;
 
+import torch_base;
 import util;
 import :intrinsic;
 
@@ -17,24 +18,24 @@ namespace hasty {
         span<R2> dim,
         opt<fft_norm> norm)
     {
-        auto normstr = [&norm]() -> at::optional<c10::string_view> {
+        auto normstr = [&norm]() -> std::optional<hc10::string_view> {
             if (norm.has_value()) {
                 switch (norm.value()) {
                 case fft_norm::FORWARD:
-                    return at::optional<c10::string_view>("forward");
+                    return std::optional<hc10::string_view>("forward");
                 case fft_norm::BACKWARD:
-                    return at::optional<c10::string_view>("backward");
+                    return std::optional<hc10::string_view>("backward");
                 case fft_norm::ORTHO:
-                    return at::optional<c10::string_view>("ortho");
+                    return std::optional<hc10::string_view>("ortho");
                 default:
                     throw std::runtime_error("Invalid fft_norm value");
                 }
             }
-            return at::nullopt;
+            return std::nullopt;
         };
         
 
-        at::Tensor newtensor = torch::fft::fftn(t._pimpl->underlying_tensor,
+        hat::Tensor newtensor = htorch::fft::fftn(t._pimpl->underlying_tensor,
             s.to_opt_arr_ref(),
             dim.to_opt_arr_ref(),
             normstr()
@@ -49,23 +50,23 @@ namespace hasty {
         span<R2> dim,
         opt<fft_norm> norm)
     {
-        auto normstr = [&norm]() -> at::optional<c10::string_view> {
+        auto normstr = [&norm]() -> std::optional<hc10::string_view> {
             if (norm.has_value()) {
                 switch (norm.value()) {
                 case fft_norm::FORWARD:
-                    return at::optional<c10::string_view>("forward");
+                    return std::optional<hc10::string_view>("forward");
                 case fft_norm::BACKWARD:
-                    return at::optional<c10::string_view>("backward");
+                    return std::optional<hc10::string_view>("backward");
                 case fft_norm::ORTHO:
-                    return at::optional<c10::string_view>("ortho");
+                    return std::optional<hc10::string_view>("ortho");
                 default:
                     throw std::runtime_error("Invalid fft_norm value");
                 }
             }
-            return at::nullopt;
+            return std::nullopt;
         };
 
-        at::Tensor newtensor = torch::fft::ifftn(t._pimpl->underlying_tensor,
+        hat::Tensor newtensor = htorch::fft::ifftn(t._pimpl->underlying_tensor,
             s.to_opt_arr_ref(),
             dim.to_opt_arr_ref(),
             normstr()
@@ -76,14 +77,14 @@ namespace hasty {
     export template<is_device D1, is_tensor_type TT1, size_t R>
     tensor<D1,TT1,0> vdot(const tensor<D1,TT1,R>& lhs, const tensor<D1,TT1,R>& rhs) 
     {
-        at::Tensor newtensor = at::vdot(lhs._pimpl->underlying_tensor.flatten(), rhs._pimpl->underlying_tensor.flatten());
+        hat::Tensor newtensor = hat::vdot(lhs._pimpl->underlying_tensor.flatten(), rhs._pimpl->underlying_tensor.flatten());
         return tensor<D1,TT1,0>({}, std::move(newtensor));
     }
 
     template<is_device D1, is_tensor_type TT1, size_t R>
     tensor<D1,TT1,R> exp(const tensor<D1,TT1,R>& t)
     {
-        at::Tensor newtensor = torch::exp(t._pimpl->underlying_tensor);
+        hat::Tensor newtensor = hat::exp(t._pimpl->underlying_tensor);
         return tensor<D1,TT1,R>(span<R>(newtensor.sizes()), std::move(newtensor));
     }
 
@@ -91,7 +92,7 @@ namespace hasty {
     requires less_than<SUMDIM, R>
     tensor<D1,TT1,R-1> sum(const tensor<D1,TT1,R>& t) 
     {
-        std::array<int64_t, R-1> newshape;
+        std::array<i64, R-1> newshape;
         for_sequence<R>([&newshape, &t](auto i) {
             if constexpr(i < SUMDIM) {
                 newshape[i] = t.template shape<i>();
@@ -99,14 +100,14 @@ namespace hasty {
                 newshape[i - 1] = t.template shape<i>();
             }
         });
-        at::Tensor newtensor = t._pimpl->underlying_tensor.sum(SUMDIM);
+        hat::Tensor newtensor = t._pimpl->underlying_tensor.sum(SUMDIM);
         return tensor<D1,TT1,R-1>(newshape, std::move(newtensor));
     }
 
     export template<is_device D1, is_tensor_type TT1, size_t R>
     tensor<D1,TT1,0> sum(const tensor<D1,TT1,R>& t) 
     {
-        at::Tensor newtensor = t._pimpl->underlying_tensor.sum();
+        hat::Tensor newtensor = t._pimpl->underlying_tensor.sum();
         return tensor<D1,TT1,0>({}, std::move(newtensor));
     }
 

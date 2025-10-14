@@ -1,6 +1,7 @@
 module;
 
 #include "pch.hpp"
+#include <endian.h>
 
 export module tensor:impl_extrinsic_operator;
 //module tensor:impl_extrinsic_operator;
@@ -15,10 +16,12 @@ namespace hasty {
     auto operator+(const tensor<D1,TT1,R1>& lhs, const tensor<D1,TT2,R2>& rhs) {
         constexpr size_t RETRANK = R1 > R2 ? R1 : R2;
 
-        at::Tensor newtensor = lhs._pimpl->underlying_tensor.add(rhs._pimpl->underlying_tensor);
-        std::array<int64_t, RETRANK> new_shape;
+        hat::Tensor newtensor = lhs._pimpl->underlying_tensor.add(rhs._pimpl->underlying_tensor);
+        std::array<i64, RETRANK> new_shape;
 
-        assert(newtensor.ndimension() == RETRANK);
+        if (newtensor.ndimension() != RETRANK) {
+            throw std::runtime_error("operator+: resulting tensor rank does not match expected rank");
+        }
 
         for_sequence<RETRANK>([&](auto i) {
             new_shape[i] = newtensor.size(i);
@@ -29,13 +32,13 @@ namespace hasty {
 
     export template<is_device D1, is_tensor_type TT1, size_t R1>
     auto operator+(const tensor<D1,TT1,R1>& lhs, base_t<TT1> rhs) -> tensor<D1,TT1,R1> {
-        at::Tensor newtensor = lhs._pimpl->underlying_tensor.add(rhs);
+        hat::Tensor newtensor = lhs._pimpl->underlying_tensor.add(rhs);
         return tensor<D1,TT1,R1>(lhs.get_shape(), std::move(newtensor));
     }
 
     export template<is_device D1, is_tensor_type TT1, size_t R1>
     auto operator+(base_t<TT1> lhs, const tensor<D1,TT1,R1>& rhs) -> tensor<D1,TT1,R1> {
-        at::Tensor newtensor = rhs._pimpl->underlying_tensor.add(lhs);
+        hat::Tensor newtensor = rhs._pimpl->underlying_tensor.add(lhs);
         return tensor<D1,TT1,R1>(rhs.get_shape(), std::move(newtensor));
     }
 
@@ -45,10 +48,12 @@ namespace hasty {
     {
         constexpr size_t RETRANK = R1 > R2 ? R1 : R2;
 
-        at::Tensor newtensor = lhs._pimpl->underlying_tensor.sub(rhs._pimpl->underlying_tensor);
-        std::array<int64_t, RETRANK> new_shape;
+        hat::Tensor newtensor = lhs._pimpl->underlying_tensor.sub(rhs._pimpl->underlying_tensor);
+        std::array<i64, RETRANK> new_shape;
 
-        assert(newtensor.ndimension() == RETRANK);
+        if (newtensor.ndimension() != RETRANK) {
+            throw std::runtime_error("operator-: resulting tensor rank does not match expected rank");
+        }
 
         for_sequence<RETRANK>([&](auto i) {
             new_shape[i] = newtensor.size(i);
@@ -59,13 +64,13 @@ namespace hasty {
     
     export template<is_device D1, is_tensor_type TT1, size_t R1>
     auto operator-(const tensor<D1,TT1,R1>& lhs, base_t<TT1> rhs) -> tensor<D1,TT1,R1> {
-        at::Tensor newtensor = lhs._pimpl->underlying_tensor.sub(rhs);
+        hat::Tensor newtensor = lhs._pimpl->underlying_tensor.sub(rhs);
         return tensor<D1,TT1,R1>(lhs.get_shape(), std::move(newtensor));
     }
 
     export template<is_device D1, is_tensor_type TT1, size_t R1>
     auto operator-(base_t<TT1> lhs, const tensor<D1,TT1,R1>& rhs) -> tensor<D1,TT1,R1> {
-        at::Tensor newtensor = rhs._pimpl->underlying_tensor.sub(lhs);
+        hat::Tensor newtensor = rhs._pimpl->underlying_tensor.sub(lhs);
         return tensor<D1,TT1,R1>(rhs.get_shape(), std::move(newtensor));
     }
 
@@ -74,10 +79,12 @@ namespace hasty {
     auto operator*(const tensor<D1,TT1,R1>& lhs, const tensor<D1,TT2,R2>& rhs) {
         constexpr size_t RETRANK = R1 > R2 ? R1 : R2;
 
-        at::Tensor newtensor = lhs._pimpl->underlying_tensor.mul(rhs._pimpl->underlying_tensor);
-        std::array<int64_t, RETRANK> new_shape; 
+        hat::Tensor newtensor = lhs._pimpl->underlying_tensor.mul(rhs._pimpl->underlying_tensor);
+        std::array<i64, RETRANK> new_shape; 
 
-        assert(newtensor.ndimension() == RETRANK);
+        if (newtensor.ndimension() != RETRANK) {
+            throw std::runtime_error("operator*: resulting tensor rank does not match expected rank");
+        }
 
         for_sequence<RETRANK>([&](auto i) {
             new_shape[i] = newtensor.size(i);
@@ -88,13 +95,13 @@ namespace hasty {
 
     export template<is_device D1, is_tensor_type TT1, size_t R1>
     auto operator*(const tensor<D1,TT1,R1>& lhs, base_t<TT1> rhs) -> tensor<D1,TT1,R1> {
-        at::Tensor newtensor = lhs._pimpl->underlying_tensor.mul(rhs);
+        hat::Tensor newtensor = lhs._pimpl->underlying_tensor.mul(rhs);
         return tensor<D1,TT1,R1>(lhs.get_shape(), std::move(newtensor));
     }
 
     export template<is_device D1, is_tensor_type TT1, size_t R1>
     auto operator*(base_t<TT1> lhs, const tensor<D1,TT1,R1>& rhs) -> tensor<D1,TT1,R1> {
-        at::Tensor newtensor = rhs._pimpl->underlying_tensor.mul(lhs);
+        hat::Tensor newtensor = rhs._pimpl->underlying_tensor.mul(lhs);
         return tensor<D1,TT1,R1>(rhs.get_shape(), std::move(newtensor));
     }
 
@@ -103,10 +110,12 @@ namespace hasty {
     auto operator/(const tensor<D1,TT1,R1>& lhs, const tensor<D1,TT2,R2>& rhs) {
         constexpr size_t RETRANK = R1 > R2 ? R1 : R2;
 
-        at::Tensor newtensor = lhs._pimpl->underlying_tensor.div(rhs._pimpl->underlying_tensor);
-        std::array<int64_t, RETRANK> new_shape;
+        hat::Tensor newtensor = lhs._pimpl->underlying_tensor.div(rhs._pimpl->underlying_tensor);
+        std::array<i64, RETRANK> new_shape;
 
-        assert(newtensor.ndimension() == RETRANK);
+        if (newtensor.ndimension() != RETRANK) {
+            throw std::runtime_error("operator/: resulting tensor rank does not match expected rank");
+        }
 
         for_sequence<RETRANK>([&](auto i) {
             new_shape[i] = newtensor.size(i);
@@ -117,13 +126,13 @@ namespace hasty {
 
     export template<is_device D1, is_tensor_type TT1, size_t R1>
     auto operator/(const tensor<D1,TT1,R1>& lhs, base_t<TT1> rhs) -> tensor<D1,TT1,R1> {
-        at::Tensor newtensor = lhs._pimpl->underlying_tensor.div(rhs);
+        hat::Tensor newtensor = lhs._pimpl->underlying_tensor.div(rhs);
         return tensor<D1,TT1,R1>(lhs.get_shape(), std::move(newtensor));
     }
 
     export template<is_device D1, is_tensor_type TT1, size_t R1>
     auto operator/(base_t<TT1> lhs, const tensor<D1,TT1,R1>& rhs) -> tensor<D1,TT1,R1> {
-        at::Tensor newtensor = rhs._pimpl->underlying_tensor.div(lhs);
+        hat::Tensor newtensor = rhs._pimpl->underlying_tensor.div(lhs);
         return tensor<D1,TT1,R1>(rhs.get_shape(), std::move(newtensor));
     }
 

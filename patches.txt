@@ -1,0 +1,1 @@
+sudo ln -s /opt/gcc-15/lib64/libstdc++.modules.json /opt/gcc-15/include/c++/15/libstdc++.modules.json

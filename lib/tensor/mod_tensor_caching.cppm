@@ -148,14 +148,14 @@ namespace hasty {
 
         template<size_t R>
 		requires less_than<R, RANK>
-		int64_t shape() const
+		i64 shape() const
         {
             if (!_block)
                 throw std::runtime_error("shape: cache_tensor is not initialized");
             return _block->shape[R];
         }
 
-        std::array<int64_t, RANK> shape() const
+        std::array<i64, RANK> shape() const
         {
             if (!_block)
                 throw std::runtime_error("shape: cache_tensor is not initialized");

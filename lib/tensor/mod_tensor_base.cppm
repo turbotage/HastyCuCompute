@@ -4,21 +4,22 @@ module;
 
 export module tensor:base;
 
+import torch_base;
 import util;
 
 namespace hasty {
 
-    export using TensorBackend = at::Tensor;
-    export using TensorBackendDevice = at::Device;
+    export using TensorBackend = hat::Tensor;
+    export using TensorBackendDevice = hat::Device;
 
-    export using TensorBackendDeviceType = at::DeviceType;
+    export using TensorBackendDeviceType = hat::DeviceType;
 
     export TensorBackendDevice get_backend_device(device_idx idx) {
         if (idx == device_idx::CPU) {
-            return at::Device(at::DeviceType::CPU);
+            return hat::Device(hat::DeviceType::CPU);
         }
         else {
-            return at::Device(at::DeviceType::CUDA, at::DeviceIndex(idx));
+            return hat::Device(hat::DeviceType::CUDA, hat::DeviceIndex(idx));
         }
     }
 

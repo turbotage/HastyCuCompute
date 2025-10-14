@@ -55,7 +55,7 @@ HIGHFIVE_REGISTER_TYPE(std::complex<double>, make_complex_double);
 
 
 
-at::Tensor import_tensor(const std::string& filepath, const std::string& dataset)
+hat::Tensor import_tensor(const std::string& filepath, const std::string& dataset)
 {
     HighFive::File file(filepath, HighFive::File::ReadOnly);
     HighFive::DataSet dset = file.getDataSet(dataset);
@@ -73,14 +73,14 @@ at::Tensor import_tensor(const std::string& filepath, const std::string& dataset
         //flat_dset.read(data);
         //dset.read<float>(data.data());
         dset.read_raw<float>(data.data());
-        return at::from_blob(data.data(), at::makeArrayRef(dims), at::ScalarType::Float).detach().clone();
+        return hat::from_blob(data.data(), hat::makeArrayRef(dims), hat::ScalarType::Float).detach().clone();
     }
     else if (dtype_str == "Float64") {
         std::vector<double> data(nelem);
         //flat_dset.read(data);
         //dset.read<double>(data.data());
         dset.read_raw<double>(data.data());
-        return at::from_blob(data.data(), at::makeArrayRef(dims), at::ScalarType::Double).detach().clone();
+        return hat::from_blob(data.data(), hat::makeArrayRef(dims), hat::ScalarType::Double).detach().clone();
     }
     else if (dtype_str == "Compound64") {
         HighFive::CompoundType ctype(std::move(dtype));
@@ -91,7 +91,7 @@ at::Tensor import_tensor(const std::string& filepath, const std::string& dataset
         //flat_dset.read(data);
         //dset.read<std::complex<float>>(data.data());
         dset.read_raw<std::complex<float>>(data.data());
-        return at::from_blob(data.data(), at::makeArrayRef(dims), at::ScalarType::ComplexFloat).detach().clone();
+        return hat::from_blob(data.data(), hat::makeArrayRef(dims), hat::ScalarType::ComplexFloat).detach().clone();
     }
     else if (dtype_str == "Compound128") {
         HighFive::CompoundType ctype(std::move(dtype));
@@ -102,7 +102,7 @@ at::Tensor import_tensor(const std::string& filepath, const std::string& dataset
         //flat_dset.read(data);
         //dset.read<std::complex<double>>(data.data());
         dset.read_raw<std::complex<double>>(data.data());
-        return at::from_blob(data.data(), at::makeArrayRef(dims), at::ScalarType::ComplexDouble).detach().clone();
+        return hat::from_blob(data.data(), hat::makeArrayRef(dims), hat::ScalarType::ComplexDouble).detach().clone();
     }
     else {
         throw std::runtime_error("disallowed dtype");
@@ -115,7 +115,7 @@ at::Tensor import_tensor(const std::string& filepath, const std::string& dataset
 namespace hasty {
 
     auto import_tensors(const HighFive::DataSet& dataset) ->
-        std::variant<at::Tensor, std::vector<at::Tensor>>
+        std::variant<hat::Tensor, std::vector<hat::Tensor>>
     {
 
         HighFive::DataType dtype = dataset.getDataType();
@@ -130,14 +130,14 @@ namespace hasty {
             //flat_dset.read(data);
             //dataset.read<float>(data.data());
             dataset.read_raw<float>(data.data());
-            return at::from_blob(data.data(), at::makeArrayRef(dims), at::ScalarType::Float).detach().clone();
+            return hat::from_blob(data.data(), hat::makeArrayRef(dims), hat::ScalarType::Float).detach().clone();
         }
         else if (dtype_str == "Float64") {
             std::vector<double> data(nelem);
             //flat_dset.read(data);
             //dataset.read<double>(data.data());
             dataset.read_raw<double>(data.data());
-            return at::from_blob(data.data(), at::makeArrayRef(dims), at::ScalarType::Double).detach().clone();
+            return hat::from_blob(data.data(), hat::makeArrayRef(dims), hat::ScalarType::Double).detach().clone();
         }
         else if (dtype_str == "Compound64") {
             HighFive::CompoundType ctype(std::move(dtype));
@@ -149,7 +149,7 @@ namespace hasty {
             //flat_dset.read<Complex64>(data);
             //dataset.read<std::complex<float>>(data.data());
             dataset.read_raw<Complex64>(data.data());
-            return at::from_blob(data.data(), at::makeArrayRef(dims), at::ScalarType::ComplexFloat).detach().clone();
+            return hat::from_blob(data.data(), hat::makeArrayRef(dims), hat::ScalarType::ComplexFloat).detach().clone();
         }
         else if (dtype_str == "Compound128") {
             HighFive::CompoundType ctype(std::move(dtype));
@@ -160,7 +160,7 @@ namespace hasty {
             //flat_dset.read(data);
             //dataset.read<std::complex<double>>(data.data());
             dataset.read_raw<Complex128>(data.data());
-            return at::from_blob(data.data(), at::makeArrayRef(dims), at::ScalarType::ComplexDouble).detach().clone();
+            return hat::from_blob(data.data(), hat::makeArrayRef(dims), hat::ScalarType::ComplexDouble).detach().clone();
         }
         else {
             throw std::runtime_error("disallowed dtype");
@@ -169,7 +169,7 @@ namespace hasty {
     }
 
     auto import_tensor(const std::string& filepath, const std::string& dataset) -> 
-        std::variant<at::Tensor, std::vector<at::Tensor>> 
+        std::variant<hat::Tensor, std::vector<hat::Tensor>> 
     {
         HighFive::File file(filepath, HighFive::File::ReadOnly);
         HighFive::DataSet dset = file.getDataSet(dataset);
@@ -179,10 +179,10 @@ namespace hasty {
 
 
     auto import_tensors(const std::string& filepath, const std::optional<std::vector<std::regex>>& matchers) ->
-        std::unordered_map<std::string, std::variant<at::Tensor, std::vector<at::Tensor>>>
+        std::unordered_map<std::string, std::variant<hat::Tensor, std::vector<hat::Tensor>>>
     {
         HighFive::File file(filepath, HighFive::File::ReadOnly);
-        std::unordered_map<std::string, std::variant<at::Tensor, std::vector<at::Tensor>>> tensors;
+        std::unordered_map<std::string, std::variant<hat::Tensor, std::vector<hat::Tensor>>> tensors;
 
         std::function<void(const std::string&, const HighFive::Group&)> grouplam;
 
@@ -229,7 +229,7 @@ namespace hasty {
     }
 
 
-    void export_tensor(const at::Tensor& tensor, const std::string& filepath, const std::string& dataset)
+    void export_tensor(const hat::Tensor& tensor, const std::string& filepath, const std::string& dataset)
     {
         HighFive::File file(filepath, HighFive::File::Overwrite);
 
@@ -238,19 +238,19 @@ namespace hasty {
         }
 
         std::vector<size_t> dims(tensor.sizes().begin(), tensor.sizes().end());
-        at::ScalarType dtype = tensor.scalar_type();
+        hat::ScalarType dtype = tensor.scalar_type();
         auto dataspace = HighFive::DataSpace(dims);
 
-        if (dtype == at::ScalarType::Float) {
+        if (dtype == hat::ScalarType::Float) {
             HighFive::DataSet dset = file.createDataSet<float>(dataset, dataspace);
             dset.write_raw(static_cast<float*>(tensor.data_ptr()));
-        } else if (dtype == at::ScalarType::Double) {
+        } else if (dtype == hat::ScalarType::Double) {
             HighFive::DataSet dset = file.createDataSet<double>(dataset, dataspace);
             dset.write_raw(static_cast<double*>(tensor.data_ptr()));
-        } else if (dtype == at::ScalarType::ComplexFloat) {
+        } else if (dtype == hat::ScalarType::ComplexFloat) {
             HighFive::DataSet dset = file.createDataSet<std::complex<float>>(dataset, dataspace);
             dset.write_raw(static_cast<std::complex<float>*>(tensor.data_ptr()));
-        } else if (dtype == at::ScalarType::ComplexDouble) {
+        } else if (dtype == hat::ScalarType::ComplexDouble) {
             HighFive::DataSet dset = file.createDataSet<std::complex<double>>(dataset, dataspace);
             dset.write_raw(static_cast<std::complex<double>*>(tensor.data_ptr()));
         }

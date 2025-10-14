@@ -2,7 +2,6 @@ module;
 
 #include "pch.hpp"
 
-#include <c10/cuda/CUDAGuard.h>
 #include <battery/embed.hpp>
 #include <cuda_runtime.h>
 #include <cufft.h>
@@ -14,6 +13,7 @@ module;
 
 export module fft:toeplitz;
 
+import torch_base;
 import util;
 import tensor;
 import nvrtc;
@@ -230,12 +230,12 @@ namespace hasty {
 		}
 
 		void perform_toeplitz_multiplication_cuda_2D(
-			const at::Tensor& 				input,
-			at::Tensor 						output,
-			const at::Tensor& 				kernel,
-			optrefw<at::Tensor> 			scratch,
-			optcrefw<at::Tensor> 			mult1,
-			optcrefw<at::Tensor> 			mult2,
+			const hat::Tensor& 				input,
+			hat::Tensor 					output,
+			const hat::Tensor& 				kernel,
+			optrefw<hat::Tensor> 			scratch,
+			optcrefw<hat::Tensor> 			mult1,
+			optcrefw<hat::Tensor> 			mult2,
 			int input_output_mult_type = 	(int)ToeplitzMultType::NONE,
 			int input_mult1_type = 			(int)ToeplitzMultType::MULT,
 			int output_mult1_type = 		(int)ToeplitzMultType::MULT_CONJ,
@@ -249,48 +249,48 @@ namespace hasty {
 			int dim = input.dim();
 			int NX = input.size(dim - 1);
 			int NY = input.size(dim - 2);
-			TORCH_CHECK(NY > 1 && NX > 1, "input dimensions must be positive");
+			torch_check(NY > 1 && NX > 1, "input dimensions must be positive");
 			int device_idx = device.index();
 			bool accumulate = (accumulate_type != (int)ToeplitzAccumulateType::NONE);
 
-			const cuFloatComplex* in_ptr = reinterpret_cast<const cuFloatComplex*>(input.data_ptr<c10::complex<float>>());
-			cuFloatComplex* out_ptr = reinterpret_cast<cuFloatComplex*>(output.data_ptr<c10::complex<float>>());
-			const cuFloatComplex* kernel_ptr = reinterpret_cast<const cuFloatComplex*>(kernel.data_ptr<c10::complex<float>>());
+			const cuFloatComplex* in_ptr = reinterpret_cast<const cuFloatComplex*>(input.data_ptr<hc10::complex<float>>());
+			cuFloatComplex* out_ptr = reinterpret_cast<cuFloatComplex*>(output.data_ptr<hc10::complex<float>>());
+			const cuFloatComplex* kernel_ptr = reinterpret_cast<const cuFloatComplex*>(kernel.data_ptr<hc10::complex<float>>());
 
 			cuFloatComplex* scratch_ptr;
-			at::Tensor scratchmem;
+			hat::Tensor scratchmem;
 			if (scratch.has_value()) {
-				const at::Tensor& scr = (*scratch).get();
-				TORCH_CHECK(scr.is_cuda(), "scratch was not a CUDA tensor");
-				TORCH_CHECK(scr.dtype() == at::kComplexFloat, "scratch dtype must be complex float");
-				TORCH_CHECK(scr.sizes() == at::IntArrayRef({ 2 * NY, 2 * NX }), "scratch must have shape (2*NY, 2*NX)");
-				TORCH_CHECK(scr.device() == device, "scratch must be on the same device as input and output");
-				TORCH_CHECK(scr.is_contiguous(), "scratch must be contiguous");
-				scratch_ptr = reinterpret_cast<cuFloatComplex*>(scr.data_ptr<c10::complex<float>>());
+				const hat::Tensor& scr = (*scratch).get();
+				torch_check(scr.is_cuda(), "scratch was not a CUDA tensor");
+				torch_check(scr.scalar_type() == hat::kComplexFloat, "scratch dtype must be complex float");
+				torch_check(scr.sizes().equals({ 2 * NY, 2 * NX }), "scratch must have shape (2*NY, 2*NX)");
+				torch_check(scr.device() == device, "scratch must be on the same device as input and output");
+				torch_check(scr.is_contiguous(), "scratch must be contiguous");
+				scratch_ptr = reinterpret_cast<cuFloatComplex*>(scr.data_ptr<hc10::complex<float>>());
 			} else {
-				scratchmem = at::empty({ 2 * NY, 2 * NX }, input.options());
-				scratch_ptr = reinterpret_cast<cuFloatComplex*>(scratchmem.data_ptr<c10::complex<float>>());
+				scratchmem = hat::empty({ 2 * NY, 2 * NX }, input.options());
+				scratch_ptr = reinterpret_cast<cuFloatComplex*>(scratchmem.data_ptr<hc10::complex<float>>());
 			}
 
 			const cuFloatComplex* mult1_ptr = nullptr;
 			if (mult1.has_value()) {
-				const at::Tensor& m1 = (*mult1).get();
-				TORCH_CHECK(m1.is_cuda(), "mult1 was not a CUDA tensor");
-				TORCH_CHECK(m1.dtype() == at::kComplexFloat, "mult1 dtype must be complex float");
-				TORCH_CHECK(m1.sizes() == at::IntArrayRef({ NY, NX }), "mult1 must have shape (NY, NX)");
-				TORCH_CHECK(m1.device() == device, "mult1 must be on the same device as input and output");
-				TORCH_CHECK(m1.is_contiguous(), "mult1 must be contiguous");
-				mult1_ptr = reinterpret_cast<const cuFloatComplex*>(m1.data_ptr<c10::complex<float>>());
+				const hat::Tensor& m1 = (*mult1).get();
+				torch_check(m1.is_cuda(), "mult1 was not a CUDA tensor");
+				torch_check(m1.scalar_type() == hat::kComplexFloat, "mult1 dtype must be complex float");
+				torch_check(m1.sizes().equals({ NY, NX }), "mult1 must have shape (NY, NX)");
+				torch_check(m1.device() == device, "mult1 must be on the same device as input and output");
+				torch_check(m1.is_contiguous(), "mult1 must be contiguous");
+				mult1_ptr = reinterpret_cast<const cuFloatComplex*>(m1.data_ptr<hc10::complex<float>>());
 			}
 			const cuFloatComplex* mult2_ptr = nullptr;
 			if (mult2.has_value()) {
-				const at::Tensor& m2 = (*mult2).get();
-				TORCH_CHECK(m2.is_cuda(), "mult2 was not a CUDA tensor");
-				TORCH_CHECK(m2.dtype() == at::kComplexFloat, "mult2 dtype must be complex float");
-				TORCH_CHECK(m2.sizes() == at::IntArrayRef({ NY, NX }), "mult2 must have shape (NY, NX)");
-				TORCH_CHECK(m2.device() == device, "mult2 must be on the same device as input and output");
-				TORCH_CHECK(m2.is_contiguous(), "mult2 must be contiguous");
-				mult2_ptr = reinterpret_cast<const cuFloatComplex*>(m2.data_ptr<c10::complex<float>>());
+				const hat::Tensor& m2 = (*mult2).get();
+				torch_check(m2.is_cuda(), "mult2 was not a CUDA tensor");
+				torch_check(m2.scalar_type() == hat::kComplexFloat, "mult2 dtype must be complex float");
+				torch_check(m2.sizes().equals({ NY, NX }), "mult2 must have shape (NY, NX)");
+				torch_check(m2.device() == device, "mult2 must be on the same device as input and output");
+				torch_check(m2.is_contiguous(), "mult2 must be contiguous");
+				mult2_ptr = reinterpret_cast<const cuFloatComplex*>(m2.data_ptr<hc10::complex<float>>());
 			}
 
 			launch_toeplitz_load_2D(
@@ -363,12 +363,12 @@ namespace hasty {
 		}
 
 		void perform_toeplitz_multiplication_cuda_3D(
-			const at::Tensor& 				input,
-			at::Tensor 						output,
-			const at::Tensor& 				kernel,
-			optrefw<at::Tensor> 			scratch,
-			optcrefw<at::Tensor> 			mult1,
-			optcrefw<at::Tensor> 			mult2,
+			const hat::Tensor& 				input,
+			hat::Tensor 					output,
+			const hat::Tensor& 				kernel,
+			optrefw<hat::Tensor> 			scratch,
+			optcrefw<hat::Tensor> 			mult1,
+			optcrefw<hat::Tensor> 			mult2,
 			int input_output_mult_type = 	(int)ToeplitzMultType::NONE,
 			int input_mult1_type = 			(int)ToeplitzMultType::MULT,
 			int output_mult1_type = 		(int)ToeplitzMultType::MULT_CONJ,
@@ -383,48 +383,48 @@ namespace hasty {
 			int NX = input.size(dim - 1);
 			int NY = input.size(dim - 2);
 			int NZ = input.size(dim - 3);
-			TORCH_CHECK(NZ > 1 && NY > 1 && NX > 1, "input dimensions must be positive");
+			torch_check(NZ > 1 && NY > 1 && NX > 1, "input dimensions must be positive");
 			int device_idx = device.index();
 			bool accumulate = (accumulate_type != (int)ToeplitzAccumulateType::NONE);
 
-			const cuFloatComplex* in_ptr = reinterpret_cast<const cuFloatComplex*>(input.data_ptr<c10::complex<float>>());
-			cuFloatComplex* out_ptr = reinterpret_cast<cuFloatComplex*>(output.data_ptr<c10::complex<float>>());
-			const cuFloatComplex* kernel_ptr = reinterpret_cast<const cuFloatComplex*>(kernel.data_ptr<c10::complex<float>>());
+			const cuFloatComplex* in_ptr = reinterpret_cast<const cuFloatComplex*>(input.data_ptr<hc10::complex<float>>());
+			cuFloatComplex* out_ptr = reinterpret_cast<cuFloatComplex*>(output.data_ptr<hc10::complex<float>>());
+			const cuFloatComplex* kernel_ptr = reinterpret_cast<const cuFloatComplex*>(kernel.data_ptr<hc10::complex<float>>());
 
 			cuFloatComplex* scratch_ptr;
-			at::Tensor scratchmem;
+			hat::Tensor scratchmem;
 			if (scratch.has_value()) {
-				const at::Tensor& scr = (*scratch).get();
-				TORCH_CHECK(scr.is_cuda(), "scratch was not a CUDA tensor");
-				TORCH_CHECK(scr.dtype() == at::kComplexFloat, "scratch dtype must be complex float");
-				TORCH_CHECK(scr.sizes() == at::IntArrayRef({ 2 * NZ, 2 * NY, 2 * NX }), "scratch must have shape (2*NZ, 2*NY, 2*NX)");
-				TORCH_CHECK(scr.device() == device, "scratch must be on the same device as input and output");
-				TORCH_CHECK(scr.is_contiguous(), "scratch must be contiguous");
-				scratch_ptr = reinterpret_cast<cuFloatComplex*>(scr.data_ptr<c10::complex<float>>());
+				const hat::Tensor& scr = (*scratch).get();
+				torch_check(scr.is_cuda(), "scratch was not a CUDA tensor");
+				torch_check(scr.scalar_type() == hat::kComplexFloat, "scratch dtype must be complex float");
+				torch_check(scr.sizes().equals({ 2 * NZ, 2 * NY, 2 * NX }), "scratch must have shape (2*NZ, 2*NY, 2*NX)");
+				torch_check(scr.device() == device, "scratch must be on the same device as input and output");
+				torch_check(scr.is_contiguous(), "scratch must be contiguous");
+				scratch_ptr = reinterpret_cast<cuFloatComplex*>(scr.data_ptr<hc10::complex<float>>());
 			} else {
-				scratchmem = at::empty({ 2 * NZ, 2 * NY, 2 * NX }, input.options());
-				scratch_ptr = reinterpret_cast<cuFloatComplex*>(scratchmem.data_ptr<c10::complex<float>>());
+				scratchmem = hat::empty({ 2 * NZ, 2 * NY, 2 * NX }, input.options());
+				scratch_ptr = reinterpret_cast<cuFloatComplex*>(scratchmem.data_ptr<hc10::complex<float>>());
 			}
 
 			const cuFloatComplex* mult1_ptr = nullptr;
 			if (mult1.has_value()) {
-				const at::Tensor& m1 = (*mult1).get();
-				TORCH_CHECK(m1.is_cuda(), "mult1 was not a CUDA tensor");
-				TORCH_CHECK(m1.dtype() == at::kComplexFloat, "mult1 dtype must be complex float");
-				TORCH_CHECK(m1.sizes() == at::IntArrayRef({ NZ, NY, NX }), "mult1 must have shape (NZ, NY, NX)");
-				TORCH_CHECK(m1.device() == device, "mult1 must be on the same device as input and output");
-				TORCH_CHECK(m1.is_contiguous(), "mult1 must be contiguous");
-				mult1_ptr = reinterpret_cast<const cuFloatComplex*>(m1.data_ptr<c10::complex<float>>());
+				const hat::Tensor& m1 = (*mult1).get();
+				torch_check(m1.is_cuda(), "mult1 was not a CUDA tensor");
+				torch_check(m1.scalar_type() == hat::kComplexFloat, "mult1 dtype must be complex float");
+				torch_check(m1.sizes().equals({ NZ, NY, NX }), "mult1 must have shape (NZ, NY, NX)");
+				torch_check(m1.device() == device, "mult1 must be on the same device as input and output");
+				torch_check(m1.is_contiguous(), "mult1 must be contiguous");
+				mult1_ptr = reinterpret_cast<const cuFloatComplex*>(m1.data_ptr<hc10::complex<float>>());
 			}
 			const cuFloatComplex* mult2_ptr = nullptr;
 			if (mult2.has_value()) {
-				const at::Tensor& m2 = (*mult2).get();
-				TORCH_CHECK(m2.is_cuda(), "mult2 was not a CUDA tensor");
-				TORCH_CHECK(m2.dtype() == at::kComplexFloat, "mult2 dtype must be complex float");
-				TORCH_CHECK(m2.sizes() == at::IntArrayRef({ NZ, NY, NX }), "mult2 must have shape (NZ, NY, NX)");
-				TORCH_CHECK(m2.device() == device, "mult2 must be on the same device as input and output");
-				TORCH_CHECK(m2.is_contiguous(), "mult2 must be contiguous");
-				mult2_ptr = reinterpret_cast<const cuFloatComplex*>(m2.data_ptr<c10::complex<float>>());
+				const hat::Tensor& m2 = (*mult2).get();
+				torch_check(m2.is_cuda(), "mult2 was not a CUDA tensor");
+				torch_check(m2.scalar_type() == hat::kComplexFloat, "mult2 dtype must be complex float");
+				torch_check(m2.sizes().equals({ NZ, NY, NX }), "mult2 must have shape (NZ, NY, NX)");
+				torch_check(m2.device() == device, "mult2 must be on the same device as input and output");
+				torch_check(m2.is_contiguous(), "mult2 must be contiguous");
+				mult2_ptr = reinterpret_cast<const cuFloatComplex*>(m2.data_ptr<hc10::complex<float>>());
 			}
 
 			launch_toeplitz_load_3D(
@@ -509,11 +509,11 @@ namespace hasty {
 
 		void transform_toeplitz_kernel(tensor<cuda_t, c64_t, 2>& kernel, bool clear_vkfft_plan) 
 		{
-			at::Tensor& ker = kernel.get_tensor();
+			hat::Tensor& ker = kernel.get_tensor();
 			
 			int NX = ker.size(1);
 			int NY = ker.size(0);
-			TORCH_CHECK(NY > 1 && NX > 1, "kernel dimensions must be positive");
+			torch_check(NY > 1 && NX > 1, "kernel dimensions must be positive");
 			auto device = ker.device();
 
 			VkFFT_Cache::VkFFT_Key key(device.index());
@@ -523,8 +523,8 @@ namespace hasty {
 			key.kernelConvolution = 1;
 			
 			{
-				at::cuda::CUDAGuard device_guard(ker.device());
-				cuFloatComplex* ker_ptr = reinterpret_cast<cuFloatComplex*>(ker.data_ptr<c10::complex<float>>());
+				hat::cuda::CUDAGuard device_guard(ker.device());
+				cuFloatComplex* ker_ptr = reinterpret_cast<cuFloatComplex*>(ker.data_ptr<hc10::complex<float>>());
 				{
 					cufftHandle plan;
 					CUFFT_CHECK(cufftPlan2d(&plan, NY, NX, CUFFT_C2C));
@@ -533,8 +533,8 @@ namespace hasty {
 					CUFFT_CHECK(cufftDestroy(plan));
 				}
 	
-				at::Tensor scratch = at::empty_like(ker);
-				cuFloatComplex* scratch_ptr = reinterpret_cast<cuFloatComplex*>(scratch.data_ptr<c10::complex<float>>());
+				hat::Tensor scratch = hat::empty_like(ker);
+				cuFloatComplex* scratch_ptr = reinterpret_cast<cuFloatComplex*>(scratch.data_ptr<hc10::complex<float>>());
 
 				VkFFTApplication& app = global_vkfft_cache[device.index()].get_or_create(key);
 				VkFFTLaunchParams launchParams = {};
@@ -559,12 +559,12 @@ namespace hasty {
 
 		void transform_toeplitz_kernel(tensor<cuda_t, c64_t, 3>& kernel, bool clear_vkfft_plan) 
 		{
-			at::Tensor& ker = kernel.get_tensor();
+			hat::Tensor& ker = kernel.get_tensor();
 			
 			int NX = ker.size(2);
 			int NY = ker.size(1);
 			int NZ = ker.size(0);
-			TORCH_CHECK(NZ > 1 && NY > 1 && NX > 1, "kernel dimensions must be positive");
+			torch_check(NZ > 1 && NY > 1 && NX > 1, "kernel dimensions must be positive");
 			auto device = ker.device();
 
 			VkFFT_Cache::VkFFT_Key key(device.index());
@@ -575,8 +575,8 @@ namespace hasty {
 			key.kernelConvolution = 1;
 			
 			{
-				at::cuda::CUDAGuard device_guard(ker.device());
-				cuFloatComplex* ker_ptr = reinterpret_cast<cuFloatComplex*>(ker.data_ptr<c10::complex<float>>());
+				hat::cuda::CUDAGuard device_guard(ker.device());
+				cuFloatComplex* ker_ptr = reinterpret_cast<cuFloatComplex*>(ker.data_ptr<hc10::complex<float>>());
 				{
 					cufftHandle plan;
 					CUFFT_CHECK(cufftPlan3d(&plan, NZ, NY, NX, CUFFT_C2C));
@@ -584,9 +584,9 @@ namespace hasty {
 					CUDA_CHECK(cudaDeviceSynchronize());
 					CUFFT_CHECK(cufftDestroy(plan));
 				}
-	
-				at::Tensor scratch = at::empty_like(ker);
-				cuFloatComplex* scratch_ptr = reinterpret_cast<cuFloatComplex*>(scratch.data_ptr<c10::complex<float>>());
+
+				hat::Tensor scratch = hat::empty_like(ker);
+				cuFloatComplex* scratch_ptr = reinterpret_cast<cuFloatComplex*>(scratch.data_ptr<hc10::complex<float>>());
 
 				VkFFTApplication& app = global_vkfft_cache[device.index()].get_or_create(key);
 				VkFFTLaunchParams launchParams = {};
@@ -623,21 +623,25 @@ namespace hasty {
 			ToeplitzAccumulateType              accumulate_type
 		)
 		{
-			const at::Tensor& inp = input.get_tensor();
-			at::Tensor& out = output.get_tensor();
-			const at::Tensor& ker = kernel.get_tensor();
+			const hat::Tensor& inp = input.get_tensor();
+			hat::Tensor& out = output.get_tensor();
+			const hat::Tensor& ker = kernel.get_tensor();
+
+			torch_check(inp.scalar_type() == hat::kComplexFloat, "input dtype must be complex float");
+			torch_check(out.scalar_type() == hat::kComplexFloat, "output dtype must be complex float");
+			torch_check(ker.scalar_type() == hat::kComplexFloat, "kernel dtype must be complex float");
 
 			int NX = inp.size(2);
 			int NY = inp.size(1);
 			auto device = inp.device();
-			TORCH_CHECK(inp.sizes() == out.sizes(), "input and output must have the same size");
-			TORCH_CHECK(device == out.device(), "input and output must be on the same device");
-			TORCH_CHECK(device == ker.device(), "input and kernel must be on the same device");
-			TORCH_CHECK(ker.sizes() == at::IntArrayRef({ 2 * NY, 2 * NX }), "scratch must have shape (2*NY, 2*NX)");
+			torch_check(inp.sizes().equals(out.sizes()), "input and output must have the same size");
+			torch_check(device == out.device(), "input and output must be on the same device");
+			torch_check(device == ker.device(), "input and kernel must be on the same device");
+			torch_check(ker.sizes().equals({ 2 * NY, 2 * NX }), "scratch must have shape (2*NY, 2*NX)");
 
-			optrefw<at::Tensor> scr = scratch.has_value() ? std::make_optional(std::ref((*scratch).get().get_tensor())) : std::nullopt;
-			optcrefw<at::Tensor> m1 = mult1.has_value() ? std::make_optional(std::cref((*mult1).get().get_tensor())) : std::nullopt;
-			optcrefw<at::Tensor> m2 = mult2.has_value() ? std::make_optional(std::cref((*mult2).get().get_tensor())) : std::nullopt;
+			optrefw<hat::Tensor> scr = scratch.has_value() ? std::make_optional(std::ref((*scratch).get().get_tensor())) : std::nullopt;
+			optcrefw<hat::Tensor> m1 = mult1.has_value() ? std::make_optional(std::cref((*mult1).get().get_tensor())) : std::nullopt;
+			optcrefw<hat::Tensor> m2 = mult2.has_value() ? std::make_optional(std::cref((*mult2).get().get_tensor())) : std::nullopt;
 
 			perform_toeplitz_multiplication_cuda_2D(
 				inp,
@@ -670,22 +674,26 @@ namespace hasty {
 			ToeplitzAccumulateType              accumulate_type
 		) 
 		{
-			const at::Tensor& inp = input.get_tensor();
-			at::Tensor& out = output.get_tensor();
-			const at::Tensor& ker = kernel.get_tensor();
+			const hat::Tensor& inp = input.get_tensor();
+			hat::Tensor& out = output.get_tensor();
+			const hat::Tensor& ker = kernel.get_tensor();
+
+			torch_check(inp.scalar_type() == hat::kComplexFloat, "input dtype must be complex float");
+			torch_check(out.scalar_type() == hat::kComplexFloat, "output dtype must be complex float");
+			torch_check(ker.scalar_type() == hat::kComplexFloat, "kernel dtype must be complex float");
 
 			int NX = inp.size(3);
 			int NY = inp.size(2);
 			int NZ = inp.size(1);
 			auto device = inp.device();
-			TORCH_CHECK(inp.sizes() == out.sizes(), "input and output must have the same size");
-			TORCH_CHECK(device == out.device(), "input and output must be on the same device");
-			TORCH_CHECK(device == ker.device(), "input and kernel must be on the same device");
-			TORCH_CHECK(ker.sizes() == at::IntArrayRef({ 2 * NZ, 2 * NY, 2 * NX }), "scratch must have shape (2*NZ, 2*NY, 2*NX)");
+			torch_check(inp.sizes().equals(out.sizes()), "input and output must have the same size");
+			torch_check(device == out.device(), "input and output must be on the same device");
+			torch_check(device == ker.device(), "input and kernel must be on the same device");
+			torch_check(ker.sizes().equals({ 2 * NZ, 2 * NY, 2 * NX }), "scratch must have shape (2*NZ, 2*NY, 2*NX)");
 
-			optrefw<at::Tensor> scr = scratch.has_value() ? std::make_optional(std::ref((*scratch).get().get_tensor())) : std::nullopt;
-			optcrefw<at::Tensor> m1 = mult1.has_value() ? std::make_optional(std::cref((*mult1).get().get_tensor())) : std::nullopt;
-			optcrefw<at::Tensor> m2 = mult2.has_value() ? std::make_optional(std::cref((*mult2).get().get_tensor())) : std::nullopt;
+			optrefw<hat::Tensor> scr = scratch.has_value() ? std::make_optional(std::ref((*scratch).get().get_tensor())) : std::nullopt;
+			optcrefw<hat::Tensor> m1 = mult1.has_value() ? std::make_optional(std::cref((*mult1).get().get_tensor())) : std::nullopt;
+			optcrefw<hat::Tensor> m2 = mult2.has_value() ? std::make_optional(std::cref((*mult2).get().get_tensor())) : std::nullopt;
 
 			perform_toeplitz_multiplication_cuda_3D(
 				inp,
@@ -712,12 +720,12 @@ namespace hasty {
 	namespace fft {
 
 		void ops_toeplitz_multiplication_cuda(
-			at::Tensor input,
-			at::Tensor output,
-			at::Tensor kernel,
-			std::optional<at::Tensor> scratch,
-			std::optional<at::Tensor> mult1,
-			std::optional<at::Tensor> mult2,
+			hat::Tensor input,
+			hat::Tensor output,
+			hat::Tensor kernel,
+			std::optional<hat::Tensor> scratch,
+			std::optional<hat::Tensor> mult1,
+			std::optional<hat::Tensor> mult2,
 			int64_t input_output_mult_type, // ToeplitzMultType
 			int64_t input_mult1_type, 	// ToeplitzMultType
 			int64_t output_mult1_type, 	// ToeplitzMultType
@@ -727,22 +735,22 @@ namespace hasty {
 		)
 		{
 			auto device = input.device();
-			TORCH_CHECK(input.is_cuda(), "input was not a CUDA tensor");
-			TORCH_CHECK(output.is_cuda(), "output was not a CUDA tensor");
-			TORCH_CHECK(kernel.is_cuda(), "kernel was not a CUDA tensor");
-			TORCH_CHECK(input.dtype() == at::kComplexFloat, "input dtype must be complex float");
-			TORCH_CHECK(output.dtype() == at::kComplexFloat, "output dtype must be complex float");
-			TORCH_CHECK(input.sizes() == output.sizes(), "input and output must have the same size");
-			TORCH_CHECK(device == output.device(), "input and output must be on the same device");
-			TORCH_CHECK(input.is_contiguous(), "input must be contiguous");
-			TORCH_CHECK(output.is_contiguous(), "output must be contiguous");
+			torch_check(input.is_cuda(), "input was not a CUDA tensor");
+			torch_check(output.is_cuda(), "output was not a CUDA tensor");
+			torch_check(kernel.is_cuda(), "kernel was not a CUDA tensor");
+			torch_check(input.scalar_type() == hat::kComplexFloat, "input dtype must be complex float");
+			torch_check(output.scalar_type() == hat::kComplexFloat, "output dtype must be complex float");
+			torch_check(input.sizes().equals(output.sizes()), "input and output must have the same size");
+			torch_check(device == output.device(), "input and output must be on the same device");
+			torch_check(input.is_contiguous(), "input must be contiguous");
+			torch_check(output.is_contiguous(), "output must be contiguous");
 			int dim = input.dim();
 			int nbatch = input.size(0);
-			TORCH_CHECK(dim == 3 || dim == 4, "input and output must be 3D or 4D (with batch)");
+			torch_check(dim == 3 || dim == 4, "input and output must be 3D or 4D (with batch)");
 
-			optrefw<at::Tensor> scratch_opt = scratch.has_value() ? std::make_optional(std::ref((*scratch))) : std::nullopt;
-			optcrefw<at::Tensor> mult1_opt = mult1.has_value() ? std::make_optional(std::cref((*mult1))) : std::nullopt;
-			optcrefw<at::Tensor> mult2_opt = mult2.has_value() ? std::make_optional(std::cref((*mult2))) : std::nullopt;
+			optrefw<hat::Tensor> scratch_opt = scratch.has_value() ? std::make_optional(std::ref((*scratch))) : std::nullopt;
+			optcrefw<hat::Tensor> mult1_opt = mult1.has_value() ? std::make_optional(std::cref((*mult1))) : std::nullopt;
+			optcrefw<hat::Tensor> mult2_opt = mult2.has_value() ? std::make_optional(std::cref((*mult2))) : std::nullopt;
 
 			if (dim == 4) {
 				perform_toeplitz_multiplication_cuda_3D(
@@ -768,12 +776,12 @@ namespace hasty {
 		}
 
 		void ops_toeplitz_multiplication(
-			at::Tensor input,
-			at::Tensor output,
-			at::Tensor kernel,
-			std::optional<at::Tensor> scratch,
-			std::optional<at::Tensor> mult1,
-			std::optional<at::Tensor> mult2,
+			hat::Tensor input,
+			hat::Tensor output,
+			hat::Tensor kernel,
+			std::optional<hat::Tensor> scratch,
+			std::optional<hat::Tensor> mult1,
+			std::optional<hat::Tensor> mult2,
 			int64_t input_output_mult_type, // ToeplitzMultType
 			int64_t input_mult1_type, 	// ToeplitzMultType
 			int64_t output_mult1_type, 	// ToeplitzMultType
