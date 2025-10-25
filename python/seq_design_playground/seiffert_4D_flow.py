@@ -9,13 +9,15 @@ import pypulseq as pp
 from pypulseq.convert import convert
 
 import scipy as sp
-from scipy.interpolate import CubicSpline, PchipInterpolator, interp1d
+from scipy.interpolate import CubicSpline, PchipInterpolator, interp1d, make_interp_spline
 import scipy.special as sps
 
 from sequtil import SafetyLimits, LTIGradientKernels, ImageProperties
 
 from vel_design import VelocityEncodingFactory
 from traj_design import Spiral3D
+
+import my_trajectories as mytraj
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -24,7 +26,8 @@ import traj_utils as tu
 def speed_interpolation(undersamp_traj, option):
 	PRE_N_SAMPLES = undersamp_traj.shape[2]
 
-	cs = CubicSpline(np.linspace(0,1,PRE_N_SAMPLES), undersamp_traj, axis=2)
+	#cs = (np.linspace(0,1,PRE_N_SAMPLES), undersamp_traj, axis=2)
+	cs = make_interp_spline(np.linspace(0,1,PRE_N_SAMPLES), undersamp_traj, k=1, axis=2)
 	if option==1:
 		k1 = 0.2
 		k2 = 10.0
@@ -38,9 +41,10 @@ def speed_interpolation(undersamp_traj, option):
 		tnew = np.linspace(0, t_end, 5*PRE_N_SAMPLES)
 		tnew = k2*(np.sqrt(k1 + tnew) - math.sqrt(k1))
 
-	convolve = True
+	convolve = False
 	if convolve:
 		kernel = np.array([0.0, 0.0, 0.1, 0.3, 0.7, 0.3, 0.1, 0.0, 0.0])
+		#kernel = np.array([0.0, 0.1, 0.2, 0.4, 0.9])
 		kernel /= np.sum(kernel)
 		tnew = np.convolve(tnew, kernel, mode='full')[:-kernel.shape[0]]
 		tnew = tnew[tnew < 1.0]
@@ -53,7 +57,7 @@ def speed_interpolation(undersamp_traj, option):
 	return undersamp_traj
 
 venc1 = 0.8
-venc2 = 0.18
+venc2 = 0.3
 
 system = pp.Opts(
 	max_grad=80, grad_unit='mT/m', 
@@ -128,9 +132,10 @@ elif spiral_type == 'my_yarn_ball':
 	spiral_settings = Spiral3D.get_default_my_yarn_ball_settings()
 	spiral_settings['nb_revs'] = 17
 	spiral_settings['nb_folds'] = 5
-	spiral_settings['add_rand_perturb'] = True
-	spiral_settings['oncurve_samples'] = 800
-	spiral_settings['rand_perturb_factor'] = 1e-3
+	spiral_settings['add_rand_perturb'] = False
+	spiral_settings['oncurve_samples'] = 4000
+	#spiral_settings['rand_perturb_factor'] = 1e-3
+	spiral_settings['rho_lambda'] = mytraj.my_yarn_ball_default_rho(0.05, 100, 200)
 
 	speed_interpolator = lambda x: speed_interpolation(x, 2)
 

@@ -16,7 +16,7 @@ from scipy.integrate import cumulative_trapezoid
 
 from sequtil import SafetyLimits, LTIGradientKernels, ImageProperties
 
-from my_trajectories import initialize_my_yarn_ball
+from my_trajectories import initialize_my_yarn_ball, my_yarn_ball_default_rho
 
 #from ramping import calc_ramp, add_ramps
 
@@ -195,18 +195,19 @@ class Spiral3D:
 		
 		gi, si = pp.traj_to_grad(trajectory, raster_time=GRT)
 
-		end_traj_gi = gi[:,:,-1][:,:,None]
-		max_end_gi = np.abs(end_traj_gi).max()
-		DT = 1.2*max_end_gi / (safe_max_slew)
-		DT_N = math.ceil(DT / GRT)
-		DT = DT_N * GRT
-		downramp_slew = end_traj_gi / DT
-		downramp_gi = np.flip(np.arange(DT_N+1)[None,None,:] * GRT * downramp_slew, axis=2)
+		#end_traj_gi = gi[:,:,-1][:,:,None]
+		#max_end_gi = np.abs(end_traj_gi).max()
+		#DT = 1.2*max_end_gi / (safe_max_slew)
+		#DT_N = math.ceil(DT / GRT)
+		#DT = DT_N * GRT
+		#downramp_slew = end_traj_gi / DT
+		#downramp_gi = np.flip(np.arange(DT_N+1)[None,None,:] * GRT * downramp_slew, axis=2)
 
 		# Start the trajectory with 2 GRT of zero gradients
 		zero_gi = np.zeros((gi.shape[0],3,2))
 
-		gi = np.concatenate([zero_gi, gi, downramp_gi, zero_gi], axis=2)
+		#gi = np.concatenate([zero_gi, gi, downramp_gi, zero_gi], axis=2)
+		gi = np.concatenate([zero_gi, gi, zero_gi], axis=2)
 
 		trajectory = traj_from_grad(gi, GRT)
 
@@ -334,7 +335,8 @@ class Spiral3D:
 								spiral_settings['oncurve_samples'], 
 								tilt="random",
 								nb_revs=spiral_settings['nb_revs'],
-								nb_folds=spiral_settings['nb_folds']
+								nb_folds=spiral_settings['nb_folds'],
+								rho_lambda=None if spiral_settings.get('rho_lambda') is None else spiral_settings['rho_lambda'],
 							)
 		else:
 			raise ValueError('Unknown spiral type: ', spiral_settings['spiral_type'])
@@ -358,9 +360,24 @@ class Spiral3D:
 			perturbation *= (perturb_factor * rand_perturb_factor)
 			undersamp_traj += perturbation
 
+		plot_initial_traj = True
+		if plot_initial_traj:
+			#tu.show_trajectory(undersamp_traj, 0, figure_size = 8)
+			plt.figure()
+			plt.plot(np.sqrt(np.sum(np.square(undersamp_traj[0].transpose(1,0)), axis=-1)))
+			plt.title('Distance to center over time (initial)')
+			plt.show()
+
 		if speed_interpolation is not None:
 			undersamp_traj = speed_interpolation(undersamp_traj)
 
+		plot_initial_traj = True
+		if plot_initial_traj:
+			#tu.show_trajectory(undersamp_traj, 0, figure_size = 8)
+			plt.figure()
+			plt.plot(np.sqrt(np.sum(np.square(undersamp_traj[0].transpose(1,0)), axis=-1)))
+			plt.title('Distance to center over time (initial)')
+			plt.show()
 
 		trajectory, grad, slew, max_grad, max_slew = self.get_fastest_spiral_gradients(undersamp_traj, spiral_settings)
 
@@ -386,21 +403,157 @@ class Spiral3D:
 			plt.show()
 
 		return trajectory, grad, slew, max_grad, max_slew
+
+class YarnballSpiralSettings:
+	def __init__(self):
+		self.nshots = 20
+		self.oncurve_samples = 2000
+		self.nb_revs = 5
+		self.nb_folds = 5
+		self.add_rand_perturb = False
+		self.rand_perturb_factor = 0.2
+		self.rho_lambda = None
+
+class YarnballSpiral:
+	def __init__(self, ltik: LTIGradientKernels, safety: SafetyLimits, imgprop: ImageProperties, yarnsettings: YarnballSpiralSettings, print_calc=False):
+		self.system = ltik.system
+		self.print_calc = print_calc
+		self.ltik = ltik
+		self.safety = safety
+		self.imgprop = imgprop
+		self.yarnsettings = yarnsettings
+
+		print("Yarnball Spiral")
+
+	def one_run(self, NGRT):
+		t = np.linspace(0,1,NGRT)
+
+		trajectory = initialize_my_yarn_ball(
+						self.yarnsettings.nshots, 
+						NGRT, 
+						tilt="",
+						nb_revs=self.yarnsettings.nb_revs,
+						nb_folds=self.yarnsettings.nb_folds,
+						rho_lambda=self.yarnsettings.rho_lambda
+					)
+
+		resolution = self.imgprop.resolution
+		delta_k = 1.0 / self.imgprop.fov
+
+		trajectory = np.ascontiguousarray(trajectory.transpose(0,2,1))
+		trajectory *= (0.5*resolution * delta_k)[None,:,None]
+
+		zeroi = np.zeros((self.yarnsettings.nshots, 3, 1))
+		trajectory = np.concatenate([zeroi, trajectory, zeroi], axis=-1)
+
+		grad, slew = pp.traj_to_grad(trajectory, raster_time=self.system.grad_raster_time)
+
+		max_grad = np.abs(grad).max()
+		max_slew = np.abs(slew).max()
+
+		return trajectory, grad, slew, max_grad, max_slew
+
+	def get_fastest_gradients(self):
+		MKL = self.ltik.max_kernel_length
+		GRT = self.system.grad_raster_time
+		nshots = self.yarnsettings.nshots
+		safe_max_grad = self.system.max_grad * self.safety.grad_ratio
+		safe_max_slew = self.system.max_slew * self.safety.slew_ratio
+
+		NGRT_i = max(math.ceil(0.5e-3 / GRT), self.yarnsettings.oncurve_samples)
+		trajectory, gi, si, max_grad, max_slew = self.one_run(NGRT_i)
+
+		if max_grad > safe_max_grad or max_slew > safe_max_slew:
+			off_ratio= max_grad / safe_max_grad
+			if off_ratio < max_slew / safe_max_slew:
+				off_ratio = max(off_ratio, math.sqrt(max_slew / safe_max_slew))
+				
+			NGRT_i = math.ceil(NGRT_i * off_ratio)
+
+		trajectory, gi, si, max_grad, max_slew = self.one_run(NGRT_i)
+		if max_grad > safe_max_grad or max_slew > safe_max_slew:
+			decrease_NGRT = False
+		else:
+			decrease_NGRT = True
+
+		print('', end='')
+		for i in range(2000):
+			if decrease_NGRT:
+				NGRT_i -= 20
+			else:
+				NGRT_i += 20
+
+			print('\rAttempting a readout of: ', NGRT_i * GRT * 1e3, 'ms, iteration: ', i, end='')
+
+			temp_trajectory, temp_gi, temp_si, temp_max_grad, temp_max_slew = self.one_run(NGRT_i)
+
+			if temp_max_grad < safe_max_grad and temp_max_slew < safe_max_slew:
+				# The update gave a new successful trajectory
+				trajectory = 	temp_trajectory
+				gi = 			temp_gi
+				si = 			temp_si
+				max_grad = 		temp_max_grad
+				max_slew = 		temp_max_slew
+				if not decrease_NGRT:
+					# If we were increasing NGRT, ie previously our trajectory did not meat
+					# grad or slew requirements, we have now found a successful trajectory
+					# and should stop
+					break
+			elif decrease_NGRT:
+				# If we were decreasing NGRT our previous trajectory was successful, temp_trajectory
+				# is now the first non-successful trajectory, so stop here with the previous trajectory
+				break
+		print('')
+
+		if self.print_calc:
+			max_slew_shot = np.argmax(np.abs(si).max(axis=(1,2)), axis=0)
+			max_grad_shot = np.argmax(np.abs(gi).max(axis=(1,2)), axis=0)
+			plot31(convert(gi[max_slew_shot,...], from_unit='Hz/m', to_unit='mT/m'), 'Gradient : Max Slew Spoke', norm=True)
+			plot31(convert(si[max_slew_shot,...], from_unit='Hz/m/s', to_unit='T/m/s'), 'Slew Rate : Max Slew Spoke', norm=True)
+			plot31(convert(gi[max_grad_shot,...], from_unit='Hz/m', to_unit='mT/m'), 'Gradient : Max Slew Spoke', norm=True)
+			plot31(convert(si[max_grad_shot,...], from_unit='Hz/m/s', to_unit='T/m/s'), 'Slew Rate : Max Slew Spoke', norm=True)
+			plot31(trajectory[max_slew_shot,...], 'Trajectory : Max Slew Spoke')
+			plot31(trajectory[max_grad_shot,...], 'Trajectory : Max Grad Spoke')
 		
+		max_grad = np.abs(gi).max()
+		max_slew = np.abs(si).max()
+
+		return trajectory, gi, si, max_grad, max_slew
+
+
 
 if __name__ == "__main__":
-		#T, DT = calc_T_DT(0.001, 80, 200, 42.58e6)
-	system = pp.Opts(max_grad=80, grad_unit='mT/m', max_slew=200, slew_unit='T/m/s', B0=3.0, grad_raster_time=10e-6)
 
-	ltik = LTIGradientKernels(system, LTIGradientKernels.kernels_from_test())
+	system = pp.Opts(
+		max_grad=80, grad_unit='mT/m', 
+		max_slew=200, slew_unit='T/m/s',
+		rf_raster_time=2e-6,
+		rf_dead_time=100e-6,
+		rf_ringdown_time=60e-6,
+		adc_raster_time=2e-6,
+		adc_dead_time=40e-6,
+		grad_raster_time=4e-6,
+		block_duration_raster=4e-6,
+		B0=3.0, 
+	)
 
-	#trajfactory = SeiffertSpiral(ltik, SafetyLimits(), ImageProperties(None, 220e-3, 256+64), print_calc=True)
+	ltik = LTIGradientKernels(system, LTIGradientKernels.kernels_from_test(system.grad_raster_time))
 
-	scan_time = 60*10
+	sl = SafetyLimits()
+	imgprop = ImageProperties([320,320,320], 
+				np.array([220e-3, 220e-3, 220e-3]), np.array([320,320,320]))
 
-	nshots = int(scan_time / 0.019)
+	yarnsettings = YarnballSpiralSettings()
+	yarnsettings.oncurve_samples = 3000
+	yarnsettings.nb_revs = 6
+	yarnsettings.nb_folds = 3
+	yarnsettings.rho_lambda = my_yarn_ball_default_rho(0.01, 200, 15)
 
-	back = trajfactory.get_gradients(nshots, None, curveiness=0.9999, oncurve_samples=50)
+	yarnball = YarnballSpiral(ltik, sl, imgprop, yarnsettings, print_calc=True)
+
+	yarnball.get_fastest_gradients()
+
+	#back = trajfactory.get_gradients(nshots, None, curveiness=0.9999, oncurve_samples=50)
 
 
 

@@ -3,6 +3,7 @@
 import math
 from functools import partial
 from typing import Literal
+import scipy as sp
 
 import numpy as np
 import numpy.linalg as nl
@@ -58,7 +59,9 @@ def initialize_my_yarn_ball(
 	Ns: int,
 	tilt: str | float = "golden",
 	nb_revs: float = 5,
-	nb_folds: float = 5
+	nb_folds: float = 5,
+	rho_lambda = None,
+	plot=False
 	) -> NDArray:
 
 
@@ -73,7 +76,6 @@ def initialize_my_yarn_ball(
 	#theta_tilt *= 0.0
 	#phi_tilt *= 0.0
 
-	plot = False
 	if plot:
 		plt.figure()
 		plt.hist(theta_tilt, bins=100)
@@ -83,15 +85,25 @@ def initialize_my_yarn_ball(
 		plt.hist(phi_tilt, bins=100)
 		plt.show()
 
-	t = np.linspace(0,1,Ns)
+	t = np.linspace(0,1-1e-7,Ns)
 	lag_length = Ns//100
 	t_lagged = np.concatenate([np.zeros((lag_length,)), (np.square(t) / (t + 0.1))[:-lag_length]])
 
 	omega = 2*np.pi*nb_revs
 
-	rho_0 = 1*(np.square(t) / (t+0.1))
-	rho_wiggle = 1#(1 + 0.2*np.sin(nb_envelopes*2*np.pi*t))
-	rho = rho_0*rho_wiggle
+	if rho_lambda is None:
+		rho_0 = 1*(np.square(t) / (t+0.1))
+		rho_wiggle = 1#(1 + 0.2*np.sin(2*np.pi*t))
+		rho = rho_0*rho_wiggle
+	else:
+		rho = rho_lambda(t)
+
+	if plot:
+		plt.figure()
+		plt.plot(t, rho)
+		#plt.plot(rho)
+		plt.title("Rho profile")
+		plt.show()
 
 	omega = omega * (t_lagged)**0.8
 
@@ -123,8 +135,34 @@ def initialize_my_yarn_ball(
 
 	return traj
 
+def my_yarn_ball_default_rho(a, n, m):
+	def g(t):
+		return np.square(t) * (1 - np.power(t, n)) / (t+a)
 
+	def dgdt(t):
+		ta = t + a
+		return (ta*(2*t*(1-np.power(t,n)) - np.square(t)*n*np.power(t,n-1)) - np.square(t)*(1 - np.power(t,n))) / np.square(ta)
+
+	def f(t):
+		return np.e * np.exp(-1/(1-np.power(t,m)))
+
+	def dfdt(t):
+		return -np.e * np.exp(-1/(1-np.power(t,m))) * m*np.power(t,m-1) / np.square(1-np.power(t,m))
+
+	def rho(t):
+		return g(t) * f(t)
+
+	def rhodt(t):
+		return dgdt(t) * f(t) + g(t) * dfdt(t)
+
+	maximum = sp.optimize.brentq(rhodt, 0.5, 0.96)
+	maximum = rho(maximum)
+
+	return lambda t: rho(t) / maximum
+
+		
 
 if __name__ == "__main__":
-	initialize_my_yarn_ball(Nc=1, Ns=800, nb_revs=10, nb_folds=1.0)
+
+	initialize_my_yarn_ball(Nc=1, Ns=5000, nb_revs=6, nb_folds=3, rho_lambda=my_yarn_ball_default_rho(0.05, 200, 15), plot=True)
 
