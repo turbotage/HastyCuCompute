@@ -16,7 +16,7 @@ from scipy.integrate import cumulative_trapezoid
 
 from sequtil import SafetyLimits, LTIGradientKernels, ImageProperties
 
-from my_trajectories import initialize_my_yarn_ball, my_yarn_ball_default_rho
+from my_trajectories import initialize_my_yarn_ball, my_yarn_ball_default_rho, my_yarn_ball_default_rho_2
 
 #from ramping import calc_ramp, add_ramps
 
@@ -24,17 +24,27 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import traj_utils as tu
 
-def plot31(slew, title='', vlines=None, norm=False):
+def plot31(data, title='', vlines=None, norm=False):
 	plt.figure()
-	plt.plot(slew[0, :], 'r-*')
-	plt.plot(slew[1, :], 'g-*')
-	plt.plot(slew[2, :], 'b-*')
+	plt.plot(data[0, :], 'r-*')
+	plt.plot(data[1, :], 'g-*')
+	plt.plot(data[2, :], 'b-*')
 	if vlines is not None:
 		for vline in vlines:
 			plt.axvline(x=vline, color='k', linestyle='--')
 		#plt.vlines(vlines, color='k', linestyle='--')
 	if norm:
-		plt.plot(np.sqrt(np.sum(np.square(slew), axis=0)), 'c-*')
+		plt.plot(np.sqrt(np.sum(np.square(data), axis=0)), 'c-*')
+	plt.title(title)
+	plt.show()
+
+def plot1(data, title='', vlines=None):
+	plt.figure()
+	plt.plot(data, 'b-*')
+	if vlines is not None:
+		for vline in vlines:
+			plt.axvline(x=vline, color='k', linestyle='--')
+		#plt.vlines(vlines, color='k', linestyle='--')
 	plt.title(title)
 	plt.show()
 
@@ -425,11 +435,14 @@ class YarnballSpiral:
 
 		print("Yarnball Spiral")
 
-	def one_run(self, NGRT):
+	def one_run(self, NGRT, nshots=None):
 		t = np.linspace(0,1,NGRT)
 
+		if nshots is None:
+			nshots = self.yarnsettings.nshots
+
 		trajectory = initialize_my_yarn_ball(
-						self.yarnsettings.nshots, 
+						nshots, 
 						NGRT, 
 						tilt="",
 						nb_revs=self.yarnsettings.nb_revs,
@@ -443,7 +456,7 @@ class YarnballSpiral:
 		trajectory = np.ascontiguousarray(trajectory.transpose(0,2,1))
 		trajectory *= (0.5*resolution * delta_k)[None,:,None]
 
-		zeroi = np.zeros((self.yarnsettings.nshots, 3, 1))
+		zeroi = np.zeros((nshots, 3, 2))
 		trajectory = np.concatenate([zeroi, trajectory, zeroi], axis=-1)
 
 		grad, slew = pp.traj_to_grad(trajectory, raster_time=self.system.grad_raster_time)
@@ -514,6 +527,7 @@ class YarnballSpiral:
 			plot31(convert(si[max_grad_shot,...], from_unit='Hz/m/s', to_unit='T/m/s'), 'Slew Rate : Max Slew Spoke', norm=True)
 			plot31(trajectory[max_slew_shot,...], 'Trajectory : Max Slew Spoke')
 			plot31(trajectory[max_grad_shot,...], 'Trajectory : Max Grad Spoke')
+			plot1(np.sqrt(np.sum(np.square(trajectory[max_slew_shot,...]), axis=0)), 'Distance to center over time : Max Slew Spoke')
 		
 		max_grad = np.abs(gi).max()
 		max_slew = np.abs(si).max()
@@ -523,6 +537,9 @@ class YarnballSpiral:
 
 
 if __name__ == "__main__":
+
+	import traj_utility as tuu
+	import traj_utils as tu
 
 	system = pp.Opts(
 		max_grad=80, grad_unit='mT/m', 
@@ -547,14 +564,56 @@ if __name__ == "__main__":
 	yarnsettings.oncurve_samples = 3000
 	yarnsettings.nb_revs = 6
 	yarnsettings.nb_folds = 3
-	yarnsettings.rho_lambda = my_yarn_ball_default_rho(0.01, 50, 15)
+	yarnsettings.rho_lambda = my_yarn_ball_default_rho(0.01, 100, 12)
+	#yarnsettings.rho_lambda = my_yarn_ball_default_rho_2(0.01, 20, 0.05)
 
 	yarnball = YarnballSpiral(ltik, sl, imgprop, yarnsettings, print_calc=True)
 
-	yarnball.get_fastest_gradients()
+	traj, gi, si, max_grad, max_slew = yarnball.get_fastest_gradients()
 
-	#back = trajfactory.get_gradients(nshots, None, curveiness=0.9999, oncurve_samples=50)
+	traj, gi, si, max_grad, max_slew = yarnball.one_run(traj.shape[2], nshots=5000)
 
+	r = np.sqrt(np.sum(np.square(traj), axis=1))
+	max_r_idx = np.argmax(r.max(axis=1))
+
+	tu.show_trajectory(0.7 *traj[-50:-1,...].transpose(0,2,1) / traj.max(), 0, 8)
+
+	start_idx = 10
+	kx = traj[:,0,start_idx:max_r_idx+1].flatten()
+	ky = traj[:,1,start_idx:max_r_idx+1].flatten()
+	kz = traj[:,2,start_idx:max_r_idx+1].flatten()
+
+	H, DCF, centers, mask, cov = tuu.compute_dcf_from_histogram(
+									kx,
+									ky,
+									kz,
+									grid_size=256,
+									smooth_sigma=6.0
+								)
+	
+	psf_norm, sidelobe_ratio = tuu.compute_psf_and_sidelobe_energy(DCF, mask)
+
+	print(f"Density histogram CoV: {cov:.4f}")
+	print(f"Sidelobe energy ratio: {sidelobe_ratio:.4e}")
+	print(f"Nonzero mask voxels: {np.sum(mask)} / {mask.size}")
+
+	rho, r = tuu.radial_density_profile(
+									kx,
+									ky,
+									kz,
+									nbins=200,
+									normalize=True,
+									return_bins=True
+								) 
+
+	#tuu.show_histogram_3d(H, threshold=0.05)
+
+	plt.plot(r / r.max(), rho / rho.max())
+	plt.xlabel("Normalized radius |k| / kmax")
+	plt.ylabel("Relative density ρ(r)")
+	plt.title("Radial Sampling Density")
+	plt.grid(True)
+	plt.show()
 
 
 

@@ -139,28 +139,45 @@ def my_yarn_ball_default_rho(a, n, m):
 	def g(t):
 		return np.square(t) * (1 - np.power(t, n)) / (t+a)
 
-	def dgdt(t):
-		ta = t + a
-		return (ta*(2*t*(1-np.power(t,n)) - np.square(t)*n*np.power(t,n-1)) - np.square(t)*(1 - np.power(t,n))) / np.square(ta)
-
 	def f(t):
 		return np.e * np.exp(-1/(1-np.power(t,m)))
-
-	def dfdt(t):
-		return -np.e * np.exp(-1/(1-np.power(t,m))) * m*np.power(t,m-1) / np.square(1-np.power(t,m))
 
 	def rho(t):
 		return g(t) * f(t)
 
 	def rhodt(t):
-		return dgdt(t) * f(t) + g(t) * dfdt(t)
+		h = 1e-6
+		return (rho(t+h) - rho(t)) / h
 
 	maximum = sp.optimize.brentq(rhodt, 0.5, 0.96)
 	maximum = rho(maximum)
 
 	return lambda t: rho(t) / maximum
 
+def my_yarn_ball_default_rho_2(a, n, b):
+	def g(t):
+		return np.square(t) * (1 - np.power(t, n)) / (t+a)
+
+	def f(t):
+		s = (t - (1-b)) / b
+		m = np.minimum(np.maximum(1-s, 0.0), 1.0)
+		return np.square(m) * (3 - 2*m)
+
+	def rho(t):
+		return g(t) * f(t)
+
+	def rhodt(t):
+		h = 1e-6
+		return (rho(t+h) - rho(t)) / h
+
+	maximum = sp.optimize.brentq(rhodt, 0.5, 0.98)
+	maximum = rho(maximum)
+
+	return lambda t: rho(t) / maximum
+
 if __name__ == "__main__":
 
-	initialize_my_yarn_ball(Nc=1, Ns=5000, nb_revs=6, nb_folds=3, rho_lambda=my_yarn_ball_default_rho(0.05, 200, 15), plot=True)
+	#initialize_my_yarn_ball(Nc=1, Ns=5000, nb_revs=6, nb_folds=3, rho_lambda=my_yarn_ball_default_rho(0.05, 20, 12), plot=True)
+
+	initialize_my_yarn_ball(Nc=1, Ns=5000, nb_revs=6, nb_folds=3, rho_lambda=my_yarn_ball_default_rho_2(0.05, 20, 0.03), plot=True)
 

@@ -349,28 +349,12 @@ if __name__ == "__main__":
 
 	tf = Spiral3D(ltik, sl, imgprop, print_calc=False)
 	tfret = tf.get_gradients(nshots, spiral_settings, speed_interpolation=speed_interpolator)
-
 	trajectory = tfret[0]
-
-	
-
 	# Add a downramp
 	trajend = trajectory[:,:,-1][...,None]
 	n_traj_downsample = 100
 	trajend = trajend - np.arange(n_traj_downsample+1)[None,None,:] * trajend / n_traj_downsample
-	trajectory = np.concatenate([trajectory, trajend, np.zeros_like(trajend)], axis=-1)
-
-	plt.figure()
-	plt.plot(trajectory[19,0, :], 'r-*')
-	plt.plot(trajectory[19,1, :], 'g-*')
-	plt.plot(trajectory[19,2, :], 'b-*')
-	plt.title('Trajectory')
-	plt.show()
-
-	# We smooth out the trajectory a bit
-	for i in range(trajectory.shape[0]):
-		for j in range(3):
-			trajectory[i,j,:] = sp.ndimage.gaussian_filter1d(trajectory[i,j,:], 5)
+	trajectory = np.concatenate([trajectory, trajend], axis=-1)
 
 	plt.figure()
 	plt.plot(trajectory[19,0, :], 'r-*')
@@ -439,6 +423,8 @@ if __name__ == "__main__":
 			plt.plot(kspace_plot[plot_index,2, :], 'b-*')
 			plt.title('Trajectory')
 			plt.show()
+
+			
 
 			pns_waveform = traj.pns(slew)
 			pns_max = pns_waveform[plot_index,...].max().detach()
