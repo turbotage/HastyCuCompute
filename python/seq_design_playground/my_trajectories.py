@@ -160,8 +160,6 @@ def my_yarn_ball_default_rho(a, n, m):
 
 	return lambda t: rho(t) / maximum
 
-		
-
 if __name__ == "__main__":
 
 	initialize_my_yarn_ball(Nc=1, Ns=5000, nb_revs=6, nb_folds=3, rho_lambda=my_yarn_ball_default_rho(0.05, 200, 15), plot=True)

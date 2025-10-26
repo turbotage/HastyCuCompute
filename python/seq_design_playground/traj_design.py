@@ -547,7 +547,7 @@ if __name__ == "__main__":
 	yarnsettings.oncurve_samples = 3000
 	yarnsettings.nb_revs = 6
 	yarnsettings.nb_folds = 3
-	yarnsettings.rho_lambda = my_yarn_ball_default_rho(0.01, 200, 15)
+	yarnsettings.rho_lambda = my_yarn_ball_default_rho(0.01, 50, 15)
 
 	yarnball = YarnballSpiral(ltik, sl, imgprop, yarnsettings, print_calc=True)
 
