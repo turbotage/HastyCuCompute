@@ -9,6 +9,7 @@ import numpy as np
 import numpy.linalg as nl
 from numpy.typing import NDArray
 from scipy.special import ellipj, ellipk
+from scipy.interpolate import PchipInterpolator
 
 from mrinufft.trajectories.maths import (
 	CIRCLE_PACKING_DENSITY,
@@ -135,12 +136,12 @@ def initialize_my_yarn_ball(
 
 	return traj
 
-def my_yarn_ball_default_rho(a, n, m):
+def my_yarn_ball_default_rho(a, c, n, m):
 	def g(t):
 		return np.square(t) * (1 - np.power(t, n)) / (t+a)
 
 	def f(t):
-		return np.e * np.exp(-1/(1-np.power(t,m)))
+		return np.e * np.exp(-1/np.power(1-np.power(t,m), c))
 
 	def rho(t):
 		return g(t) * f(t)
@@ -175,9 +176,60 @@ def my_yarn_ball_default_rho_2(a, n, b):
 
 	return lambda t: rho(t) / maximum
 
+def my_yarn_ball_default_rho_3(a, b, c, n, m):
+	def g(t):
+		return (a - np.power(t - b, 2.0))*(1-np.power(t,n))
+
+	def f(t):
+		if isinstance(t, float):
+			if t <= 1e-6 or t >= (1.0 - 1e-6):
+				return 0.0
+			else:
+				s = (t - 0.5) / 0.5
+				return np.e * np.exp(-1/np.power(1-np.power(s,m), c))
+		elif isinstance(t, np.ndarray):
+			ret = np.empty_like(t)
+			ret[(t <= 1e-6) | (t >= 1.0 - 1e-6)] = 0.0
+			geq = (t > 1e-6) & (t < (1.0 - 1e-6))
+			s = (t[geq] - 0.5) / 0.5
+			ret[geq] = np.e * np.exp(-1/np.power(1-np.power(s,m), c))
+			return ret
+		else:
+			raise ValueError("Input must be float or ndarray")
+
+	def rho(t):
+		return g(t) * f(t)
+
+	def rhodt(t):
+		h = 1e-6
+		return (rho(t+h) - rho(t)) / h
+
+	maximum = sp.optimize.brentq(rhodt, 0.5, 0.98)
+	maximum = rho(maximum)
+
+	return lambda t: rho(t) / maximum
+
+def my_yarn_ball_default_rho_4():
+	pchip = PchipInterpolator(
+		x=[0.0, 0.001, 0.10, 0.3, 0.85, 0.9, 0.95, 0.999,  1.0],
+		y=[0.0, 0.0,   0.6,  0.8, 1.0,  0.8, 0.5,  0.0,    0.0]
+	)
+
+	return lambda t: pchip(t)
+	
+
 if __name__ == "__main__":
 
 	#initialize_my_yarn_ball(Nc=1, Ns=5000, nb_revs=6, nb_folds=3, rho_lambda=my_yarn_ball_default_rho(0.05, 20, 12), plot=True)
 
-	initialize_my_yarn_ball(Nc=1, Ns=5000, nb_revs=6, nb_folds=3, rho_lambda=my_yarn_ball_default_rho_2(0.05, 20, 0.03), plot=True)
+	#rholam = my_yarn_ball_default_rho_3(0.8, 0.8, 0.75, 25, 12)
+	#rholam = my_yarn_ball_default_rho_3(0.9, 0.9, 0.5, 20, 12)
+	rholam = my_yarn_ball_default_rho_4()
+
+	print(rholam(0.0))
+	print(rholam(1.0))
+
+	initialize_my_yarn_ball(Nc=1, Ns=5000, nb_revs=6, nb_folds=3, rho_lambda=rholam, plot=True)
+
+	#initialize_my_yarn_ball(Nc=1, Ns=5000, nb_revs=6, nb_folds=3, rho_lambda=my_yarn_ball_default_rho_2(0.05, 20, 0.03), plot=True)
 

@@ -16,7 +16,7 @@ from scipy.integrate import cumulative_trapezoid
 
 from sequtil import SafetyLimits, LTIGradientKernels, ImageProperties
 
-from my_trajectories import initialize_my_yarn_ball, my_yarn_ball_default_rho, my_yarn_ball_default_rho_2
+import my_trajectories as mytraj
 
 #from ramping import calc_ramp, add_ramps
 
@@ -414,127 +414,6 @@ class Spiral3D:
 
 		return trajectory, grad, slew, max_grad, max_slew
 
-class YarnballSpiralSettings:
-	def __init__(self):
-		self.nshots = 20
-		self.oncurve_samples = 2000
-		self.nb_revs = 5
-		self.nb_folds = 5
-		self.add_rand_perturb = False
-		self.rand_perturb_factor = 0.2
-		self.rho_lambda = None
-
-class YarnballSpiral:
-	def __init__(self, ltik: LTIGradientKernels, safety: SafetyLimits, imgprop: ImageProperties, yarnsettings: YarnballSpiralSettings, print_calc=False):
-		self.system = ltik.system
-		self.print_calc = print_calc
-		self.ltik = ltik
-		self.safety = safety
-		self.imgprop = imgprop
-		self.yarnsettings = yarnsettings
-
-		print("Yarnball Spiral")
-
-	def one_run(self, NGRT, nshots=None):
-		t = np.linspace(0,1,NGRT)
-
-		if nshots is None:
-			nshots = self.yarnsettings.nshots
-
-		trajectory = initialize_my_yarn_ball(
-						nshots, 
-						NGRT, 
-						tilt="",
-						nb_revs=self.yarnsettings.nb_revs,
-						nb_folds=self.yarnsettings.nb_folds,
-						rho_lambda=self.yarnsettings.rho_lambda
-					)
-
-		resolution = self.imgprop.resolution
-		delta_k = 1.0 / self.imgprop.fov
-
-		trajectory = np.ascontiguousarray(trajectory.transpose(0,2,1))
-		trajectory *= (0.5*resolution * delta_k)[None,:,None]
-
-		zeroi = np.zeros((nshots, 3, 2))
-		trajectory = np.concatenate([zeroi, trajectory, zeroi], axis=-1)
-
-		grad, slew = pp.traj_to_grad(trajectory, raster_time=self.system.grad_raster_time)
-
-		max_grad = np.abs(grad).max()
-		max_slew = np.abs(slew).max()
-
-		return trajectory, grad, slew, max_grad, max_slew
-
-	def get_fastest_gradients(self):
-		MKL = self.ltik.max_kernel_length
-		GRT = self.system.grad_raster_time
-		nshots = self.yarnsettings.nshots
-		safe_max_grad = self.system.max_grad * self.safety.grad_ratio
-		safe_max_slew = self.system.max_slew * self.safety.slew_ratio
-
-		NGRT_i = max(math.ceil(0.5e-3 / GRT), self.yarnsettings.oncurve_samples)
-		trajectory, gi, si, max_grad, max_slew = self.one_run(NGRT_i)
-
-		if max_grad > safe_max_grad or max_slew > safe_max_slew:
-			off_ratio= max_grad / safe_max_grad
-			if off_ratio < max_slew / safe_max_slew:
-				off_ratio = max(off_ratio, math.sqrt(max_slew / safe_max_slew))
-				
-			NGRT_i = math.ceil(NGRT_i * off_ratio)
-
-		trajectory, gi, si, max_grad, max_slew = self.one_run(NGRT_i)
-		if max_grad > safe_max_grad or max_slew > safe_max_slew:
-			decrease_NGRT = False
-		else:
-			decrease_NGRT = True
-
-		print('', end='')
-		for i in range(2000):
-			if decrease_NGRT:
-				NGRT_i -= 20
-			else:
-				NGRT_i += 20
-
-			print('\rAttempting a readout of: ', NGRT_i * GRT * 1e3, 'ms, iteration: ', i, end='')
-
-			temp_trajectory, temp_gi, temp_si, temp_max_grad, temp_max_slew = self.one_run(NGRT_i)
-
-			if temp_max_grad < safe_max_grad and temp_max_slew < safe_max_slew:
-				# The update gave a new successful trajectory
-				trajectory = 	temp_trajectory
-				gi = 			temp_gi
-				si = 			temp_si
-				max_grad = 		temp_max_grad
-				max_slew = 		temp_max_slew
-				if not decrease_NGRT:
-					# If we were increasing NGRT, ie previously our trajectory did not meat
-					# grad or slew requirements, we have now found a successful trajectory
-					# and should stop
-					break
-			elif decrease_NGRT:
-				# If we were decreasing NGRT our previous trajectory was successful, temp_trajectory
-				# is now the first non-successful trajectory, so stop here with the previous trajectory
-				break
-		print('')
-
-		if self.print_calc:
-			max_slew_shot = np.argmax(np.abs(si).max(axis=(1,2)), axis=0)
-			max_grad_shot = np.argmax(np.abs(gi).max(axis=(1,2)), axis=0)
-			plot31(convert(gi[max_slew_shot,...], from_unit='Hz/m', to_unit='mT/m'), 'Gradient : Max Slew Spoke', norm=True)
-			plot31(convert(si[max_slew_shot,...], from_unit='Hz/m/s', to_unit='T/m/s'), 'Slew Rate : Max Slew Spoke', norm=True)
-			plot31(convert(gi[max_grad_shot,...], from_unit='Hz/m', to_unit='mT/m'), 'Gradient : Max Slew Spoke', norm=True)
-			plot31(convert(si[max_grad_shot,...], from_unit='Hz/m/s', to_unit='T/m/s'), 'Slew Rate : Max Slew Spoke', norm=True)
-			plot31(trajectory[max_slew_shot,...], 'Trajectory : Max Slew Spoke')
-			plot31(trajectory[max_grad_shot,...], 'Trajectory : Max Grad Spoke')
-			plot1(np.sqrt(np.sum(np.square(trajectory[max_slew_shot,...]), axis=0)), 'Distance to center over time : Max Slew Spoke')
-		
-		max_grad = np.abs(gi).max()
-		max_slew = np.abs(si).max()
-
-		return trajectory, gi, si, max_grad, max_slew
-
-
 
 if __name__ == "__main__":
 
@@ -564,56 +443,75 @@ if __name__ == "__main__":
 	yarnsettings.oncurve_samples = 3000
 	yarnsettings.nb_revs = 6
 	yarnsettings.nb_folds = 3
-	yarnsettings.rho_lambda = my_yarn_ball_default_rho(0.01, 100, 12)
-	#yarnsettings.rho_lambda = my_yarn_ball_default_rho_2(0.01, 20, 0.05)
+	#yarnsettings.rho_lambda = mytraj.my_yarn_ball_default_rho(0.01, 0.8, 50, 9)
+	#yarnsettings.rho_lambda = mytraj.my_yarn_ball_default_rho_2(0.01, 20, 0.05)
+	yarnsettings.rho_lambda = mytraj.my_yarn_ball_default_rho_3(0.8, 0.8, 0.75, 25, 12)
+	#yarnsettings.rho_lambda = mytraj.my_yarn_ball_default_rho_4()
 
 	yarnball = YarnballSpiral(ltik, sl, imgprop, yarnsettings, print_calc=True)
 
 	traj, gi, si, max_grad, max_slew = yarnball.get_fastest_gradients()
 
-	traj, gi, si, max_grad, max_slew = yarnball.one_run(traj.shape[2], nshots=5000)
+	do_density_calcs = False
+	if do_density_calcs:
+		traj, gi, si, max_grad, max_slew = yarnball.one_run(traj.shape[2], nshots=5000)
 
-	r = np.sqrt(np.sum(np.square(traj), axis=1))
-	max_r_idx = np.argmax(r.max(axis=1))
+		r = np.sqrt(np.sum(np.square(traj), axis=1))
+		max_r_idx = np.argmax(r.max(axis=0))
 
-	tu.show_trajectory(0.7 *traj[-50:-1,...].transpose(0,2,1) / traj.max(), 0, 8)
+		tu.show_trajectory(0.7 *traj[-50:-1,...].transpose(0,2,1) / traj.max(), 0, 8)
 
-	start_idx = 10
-	kx = traj[:,0,start_idx:max_r_idx+1].flatten()
-	ky = traj[:,1,start_idx:max_r_idx+1].flatten()
-	kz = traj[:,2,start_idx:max_r_idx+1].flatten()
+		start_idx = 10
+		kx = traj[:,0,start_idx:max_r_idx+1].flatten()
+		ky = traj[:,1,start_idx:max_r_idx+1].flatten()
+		kz = traj[:,2,start_idx:max_r_idx+1].flatten()
 
-	H, DCF, centers, mask, cov = tuu.compute_dcf_from_histogram(
-									kx,
-									ky,
-									kz,
-									grid_size=256,
-									smooth_sigma=6.0
-								)
-	
-	psf_norm, sidelobe_ratio = tuu.compute_psf_and_sidelobe_energy(DCF, mask)
 
-	print(f"Density histogram CoV: {cov:.4f}")
-	print(f"Sidelobe energy ratio: {sidelobe_ratio:.4e}")
-	print(f"Nonzero mask voxels: {np.sum(mask)} / {mask.size}")
+		kx_i = traj[0,0,0:max_r_idx+1]
+		ky_i = traj[0,1,0:max_r_idx+1]
+		kz_i = traj[0,2,0:max_r_idx+1]
 
-	rho, r = tuu.radial_density_profile(
-									kx,
-									ky,
-									kz,
-									nbins=200,
-									normalize=True,
-									return_bins=True
-								) 
+		r = np.sqrt(kx_i**2 + ky_i**2 + kz_i**2)
 
-	#tuu.show_histogram_3d(H, threshold=0.05)
+		adc_count = np.arange(r.shape[0])
 
-	plt.plot(r / r.max(), rho / rho.max())
-	plt.xlabel("Normalized radius |k| / kmax")
-	plt.ylabel("Relative density ρ(r)")
-	plt.title("Radial Sampling Density")
-	plt.grid(True)
-	plt.show()
+		plt.figure()
+		plt.plot(r, adc_count)
+		plt.title("k-space radius over time")
+		plt.show()
+
+		H, DCF, centers, mask, cov = tuu.compute_dcf_from_histogram(
+										kx,
+										ky,
+										kz,
+										grid_size=256,
+										smooth_sigma=6.0
+									)
+		
+		psf_norm, sidelobe_ratio = tuu.compute_psf_and_sidelobe_energy(DCF, mask)
+
+		print(f"Density histogram CoV: {cov:.4f}")
+		print(f"Sidelobe energy ratio: {sidelobe_ratio:.4e}")
+		print(f"Nonzero mask voxels: {np.sum(mask)} / {mask.size}")
+
+		rho, r, counts = tuu.radial_density_profile(
+										kx,
+										ky,
+										kz,
+										nbins=50,
+										normalize=True,
+										return_bins=True
+									)
+
+		#tuu.show_histogram_3d(H, threshold=0.05)
+
+		plt.plot(r / r.max(), rho / rho.max())
+		#plt.plot(counts.astype(np.float32) / counts.max(), 'r--')
+		plt.xlabel("Normalized radius |k| / kmax")
+		plt.ylabel("Relative density ρ(r)")
+		plt.title("Radial Sampling Density")
+		plt.grid(True)
+		plt.show()
 
 
 

@@ -200,8 +200,8 @@ if __name__ == "__main__":
 	#T, DT = calc_T_DT(0.001, 80, 200, 42.58e6)
 	system = pp.Opts(max_grad=80, grad_unit='mT/m', max_slew=200, slew_unit='T/m/s', B0=3.0, grad_raster_time=10e-6)
 
-	ltik = LTIGradientKernels(system).init_from_test()
+	ltik = LTIGradientKernels(system, LTIGradientKernels.kernels_from_test(system.grad_raster_time))
 
 	vef = VelocityEncodingFactory(ltik, SafetyLimits(), print_calc=True)
 
-	back = vef.get_gradients([1.5, None, 0.2])
+	back = vef.get_gradients([0.7, None, 0.2])

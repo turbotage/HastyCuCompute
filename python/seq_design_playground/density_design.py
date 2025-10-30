@@ -1,5 +1,14 @@
+import os
+import sys
 import numpy as np
+import matplotlib.pyplot as plt
+import math
 from scipy import ndimage, fft
+
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+import traj_utils as tu
 
 # ------------------------------------------------------------
 # 1. Histogram-based density estimator
@@ -105,9 +114,9 @@ def radial_density_profile(kx, ky, kz, nbins=200, normalize=True, return_bins=Fa
         rho /= integral
 
     if return_bins:
-        return rho, rcenters
+        return rho, rcenters, counts
     else:
-        return rho
+        return rho, counts
 
 
 def show_histogram_3d(H, threshold=0.05):
@@ -131,6 +140,66 @@ def show_histogram_3d(H, threshold=0.05):
     ))
     fig.update_layout(scene=dict(aspectmode='cube'), title="3D Density Histogram (Isosurface)")
     fig.show()
+
+def do_density_calcs(kspace_runner):
+	traj, gi, si, max_grad, max_slew = kspace_runner()
+	
+	r = np.sqrt(np.sum(np.square(traj), axis=1))
+	max_r_idx = np.argmax(r.max(axis=0))
+
+	tu.show_trajectory(0.7 *traj[-50:-1,...].transpose(0,2,1) / traj.max(), 0, 8)
+
+	start_idx = 10
+	kx = traj[:,0,start_idx:max_r_idx+1].flatten()
+	ky = traj[:,1,start_idx:max_r_idx+1].flatten()
+	kz = traj[:,2,start_idx:max_r_idx+1].flatten()
+
+
+	kx_i = traj[0,0,0:max_r_idx+1]
+	ky_i = traj[0,1,0:max_r_idx+1]
+	kz_i = traj[0,2,0:max_r_idx+1]
+
+	r = np.sqrt(kx_i**2 + ky_i**2 + kz_i**2)
+
+	adc_count = np.arange(r.shape[0])
+
+	plt.figure()
+	plt.plot(r, adc_count)
+	plt.title("k-space radius over time")
+	plt.show()
+
+	H, DCF, centers, mask, cov = compute_dcf_from_histogram(
+									kx,
+									ky,
+									kz,
+									grid_size=256,
+									smooth_sigma=6.0
+								)
+	
+	psf_norm, sidelobe_ratio = compute_psf_and_sidelobe_energy(DCF, mask)
+
+	print(f"Density histogram CoV: {cov:.4f}")
+	print(f"Sidelobe energy ratio: {sidelobe_ratio:.4e}")
+	print(f"Nonzero mask voxels: {np.sum(mask)} / {mask.size}")
+
+	rho, r, counts = radial_density_profile(
+									kx,
+									ky,
+									kz,
+									nbins=50,
+									normalize=True,
+									return_bins=True
+								)
+
+	#tuu.show_histogram_3d(H, threshold=0.05)
+
+	plt.plot(r / r.max(), rho / rho.max())
+	#plt.plot(counts.astype(np.float32) / counts.max(), 'r--')
+	plt.xlabel("Normalized radius |k| / kmax")
+	plt.ylabel("Relative density ρ(r)")
+	plt.title("Radial Sampling Density")
+	plt.grid(True)
+	plt.show()
 
 # ------------------------------------------------------------
 # 4. Example usage
