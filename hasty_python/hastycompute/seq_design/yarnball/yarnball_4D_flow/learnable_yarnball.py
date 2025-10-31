@@ -7,26 +7,25 @@ import pulserver as pps
 import pypulseq as pp
 from pypulseq.convert import convert
 from pypulseq import add_ramps as pp_ramp
-
-from sequtil import SafetyLimits, ImageProperties
-from vel_design import VelocityEncodingFactory
-
 from collections import OrderedDict
 
-import gradient_design as gd
-import short_grad_design as sgd
-
-import yarnball_design as ybd
-import pns_design as pnsd
-import radius_design as rd
 
 import os
 import sys
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-import torch_utils
+
+import hasty_python.seq_design.gradient_design as gd
+import hasty_python.seq_design.short_grad_design as sgd
+import hasty_python.seq_design.pns_design as pnsd
+import hasty_python.seq_design.radius_design as rd
+import hasty_python.seq_design.yarnball.yarnball_design as ybd
+import hasty_python.seq_design.velocity_design as ved
+
+from hasty_python.seq_design.sequtil import SafetyLimits, ImageProperties
+import hasty_python.utils.torch_utils as torch_utils
 
 
-import velocity_design as ved
+
+
 
 device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
 
@@ -52,13 +51,13 @@ def iteration_plot(grad, grad_up, slew, slew_up, pns_waveform, DM0L, DM1L, DM2L)
 	)
 	
 	print(
-		f"MaxGrad: {waveform.abs().max().item():.4f} mT/m, MaxSlew: {slew.abs().max().item():.4f} T/m/s"
+		f"MaxGrad: {grad.abs().max().item():.4f} mT/m, MaxSlew: {slew.abs().max().item():.4f} T/m/s"
 		)
 	print(
 		f"MaxPns: {100*pns_waveform.abs().max().item():.3f} %"
 	)
 
-	max_grad_spoke_idx = torch.argmax(waveform.abs().max(-1).values.max(-1).values)
+	max_grad_spoke_idx = torch.argmax(grad.abs().max(-1).values.max(-1).values)
 	max_slew_spoke_idx = torch.argmax(slew.abs().max(-1).values.max(-1).values)
 	max_pns_spoke_idx = torch.argmax(pns_waveform.abs().max(-1).values.max(-1).values)
 
@@ -66,16 +65,16 @@ def iteration_plot(grad, grad_up, slew, slew_up, pns_waveform, DM0L, DM1L, DM2L)
 	import matplotlib.pyplot as plt
 	plt.figure()
 	plt.subplot(2,1,1)
-	plt.plot(waveform_up[max_grad_spoke_idx,0,:].detach().cpu().numpy(), label='X')
-	plt.plot(waveform_up[max_grad_spoke_idx,1,:].detach().cpu().numpy(), label='Y')
-	plt.plot(waveform_up[max_grad_spoke_idx,2,:].detach().cpu().numpy(), label='Z')
+	plt.plot(grad_up[max_grad_spoke_idx,0,:].detach().cpu().numpy(), label='X')
+	plt.plot(grad_up[max_grad_spoke_idx,1,:].detach().cpu().numpy(), label='Y')
+	plt.plot(grad_up[max_grad_spoke_idx,2,:].detach().cpu().numpy(), label='Z')
 	plt.ylabel('Gradient (mT/m)')
 	plt.title('Gradient waveforms: Max Grad spoke')
 	plt.legend()
 	plt.subplot(2,1,2)
-	plt.plot(waveform_up[max_slew_spoke_idx,0,:].detach().cpu().numpy(), label='X')
-	plt.plot(waveform_up[max_slew_spoke_idx,1,:].detach().cpu().numpy(), label='Y')
-	plt.plot(waveform_up[max_slew_spoke_idx,2,:].detach().cpu().numpy(), label='Z')
+	plt.plot(grad_up[max_slew_spoke_idx,0,:].detach().cpu().numpy(), label='X')
+	plt.plot(grad_up[max_slew_spoke_idx,1,:].detach().cpu().numpy(), label='Y')
+	plt.plot(grad_up[max_slew_spoke_idx,2,:].detach().cpu().numpy(), label='Z')
 	plt.ylabel('Gradient (mT/m)')
 	plt.title('Gradient waveforms: Max Slew spoke')
 	plt.legend()
@@ -96,7 +95,7 @@ def iteration_plot(grad, grad_up, slew, slew_up, pns_waveform, DM0L, DM1L, DM2L)
 	plt.legend()
 	plt.show()
 
-with device:
+def run_learning():
 	system = pps.Opts(
 		max_grad=80, grad_unit='mT/m', 
 		max_slew=200, slew_unit='T/m/s',
@@ -125,6 +124,7 @@ with device:
 	imgprop = ImageProperties([320,320,320], 
 				torch.tensor([220e-3, 220e-3, 220e-3]), torch.tensor([320,320,320]))
 
+
 	# YARNBALL
 	yb_settings = ybd.YarnballSettings(device=device)
 	yb_settings.nb_revs = 7
@@ -139,8 +139,10 @@ with device:
 	).forward()
 	yarnball_gds = gd.GradientStaticSegment(yarnball_grad)
 
+	print(f"Yarnball max grad: {yarnball_grad.abs().max().item():.2f} mT/m")
+
 	# VELOCITY ENCODING
-	smooth_kernel = torch.flip(torch.linspace(0,1,20, dtype=torch.float64, device=device), dims=[0])
+	smooth_kernel = torch.flip(torch.linspace(0,1,21, dtype=torch.float64, device=device), dims=[0])
 	smooth_kernel = torch.exp(-torch.square(smooth_kernel)/0.05)
 	smooth_kernel /= torch.sum(smooth_kernel)
 
@@ -148,12 +150,14 @@ with device:
 	vels = torch.tensor([-0.8, 0.8, 0.8], dtype=torch.float64, device=device)
 	vel_grads, vel_props = vef.get_gradients(vels, ['x', 'y', 'z'])
 	ve_grad = torch.stack(vel_grads, axis=0).unsqueeze(0)
-	velocity_encoding_gds = gd.GradientFreeSegment(ve_grad)
+	
+	velocity_encoding_gds = gd.GradientFreeInterpolatedSegment(ve_grad[...,::14], ve_grad.shape[-1], interptype="cubic")
+	#velocity_encoding_gds = gd.GradientFreeSegment(ve_grad)
 
 	# SPOILER
-	spoiler_ngrt = 200
+	spoiler_ngrt = 301
 	spoiler_grad = yarnball_grad[:,:,-1].unsqueeze(-1) * (spoiler_ngrt - torch.arange(spoiler_ngrt)).view(1,1,-1) / spoiler_ngrt
-	spoiler_gds = gd.GradientFreeSegment(spoiler_grad)
+	spoiler_gds = gd.GradientFreeInterpolatedSegment(spoiler_grad[...,::10], 600)
 
 	gradient_segments = OrderedDict([
 		('velocity_encoding', velocity_encoding_gds),
@@ -175,6 +179,9 @@ with device:
 	zeroth_moment_vector = torch.tensor([M0_spoil, M0_spoil, M0_spoil], dtype=torch.float64, device=device).unsqueeze(0)
 
 	optimizer = torch.optim.AdamW(grad.parameters(), lr=1e-2)
+	#learning_rate_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20000, gamma=0.5)
+	#optimizer = torch.optim.LBFGS(grad.parameters(), lr=1.0, max_iter=20, history_size=10)
+
 	for iter in range(100000):
 
 		waveform = grad.forward()
@@ -196,6 +203,9 @@ with device:
 		if iter % 10000 == 0:
 			iteration_plot(waveform, waveform_up, slew, slew_up, pns_waveform, DM0_list, DM1_list, DM2_list)
 
+
+		vel_enc_M1_relerr = torch.abs((DM1_list[0] - first_moment_vector) / first_moment_vector)
+
 		# For M0 we wan't zero M0 after velocity encoding and 4pi dephasing after spoiler
 		m01 = 1e6
 		m02 = 1e-3
@@ -206,21 +216,28 @@ with device:
 		m11 = 1e9
 		m12 = 1e6
 		velenc_M1_loss  = torch.sum(torch.pow(torch.square(m11*(DM1_list[0] - first_moment_vector)), 2))
-		spoiler_M1_loss = torch.sum(torch.square(m12*DM1_list[1]))
+		#spoiler_M1_loss = torch.sum(torch.square(m12*DM1_list[1]))
 
 		slew_loss = 1e-4*torch.sum(torch.pow(slew/180, 12))
 
 		pns_loss = 1e-4*torch.sum(torch.pow(pns_waveform, 8))
 
-		loss = velenc_M0_loss + velenc_M1_loss + spoiler_M0_loss + spoiler_M1_loss + slew_loss + pns_loss
+		loss = velenc_M0_loss + velenc_M1_loss + spoiler_M0_loss + slew_loss + pns_loss # + spoiler_M1_loss 
 
-		print(	f"Loss: {loss.item():.8f}, " + 
-				f"VelEnc M0_loss: {velenc_M0_loss.item():.8f}, " + 
-				f"VelEnc M1_loss: {velenc_M1_loss.item():.8f}, " + 
-				f"Spoiler M0_loss: {spoiler_M0_loss.item():.8f}, " +
-				f"Spoiler M1_loss: {spoiler_M1_loss.item():.8f}, " +
-				f"Slew_loss: {slew_loss.item():.8f}, " + 
-				f"PNS_loss: {pns_loss.item():.8f}")
+		# f"Spoiler M1_loss: {spoiler_M1_loss.item():.8f}, " +
+		if iter % 50 == 0:
+			print(f"Iter {iter}: ")
+			print(	f"	Loss: {loss.item():.8f}, " + 
+					f"VelEnc M0_loss: {velenc_M0_loss.item():.8f}, " + 
+					f"VelEnc M1_loss: {velenc_M1_loss.item():.8f}, " + 
+					f"Spoiler M0_loss: {spoiler_M0_loss.item():.8f}, " +
+					f"Slew_loss: {slew_loss.item():.8f}, " + 
+					f"PNS_loss: {pns_loss.item():.8f}")
+			print(	f"	Max Grad: {waveform.abs().max().item():.4f} mT/m, " +
+		 			f"Max Slew: {slew.abs().max().item():.4f} T/m/s, " + 
+					f"Max PNS: {100*pns_waveform.abs().max().item():.3f} %")
+			print(	f"	VelEnc M1 rel err: " +
+					f"{torch_utils.formated_list_print(vel_enc_M1_relerr[0,...].detach().cpu())} ")
 
 		optimizer.zero_grad()
 		loss.backward()
@@ -230,6 +247,12 @@ with device:
 			clamp_max_grad = sl.grad_ratio*convert(system.max_grad, from_unit='Hz/m', to_unit='mT/m')
 			for name, p in grad.named_parameters():
 				if ("velocity_encoding" in name) and ("free_gradwave" in name):
-					p.clamp_(max=clamp_max_grad)
+					p.clamp_(min=-clamp_max_grad, max=clamp_max_grad)
 				if ("spoiler" in name) and ("free_gradwave" in name):
-					p.clamp_(max=clamp_max_grad)
+					p.clamp_(min=-clamp_max_grad, max=clamp_max_grad)
+
+
+
+if __name__ == "__main__":
+	with device:
+		run_learning()

@@ -25,11 +25,16 @@ def randomized_svd_torch(m, n, k, matvec=None, rmatvec=None, A_tensor=None,
     if matvec is None or rmatvec is None:
         raise ValueError("Provide either A_tensor or both matvec and rmatvec.")
 
-    torch.manual_seed(random_seed if random_seed is not None else 0)
-
     l = k + p
+
+    gen = torch.Generator(device=device)
+    if random_seed is not None:
+        gen.manual_seed(random_seed)
+    else:
+        gen.manual_seed(torch.seed())
+
     # 1) Draw random Gaussian test matrix Omega (n x l)
-    Omega = torch.randn(n, l, device=device, dtype=dtype)
+    Omega = torch.randn(n, l, device=device, dtype=dtype, generator=gen)
 
     # 2) Form Y = A @ Omega (m x l)
     Y = matvec(Omega)
@@ -37,7 +42,10 @@ def randomized_svd_torch(m, n, k, matvec=None, rmatvec=None, A_tensor=None,
     # 3) Power iterations (optional)
     for _ in range(n_iter):
         Z = rmatvec(Y)   # n x l
+        Z, _ = torch.linalg.qr(Z, mode='reduced')
         Y = matvec(Z)    # m x l
+        Q, _ = torch.linalg.qr(Y, mode='reduced')
+        Y = Q
 
     # 4) Orthonormalize Y -> Q (m x l)
     Q, _ = torch.linalg.qr(Y, mode='reduced')
@@ -59,26 +67,26 @@ def randomized_svd_torch(m, n, k, matvec=None, rmatvec=None, A_tensor=None,
 
     return U_k, S_k, Vt_k
 
+if __name__ == "__main__":
+    m = 20000
+    n = 20000
+    k = 8
 
-m = 20000
-n = 20000
-k = 8
-
-A = torch.zeros((m, n), dtype=torch.complex64)
-for i in range(10):
-    a = torch.randn(n // 40, dtype=torch.complex64)
-    ar = F.interpolate(a.real.unsqueeze(0).unsqueeze(0), size=n, mode='linear', align_corners=True).squeeze()
-    ai = F.interpolate(a.imag.unsqueeze(0).unsqueeze(0), size=n, mode='linear', align_corners=True).squeeze()
-    a = ar + 1j * ai
-    u = torch.randn(m, dtype=torch.complex64)
-    t = torch.linspace(0, 1, steps=m, dtype=torch.complex64)
-    for j in range(100):
-        u += (1/(1.2**j))*torch.exp(torch.rand(1, dtype=torch.complex64) * t)
-    A += (1 / (1.5**i))*u.unsqueeze(1) * a.unsqueeze(0)
+    A = torch.zeros((m, n), dtype=torch.complex64)
+    for i in range(10):
+        a = torch.randn(n // 40, dtype=torch.complex64)
+        ar = F.interpolate(a.real.unsqueeze(0).unsqueeze(0), size=n, mode='linear', align_corners=True).squeeze()
+        ai = F.interpolate(a.imag.unsqueeze(0).unsqueeze(0), size=n, mode='linear', align_corners=True).squeeze()
+        a = ar + 1j * ai
+        u = torch.randn(m, dtype=torch.complex64)
+        t = torch.linspace(0, 1, steps=m, dtype=torch.complex64)
+        for j in range(100):
+            u += (1/(1.2**j))*torch.exp(torch.rand(1, dtype=torch.complex64) * t)
+        A += (1 / (1.5**i))*u.unsqueeze(1) * a.unsqueeze(0)
 
 
-U, S, Vh = randomized_svd_torch(m, n, k, A_tensor=A, p = 15, n_iter = 3, device='cpu', dtype=torch.complex64)
+    U, S, Vh = randomized_svd_torch(m, n, k, A_tensor=A, p = 15, n_iter = 2, device='cpu', dtype=torch.complex64)
 
-A_reconstructed = (U * S.unsqueeze(0)) @ Vh
+    A_reconstructed = (U * S.unsqueeze(0)) @ Vh
 
-print('Hello: ', torch.linalg.norm(A - A_reconstructed) / torch.linalg.norm(A))
+    print('Hello: ', torch.linalg.norm(A - A_reconstructed) / torch.linalg.norm(A))

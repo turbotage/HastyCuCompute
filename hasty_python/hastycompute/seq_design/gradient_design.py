@@ -5,6 +5,7 @@ import math
 
 import pypulseq as pp
 from sequtil import convert
+import torch_utils
 
 from collections import OrderedDict
 
@@ -93,16 +94,25 @@ class GradientStaticSegment(GradientSegment):
 	def forward(self):
 		return self.static_gradwave
 	
-class GradientFreeSegment(GradientSegment):
-	def __init__(self, initial_gradwave):
+class GradientFreeInterpolatedSegment(GradientSegment):
+	def __init__(self, undersampled_gradwave, NGRT, interptype="cubic"):
 		super().__init__()
-		self.free_gradwave = nn.Parameter(initial_gradwave)
+		self.NGRT = NGRT
+		self.interptype = interptype
+		self.free_gradwave = nn.Parameter(undersampled_gradwave)
 	
 	def output_shape(self):
-		return self.free_gradwave.shape
+		out_shape = list(self.free_gradwave.shape)
+		out_shape[-1] = self.NGRT
+		return torch.Size(out_shape)
 
 	def forward(self):
-		return self.free_gradwave
+		if self.interptype == "cubic":
+			return torch_utils.catmull_rom_interp(self.free_gradwave, self.NGRT)
+		elif self.interptype == "linear":
+			return F.interpolate(self.free_gradwave, size=self.NGRT, mode="linear")
+		else:
+			raise ValueError("Unknown interpolation type.")
 
 class Gradient(nn.Module):
 	def __init__(self, 

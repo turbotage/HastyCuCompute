@@ -148,6 +148,9 @@ if __name__ == "__main__":
 	slewform = gd.Gradient.calculate_slew_rate(waveform, system.grad_raster_time)
 	kspaceform = gd.Gradient.calculate_kspace_traj(waveform, system.grad_raster_time, system.gamma)
 
+	print(f"Max gradient: {waveform.abs().max().item():.2f} mT/m")
+	print(f"Max slew rate: {slewform.abs().max().item():.2f} T/m/s")
+
 	import matplotlib.pyplot as plt
 	plt.figure()
 	plt.subplot(3,1,1)

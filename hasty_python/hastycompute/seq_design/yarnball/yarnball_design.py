@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
-import rotation as rot
 
-import gradient_design as gd
+import seq_design.gradient_design as gd
+import utils.rotation as rot
 
 from scipy.stats.sampling import TransformedDensityRejection
 spdf = rot.SurfacePDF()
@@ -89,13 +89,11 @@ class YarnballTimeDynamicSegment(gd.GradientTimeDynamicSegment):
         
 
 if __name__ == "__main__":
-    settings = YarnballSettings()
-    grad = initialize_yarnball_gradient(settings)
 
     if True:
-        import os
-        import sys
-        sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-        import traj_utils as tu
+        settings = YarnballSettings()
+        grad = initialize_yarnball_gradient(settings)
 
-        tu.show_trajectory(grad.detach().transpose(1,2).numpy(), 0, figure_size = 8)
+        import hasty_python.plot.traj_plots as tp
+
+        tp.show_trajectory(grad.detach().transpose(1,2).numpy(), 0, figure_size = 8)
