@@ -24,7 +24,7 @@ class GradientKernels:
 
 		n_grad_raster_times = 6
 		t = torch.linspace(0, n_grad_raster_times*grad_raster_time, 
-						   n_grad_raster_times*kernel_oversampling, device=device)
+						   n_grad_raster_times*kernel_oversampling, dtype=torch.float64, device=device)
 		kernel = (Dk*t)**(k1) * torch.exp(-k2*Dk*t)
 		kernel /= torch.sum(kernel)
 
@@ -105,7 +105,11 @@ class GradientFreeSegment(GradientSegment):
 		return self.free_gradwave
 
 class Gradient(nn.Module):
-	def __init__(self, gk: GradientKernels, device: torch.device, gradient_segments: OrderedDict[str, GradientSegment]):
+	def __init__(self, 
+			  gk: GradientKernels, 
+			  gradient_segments: OrderedDict[str, GradientSegment], 
+			  device: torch.device=torch.device('cpu')
+			  ):
 		super().__init__()
 		self.gk = gk
 		self.device = device

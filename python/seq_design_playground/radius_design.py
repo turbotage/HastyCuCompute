@@ -80,14 +80,16 @@ def non_returning_rho3():
 
 	return lambda t: torch.tensor(pchip(t.detach().numpy()))
 
-def learnable_rho(a, b):
+def learnable_rho(a, b, c):
 	if isinstance(a, torch.Tensor) == False:
 		a = torch.tensor(a, dtype=torch.float64)
 	if isinstance(b, torch.Tensor) == False:
 		b = torch.tensor(b, dtype=torch.float64)
+	if isinstance(c, torch.Tensor) == False:
+		c = torch.tensor(c, dtype=torch.float64)
 
 	def rho(t):
-		return torch.exp(-1/(a*t))*(1 - torch.exp(-b*t)) / (torch.exp(-1/a)*(1 - torch.exp(-b)))
+		return torch.exp(-1/(a*t))*torch.pow((1 - torch.exp(-b*t)) / (torch.exp(-1/a)*(1 - torch.exp(-b))), c)
 
 	return lambda t: rho(t)
 

@@ -61,7 +61,8 @@ class VelocityEncodingFactory:
 		self.smooth_kernel = smooth_kernel
 
 	def get_gradients(self, velocity_vector, channels=['x', 'y', 'z']):
-		
+		device = velocity_vector.device
+
 		GRT = self.system.grad_raster_time
 
 		max_grad = self.system.max_grad * self.sl.grad_ratio
@@ -86,7 +87,7 @@ class VelocityEncodingFactory:
 		t = torch.arange(0, NGRT)*GRT
 
 		if self.smooth_kernel is None:
-			self.smooth_kernel = torch.flip(torch.linspace(0,1,NGRT//8), dims=[0])
+			self.smooth_kernel = torch.flip(torch.linspace(0,1,NGRT//8, dtype=torch.float64, device=device), dims=[0])
 			self.smooth_kernel = torch.exp(-torch.square(self.smooth_kernel)/0.05)
 			self.smooth_kernel /= torch.sum(self.smooth_kernel)
 		smooth_kernel_length = self.smooth_kernel.shape[0]
@@ -98,7 +99,7 @@ class VelocityEncodingFactory:
 			
 			if velocity_vector[i] is None or velocity_vector[i] > 1e4:
 
-				grad_wave = torch.zeros((t.shape[0] + smooth_kernel_length - 1 + self.gk.max_kernel_length,))
+				grad_wave = torch.zeros((t.shape[0] + smooth_kernel_length - 1 + self.gk.max_kernel_length,), dtype=torch.float64, device=device)
 
 				# if self.print_calc:
 				# 	print('Velocity is None or too high, setting to zero')
@@ -119,29 +120,29 @@ class VelocityEncodingFactory:
 				Gmax = 1e3*convert(max_slew, from_unit='Hz/m/s', to_unit='T/m/s')*DT
 
 				if velocity_vector[i] > 0:
-					grad_blip = torch.tensor([0, -Gmax, -Gmax, 0, Gmax, Gmax, 0, 0])
+					grad_blip = torch.tensor([0, -Gmax, -Gmax, 0, Gmax, Gmax, 0, 0], dtype=torch.float64, device=device)
 				else:
-					grad_blip = torch.tensor([0, Gmax, Gmax, 0, -Gmax, -Gmax, 0, 0])
+					grad_blip = torch.tensor([0, Gmax, Gmax, 0, -Gmax, -Gmax, 0, 0], dtype=torch.float64, device=device)
 
 
 				grad_wave = torch_utils.interp(
 								t, 
 								torch.tensor([
 									0, DT, T+DT, T+2*DT, T+3*DT, 2*T+3*DT, 2*T+4*DT, 2*T+4*DT+GRT
-								]), 
+								], dtype=torch.float64, device=device), 
 								grad_blip
 							)
 
 				grad_wave = torch_utils.lagged_convolve(grad_wave, self.smooth_kernel)
 
-				grad_wave = torch.cat([grad_wave, torch.zeros((self.gk.max_kernel_length,))])
+				grad_wave = torch.cat([grad_wave, torch.zeros((self.gk.max_kernel_length,), dtype=torch.float64, device=device)])
 
 				grad_wave_up = gd.Gradient.calculate_actual_waveform(grad_wave.expand(1,3,-1), self.gk)[0,0,:]
 
 				DM0, DM1, DM2 = gd.Gradient.calculate_specific_moments(
 									grad_wave_up.expand(1,1,-1), 
 									self.system.grad_raster_time / self.gk.oversamp(), 
-									torch.tensor([grad_wave_up.shape[0]-1])
+									torch.tensor([grad_wave_up.shape[0]-1], dtype=torch.int64, device=device)
 								)
 				DM0, DM1, DM2 = DM0[0].squeeze(), DM1[0].squeeze(), DM2[0].squeeze()
 

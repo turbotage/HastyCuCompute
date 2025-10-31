@@ -11,12 +11,14 @@ class ShortGradDesign:
 				 gk: gd.GradientKernels, 
 				 gs: gd.GradientTimeDynamicSegment, 
 				 sl: SafetyLimits, 
-				 ip: ImageProperties
+				 ip: ImageProperties,
+				 device=torch.device('cpu')
 			):
 		self.gk = gk
 		self.sl = sl
 		self.ip = ip
 		self.max_ngrt = max_ngrt
+		self.device = device
 
 		resolution = self.ip.resolution
 		fov = self.ip.fov
@@ -27,7 +29,7 @@ class ShortGradDesign:
 
 		self.gs = gd.GradientScaledTimeDynamicSegment(
 			gs,
-			scale=torch.tensor([1.0, 1.0, 1.0], dtype=torch.float64),
+			scale=torch.tensor([1.0, 1.0, 1.0], dtype=torch.float64, device=device),
 			NGRT=max_ngrt
 		)
 
@@ -90,6 +92,8 @@ if __name__ == "__main__":
 	import pulserver as pps
 	import radius_design as rd
 
+	device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
+
 	system = pps.Opts(
 		max_grad=80, grad_unit='mT/m', 
 		max_slew=200, slew_unit='T/m/s',
@@ -107,28 +111,31 @@ if __name__ == "__main__":
 	gk = gd.GradientKernels(
 			system,
 			gd.GradientKernels.kernels_from_test(
-				system.grad_raster_time, kernel_oversampling=kernel_os
+				system.grad_raster_time, kernel_oversampling=kernel_os, device=device
 			),
 			kernel_oversampling=kernel_os
 		)
 
-	yb_settings = ybd.YarnballSettings()
+	yb_settings = ybd.YarnballSettings(device=device)
 	yb_settings.set_nshot(100)
 	yb_settings.nb_revs = 7
 	yb_settings.nb_folds = 4
-	yb_settings.rho_lambda = rd.learnable_rho(100, 5)
+	yb_settings.rho_lambda = rd.learnable_rho(100, 1.5, 0.5)
 
 	sl = SafetyLimits(0.95, 0.95)
 	imgprop = ImageProperties([320,320,320], 
-				torch.tensor([220e-3, 220e-3, 220e-3]), torch.tensor([320,320,320]))
+				torch.tensor([220e-3, 220e-3, 220e-3], device=device),
+				torch.tensor([320,320,320], device=device)
+			)
 
 	max_ngrt = 20000
 	sgd = ShortGradDesign(
 				max_ngrt,
 				gk,
-				ybd.YarballTimeDynamicSegment(yb_settings, max_ngrt),
+				ybd.YarnballTimeDynamicSegment(yb_settings, max_ngrt, device=device),
 				sl,
-				imgprop
+				imgprop,
+				device=device
 			)
 
 	sgd.optimize_NGRT()
@@ -144,25 +151,25 @@ if __name__ == "__main__":
 	import matplotlib.pyplot as plt
 	plt.figure()
 	plt.subplot(3,1,1)
-	plt.plot(waveform[0,0,:].detach().numpy(), label='Gx')
-	plt.plot(waveform[0,1,:].detach().numpy(), label='Gy')
-	plt.plot(waveform[0,2,:].detach().numpy(), label='Gz')
+	plt.plot(waveform[0,0,:].detach().cpu().numpy(), label='Gx')
+	plt.plot(waveform[0,1,:].detach().cpu().numpy(), label='Gy')
+	plt.plot(waveform[0,2,:].detach().cpu().numpy(), label='Gz')
 	plt.title("Gradient Waveform")
 	#plt.xlabel("Timepoints")
 	plt.ylabel("Gradient (mT/m)")
 	plt.legend()
 	plt.subplot(3,1,2)
-	plt.plot(slewform[0,0,:].detach().numpy(), label='Gx')
-	plt.plot(slewform[0,1,:].detach().numpy(), label='Gy')
-	plt.plot(slewform[0,2,:].detach().numpy(), label='Gz')
+	plt.plot(slewform[0,0,:].detach().cpu().numpy(), label='Gx')
+	plt.plot(slewform[0,1,:].detach().cpu().numpy(), label='Gy')
+	plt.plot(slewform[0,2,:].detach().cpu().numpy(), label='Gz')
 	plt.title("Slew Rate Waveform")
 	#plt.xlabel("Timepoints")
 	plt.ylabel("Slew Rate (T/m/s)")
 	plt.legend()
 	plt.subplot(3,1,3)
-	plt.plot(kspaceform[0,0,:].detach().numpy(), label='Kx')
-	plt.plot(kspaceform[0,1,:].detach().numpy(), label='Ky')
-	plt.plot(kspaceform[0,2,:].detach().numpy(), label='Kz')
+	plt.plot(kspaceform[0,0,:].detach().cpu().numpy(), label='Kx')
+	plt.plot(kspaceform[0,1,:].detach().cpu().numpy(), label='Ky')
+	plt.plot(kspaceform[0,2,:].detach().cpu().numpy(), label='Kz')
 	plt.title("K-space Trajectory")
 	#plt.xlabel("Timepoints")
 	plt.ylabel("K-space (1/m)")
