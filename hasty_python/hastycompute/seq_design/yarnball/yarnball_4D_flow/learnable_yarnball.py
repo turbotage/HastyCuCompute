@@ -13,15 +13,15 @@ from collections import OrderedDict
 import os
 import sys
 
-import hasty_python.seq_design.gradient_design as gd
-import hasty_python.seq_design.short_grad_design as sgd
-import hasty_python.seq_design.pns_design as pnsd
-import hasty_python.seq_design.radius_design as rd
-import hasty_python.seq_design.yarnball.yarnball_design as ybd
-import hasty_python.seq_design.velocity_design as ved
+import hastycompute.seq_design.gradient_design as gd
+import hastycompute.seq_design.short_grad_design as sgd
+import hastycompute.seq_design.pns_design as pnsd
+import hastycompute.seq_design.radius_design as rd
+import hastycompute.seq_design.yarnball.yarnball_design as ybd
+import hastycompute.seq_design.velocity_design as ved
 
-from hasty_python.seq_design.sequtil import SafetyLimits, ImageProperties
-import hasty_python.utils.torch_utils as torch_utils
+from hastycompute.seq_design.sequtil import SafetyLimits, ImageProperties
+import hastycompute.utils.torch_utils as torch_utils
 
 
 

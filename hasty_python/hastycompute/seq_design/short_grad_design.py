@@ -1,9 +1,9 @@
+import copy
 import torch
 import math
-import gradient_design as gd
-from sequtil import SafetyLimits, ImageProperties
-import copy
-from sequtil import convert
+
+import hastycompute.seq_design.gradient_design as gd
+from hastycompute.seq_design.sequtil import SafetyLimits, ImageProperties, convert
 
 class ShortGradDesign:
 	def __init__(self, 
@@ -88,9 +88,10 @@ class ShortGradDesign:
 
 
 if __name__ == "__main__":
-	import yarnball_design as ybd
+	import hastycompute.seq_design.yarnball.yarnball_design as ybd
+	import hastycompute.seq_design.radius_design as rd
+	
 	import pulserver as pps
-	import radius_design as rd
 
 	device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
 

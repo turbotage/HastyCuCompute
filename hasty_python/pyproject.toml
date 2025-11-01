@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hastycompute"
+version = "0.1.0"
+description = "Hasty computation utilities"
+readme = "README.md"
+authors = [{ name = "Your Name" }]
+dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["."]

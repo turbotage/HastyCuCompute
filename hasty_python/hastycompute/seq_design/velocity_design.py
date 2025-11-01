@@ -2,14 +2,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-import gradient_design as gd
+import hastycompute.seq_design.gradient_design as gd
+import hastycompute.utils.torch_utils as torch_utils
 
-from sequtil import SafetyLimits, LTIGradientKernels, ImageProperties, convert
+from hastycompute.seq_design.sequtil import SafetyLimits, LTIGradientKernels, ImageProperties, convert
 
-import os
-import sys
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-import torch_utils
 
 def first_moment(T, DT, slew_rate):
 	return DT*slew_rate*(2*torch.square(DT) + 3*T*DT + torch.square(T))

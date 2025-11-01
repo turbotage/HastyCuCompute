@@ -2,12 +2,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-
-import pypulseq as pp
-from sequtil import convert
-import torch_utils
-
 from collections import OrderedDict
+
+from hastycompute.seq_design.sequtil import convert
+import hastycompute.utils.torch_utils as torch_utils
+
 
 class GradientKernels:
 	def __init__(self, system, kernels, kernel_oversampling=20):
@@ -274,6 +273,7 @@ class Gradient(nn.Module):
 		return DM0_list, DM1_list, DM2_list
 
 if __name__ == "__main__":
+	import pypulseq as pp
 	system = pp.Opts(
 		max_grad=80, grad_unit='mT/m', 
 		max_slew=200, slew_unit='T/m/s',

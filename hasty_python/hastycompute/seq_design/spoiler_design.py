@@ -5,21 +5,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 import math
 
-import pypulseq as pp
-from pypulseq.convert import convert
-
 import scipy as sp
 from scipy.interpolate import CubicSpline, PchipInterpolator, interp1d
 import scipy.special as sps
 
-from sequtil import SafetyLimits, LTIGradientKernels
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-import traj_utils as tu
+from hastycompute.seq_design.sequtil import SafetyLimits, LTIGradientKernels
 
 class SpoilerFactory:
-    def __init__(self, area: float, system: pp.Opts, sl: SafetyLimits):
+    def __init__(self, area: float, system, sl: SafetyLimits):
         self.area = area
         self.system = system
         self.sl = sl
@@ -61,6 +54,9 @@ class SpoilerFactory:
 
 
 if __name__ == "__main__":
+    import pypulseq as pp
+    import hastycompute.plot.traj_plots as tpu
+
     system = pp.Opts(
         max_grad=40, grad_unit='mT/m',
         max_slew=150, slew_unit='T/m/s',

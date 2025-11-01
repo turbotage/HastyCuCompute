@@ -1,6 +1,7 @@
 import torch
 import math
-import orthoslicer
+import hastycompute.plot.orthoslicer as orthoslicer
+import h5py
 
 def real_spherical_harmonics(lmin, lmax, theta, phi):
     """
@@ -74,12 +75,31 @@ mask = r < (shape[0]//2)
 theta = torch.acos(z/(r + 1e-8))
 phi = torch.atan2(y, x)
 
-Y = real_spherical_harmonics(0, 3, theta, phi)
+Y = real_spherical_harmonics(0, 2, theta, phi)
 
 ylist = []
 for y in Y.values():
     ylist.append(y.view(shape))
 y = torch.stack(ylist, dim=0)
+
+off_resonance_map = 1.0/(0.200*torch.exp(-8*torch.square(r/r.max()))) + 1j*torch.exp(-12*torch.square(r/r.max()))
+
+#with h5py.File('/home/turbotage/Documents/4DRecon/other_data/framed_true.h5', 'r') as f:
+#    img = f['image'][:]
+
+nspokes = 8000
+nsamp_per_spoke = 2563
+nframes = 20
+
+off_resonance_map = None
+torch.empty((nspokes // nframes, nsamp_per_spoke), dtype=torch.complex64, device='cuda')
+for spoke in range(nspokes // nframes):
+    t = 0
+    for samp in range(nsamp_per_spoke):
+    
+        
+
+    
 
 orthoslicer.image_nd(y.cpu().numpy())
 

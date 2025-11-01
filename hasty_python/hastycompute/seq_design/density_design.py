@@ -8,7 +8,7 @@ from scipy import ndimage, fft
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-import traj_utils as tu
+import hastycompute.plot.traj_plots as tpu
 
 # ------------------------------------------------------------
 # 1. Histogram-based density estimator
@@ -147,7 +147,7 @@ def do_density_calcs(kspace_runner):
 	r = np.sqrt(np.sum(np.square(traj), axis=1))
 	max_r_idx = np.argmax(r.max(axis=0))
 
-	tu.show_trajectory(0.7 *traj[-50:-1,...].transpose(0,2,1) / traj.max(), 0, 8)
+	tpu.show_trajectory(0.7 *traj[-50:-1,...].transpose(0,2,1) / traj.max(), 0, 8)
 
 	start_idx = 10
 	kx = traj[:,0,start_idx:max_r_idx+1].flatten()

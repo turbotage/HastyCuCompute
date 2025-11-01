@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 
-import seq_design.gradient_design as gd
-import utils.rotation as rot
+import hastycompute.seq_design.gradient_design as gd
+import hastycompute.utils.rotation as rot
 
 from scipy.stats.sampling import TransformedDensityRejection
 spdf = rot.SurfacePDF()

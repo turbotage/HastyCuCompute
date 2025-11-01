@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as pltpatch
 from matplotlib.widgets import TextBox
 
-import plot_utility as pu
+import hastycompute.plot.plot_utility as pu
 
 class HastyOrthoSlicer:
 
