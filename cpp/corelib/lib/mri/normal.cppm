@@ -17,8 +17,10 @@ import fft;
 
 namespace hasty {
 	
-	template<is_device D, is_fp_complex_tensor_type TT, size_t DIM>
+	template<typename D, typename TT, size_t DIM>
 	concept is_normal_op_compatible = 
+		is_device<D> &&
+		is_fp_complex_tensor_type<TT> &&
 		std::is_same_v<TT, c64_t> 	&& 
 		(DIM >= 2) && (DIM <= 3) 	&&
 		std::is_same_v<D, cuda_t>;

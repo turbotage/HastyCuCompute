@@ -1,6 +1,6 @@
 module;
 
-#include "pch.hpp"
+#include <pch.hpp>
 
 #include <battery/embed.hpp>
 #include <cuda_runtime.h>
@@ -119,7 +119,7 @@ namespace hasty {
 		{
 			static std::array<hasty::nvrtc::NVRTC_ModFunc, (size_t)device_idx::MAX_CUDA_DEVICES> nvrtc_modules = {};
 
-			static const char* toeplitz_load_3D_code = b::embed<"lib/fft/kernels/toeplitz_load_3D.cu">().data();
+			static const char* toeplitz_load_3D_code = b::embed<"cpp/corelib/lib/fft/kernels/toeplitz_load_3D.cu">().data();
 
 			if (!nvrtc_modules[device_idx].module) {
 				nvrtc::compile_nvrtc_kernel(
@@ -184,7 +184,7 @@ namespace hasty {
 		{
 			static std::array<hasty::nvrtc::NVRTC_ModFunc, (size_t)device_idx::MAX_CUDA_DEVICES> nvrtc_modules = {};
 
-			static const char* toeplitz_load_2D_code = b::embed<"lib/fft/kernels/toeplitz_load_2D.cu">().data();
+			static const char* toeplitz_load_2D_code = b::embed<"cpp/corelib/lib/fft/kernels/toeplitz_load_2D.cu">().data();
 
 			if (!nvrtc_modules[device_idx].module) {
 				nvrtc::compile_nvrtc_kernel(
