@@ -40,8 +40,8 @@ target_sources(HastyCuCompute
 	PRIVATE
 		"cpp/corelib/lib/io/hdf5.cpp"
 		"cpp/corelib/lib/tensor/mod_tensor.cpp"
-		"cpp/corelib/lib/trace/trace.cpp"
-		"cpp/corelib/lib/trace/trace_cache.cpp"
+		"cpp/corelib/lib/script/trace.cpp"
+		"cpp/corelib/lib/script/trace_cache.cpp"
 		"cpp/corelib/lib/fft/fft.cpp"
 		"cpp/corelib/lib/fft/vkfft.cpp"
 )
@@ -78,8 +78,9 @@ target_sources(HastyCuCompute
 			"cpp/corelib/lib/tensor/mod_tensor_factory.cppm"
 			"cpp/corelib/lib/tensor/mod_tensor_intrinsic.cppm"
 			"cpp/corelib/lib/tensor/mod_tensor.cppm"
-			"cpp/corelib/lib/trace/trace.cppm"
-			"cpp/corelib/lib/trace/trace_cache.cppm"
+			"cpp/corelib/lib/script/tensor_proto.cppm"
+			"cpp/corelib/lib/script/trace_cache.cppm"
+			"cpp/corelib/lib/script/trace.cppm"
 			"cpp/corelib/lib/util/util_concepts.cppm"
 			"cpp/corelib/lib/util/util_containers.cppm"
 			"cpp/corelib/lib/util/util_funcs.cppm"

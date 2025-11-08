@@ -339,17 +339,6 @@ namespace hasty {
 		[]<is_device D2, is_tensor_type TT2, size_t RANK2>(tensor<D2,TT2,RANK2>&){}(t);
 	};
 
-	/*
-	export template<typename T>
-	concept is_tensor = requires(T t) {
-		typename T::device_type_t;
-		typename T::tensor_type_t;
-		{ T::size() } -> std::convertible_to<size_t>;
-		requires std::is_same_v<T,
-			tensor<typename T::device_type_t, typename T::tensor_type_t, T::size()>
-		>;
-	};
-	*/
 
 	export template<is_tensor_type TT>
 	class scalar {
@@ -375,11 +364,37 @@ namespace hasty {
 	export template<typename T>
 	concept is_tensor_or_vector_of_tensors = is_tensor<T> || is_vector_of_tensors<T>;
 
+	// We also create a concept for being a tensor container. This is a type that is
+	// mirrored by the tensor_prototype types
 
+	template<typename T, int Depth = 0>
+	struct is_tensor_container_impl {
+		static constexpr bool value = is_tensor<T>;
+	};
 
+	// Specialization for std::vector
+	template<typename T, int Depth>
+	requires (Depth < 10)
+	struct is_tensor_container_impl<std::vector<T>, Depth> {
+		static constexpr bool value = is_tensor_container_impl<T, Depth+1>::value;
+	};
 
+	// Specialization for std::map
+	template<typename K, typename V, int Depth>
+	requires (Depth < 10) && (std::same_as<K, std::string> || std::same_as<K, std::size_t>)
+	struct is_tensor_container_impl<std::map<K, V>, Depth> {
+		static constexpr bool value = is_tensor_container_impl<V, Depth+1>::value;
+	};
 
+	// Specialization for std::tuple
+	template<typename... Ts, int Depth>
+	requires (Depth < 10)
+	struct is_tensor_container_impl<std::tuple<Ts...>, Depth> {
+		static constexpr bool value = (is_tensor_container_impl<Ts, Depth+1>::value && ...);
+	};
 
+	export template<typename T>
+	concept is_tensor_container = is_tensor_container_impl<T>::value;
 
 	/*
 	// Explicit instantiations

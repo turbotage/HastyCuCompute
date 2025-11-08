@@ -14,7 +14,7 @@ namespace hasty {
 	namespace trace {
 		
 		export using CompilationUnit = htorch::jit::CompilationUnit;
-    	export using CompilationModule = htorch::jit::Module;
+    	export using Module = htorch::jit::Module;
 
 
 		// TENSOR PROTOTYPE
