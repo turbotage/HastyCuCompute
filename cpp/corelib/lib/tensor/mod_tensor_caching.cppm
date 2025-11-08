@@ -250,7 +250,6 @@ namespace hasty {
             }
         }
 
-
         template<class D>
         auto operator[](device_idx didx, const tensor<D, b8_t, RANK>& mask) const -> tensor<D, TT, 1>
         {

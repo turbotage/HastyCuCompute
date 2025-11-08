@@ -123,7 +123,6 @@ namespace pyffi {
 }
 
 
-
 PYBIND11_MODULE(MODULE_NAME, m) {
     
     m.doc() = "HastyCuCompute module";

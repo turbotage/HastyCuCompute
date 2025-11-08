@@ -8,6 +8,7 @@ namespace hasty {
 
     export class InterfaceObject {
     public:
+        
         template<typename T>
         T& get() const {
             if (_type_index != std::type_index(typeid(T))) {
