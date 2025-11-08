@@ -310,6 +310,15 @@ target_link_libraries(VKFFTTest PRIVATE CUDA::cuda_driver)
 
 ################ INSTALL ####################
 include(GNUInstallDirs)
+
+# Copy models folder to build directory (for Debug/Release builds)
+add_custom_command(TARGET HastyCuCompute POST_BUILD
+	COMMAND ${CMAKE_COMMAND} -E copy_directory
+		${CMAKE_SOURCE_DIR}/models
+		${CMAKE_BINARY_DIR}/models
+	COMMENT "Copying wavelet models to build directory"
+)
+
 install(TARGETS HastyCuCompute EXPORT HastyCuComputeTargets
 	RUNTIME_DEPENDENCIES
 		#PRE_EXCLUDE_REGEXES ".*libstdc\+\+.*" ".*libgcc.*" ".*libc.so.*" ".*libc\+\+.*"
@@ -330,6 +339,13 @@ install(EXPORT HastyCuComputeTargets
 )
 
 install(FILES "${NVRTC_PATH}" "${CUDART_PATH}" DESTINATION lib)
+
+# Install models folder at top level
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/models
+	DESTINATION .
+	FILES_MATCHING PATTERN "*.pt"
+	PATTERN "*.gitkeep" EXCLUDE
+)
 
 # Install the include files
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
