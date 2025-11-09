@@ -10,8 +10,7 @@ export import :trajectory;
 import op;
 import util;
 import tensor;
-import trace;
-import trace_cache;
+import script_cache;
 import threading;
 import fft;
 
@@ -493,28 +492,21 @@ namespace hasty {
 
 	protected:
 
-		using X_PROTO_T = trace::tensor_prototype<D,TT,DIM>;
-		using STACKED_DIAG_PROTO_T = trace::tensor_prototype<D,TT,DIM+1>;
-		using WEIGHTS_PROTO_T = trace::tensor_prototype<D,TT,2>;
+		using X_PROTO_T = script::tensor_prototype<D,TT,DIM>;
+		using STACKED_DIAG_PROTO_T = script::tensor_prototype<D,TT,DIM+1>;
+		using WEIGHTS_PROTO_T = script::tensor_prototype<D,TT,2>;
 
-		using TRACE_FUNC_T = trace::trace_function<
-			std::tuple<X_PROTO_T>, 
-			std::tuple<	STACKED_DIAG_PROTO_T,
-						STACKED_DIAG_PROTO_T,
-						WEIGHTS_PROTO_T>
-		>;
-
-		using RUNNABLE_TRACE_FUNC_T = trace::runnable_trace_function<
-			std::tuple<X_PROTO_T>, 
-			std::tuple<	STACKED_DIAG_PROTO_T,
-						STACKED_DIAG_PROTO_T,
-						WEIGHTS_PROTO_T>
+		using RUNNABLE_SCRIPT_T = script::runnable_script<
+			X_PROTO_T,
+			STACKED_DIAG_PROTO_T,
+			STACKED_DIAG_PROTO_T,
+			WEIGHTS_PROTO_T
 		>;
 
 		using THIS_TYPE_T = NORMAL_IDTW_T1_OP<D,TT,DIM>;
 
 
-		static auto build_runner(bool store_module) -> RUNNABLE_TRACE_FUNC_T 
+		static auto build_runner(bool store_module) -> RUNNABLE_SCRIPT_T 
 		{
 			struct Settings{
 				auto to_string() const { return class_name; }
@@ -522,23 +514,45 @@ namespace hasty {
 			};
 			Settings settings;
 
-			if (trace::global_trace_cache.template contains_cached<TRACE_FUNC_T>(settings)) {
-				return trace::global_trace_cache.template get_cached_runnable_trace_function<TRACE_FUNC_T>(settings);
-			} else if (trace::global_trace_cache.template contains_file<TRACE_FUNC_T>(settings)) {
-				trace::global_trace_cache.template load_module<TRACE_FUNC_T>(settings);
-				return trace::global_trace_cache.template get_cached_runnable_trace_function<TRACE_FUNC_T>(settings);
+			if (script::global_trace_cache.template contains_cached<RUNNABLE_SCRIPT_T>(settings)) {
+				return script::global_trace_cache.template get_cached<RUNNABLE_SCRIPT_T>(settings);
+			} 
+			else if (script::global_trace_cache.template contains_file<RUNNABLE_SCRIPT_T>(settings)) {
+				script::global_trace_cache.template load<RUNNABLE_SCRIPT_T>(settings);
+				return script::global_trace_cache.template get_cached<RUNNABLE_SCRIPT_T>(settings);
 			} else {
-				auto trace_func = std::make_shared<TRACE_FUNC_T>(THIS_TYPE_T::build_trace_function());
-				trace::global_trace_cache.cache_module(settings, std::move(trace_func));
+
+				STACKED_DIAG_PROTO_T	  stack_out("stack_out");
+				STACKED_DIAG_PROTO_T	  stacked_diag("stacked_diag");
+				WEIGHTS_PROTO_T           weights("weights");
+
+				static constexpr std::string_view code = R"ts(
+FORWARD_ENTRYPOINT(self, stack_out, stacked_diag, weights):
+	nstack = stacked_diag.shape[0]
+	stack_out[:] = torch.mm(weights, stack_out.view(nstack, -1)).view_as(stack_out)
+	stack_out *= stacked_diag.conj()
+	return (stack_out.sum(dim=0),)
+		)ts";
+
+				runnable_to_compiled_builder_t<RUNNABLE_SCRIPT_T> builder(
+					class_name,
+					code,
+					std::move(stack_out), std::move(stacked_diag), std::move(weights)
+				);
+
+				builder.compile();
+				auto runnable_script = builder.decay_to_runnable_script();
+
+				script::global_trace_cache.cache_module(settings, runnable_script);
 				if (store_module) {
-					trace::global_trace_cache.template save_module<TRACE_FUNC_T>(settings);
+					script::global_trace_cache.template save<RUNNABLE_SCRIPT_T>(settings);
 				}
-				return trace::global_trace_cache.template get_cached_runnable_trace_function<TRACE_FUNC_T>(settings);
+				return runnable_script;
 			}
 
 		}
 
-		static auto build_trace_function() -> TRACE_FUNC_T {
+		static auto build_trace_function() -> RUNNABLE_SCRIPT_T {
 
 			STACKED_DIAG_PROTO_T	  stack_out("stack_out");
 			STACKED_DIAG_PROTO_T	  stacked_diag("stacked_diag");

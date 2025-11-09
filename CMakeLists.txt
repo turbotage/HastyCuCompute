@@ -40,8 +40,7 @@ target_sources(HastyCuCompute
 	PRIVATE
 		"cpp/corelib/lib/io/hdf5.cpp"
 		"cpp/corelib/lib/tensor/mod_tensor.cpp"
-		"cpp/corelib/lib/script/trace.cpp"
-		"cpp/corelib/lib/script/trace_cache.cpp"
+		"cpp/corelib/lib/script/script_cache.cpp"
 		"cpp/corelib/lib/fft/fft.cpp"
 		"cpp/corelib/lib/fft/vkfft.cpp"
 )
@@ -79,8 +78,8 @@ target_sources(HastyCuCompute
 			"cpp/corelib/lib/tensor/mod_tensor_intrinsic.cppm"
 			"cpp/corelib/lib/tensor/mod_tensor.cppm"
 			"cpp/corelib/lib/script/tensor_proto.cppm"
-			"cpp/corelib/lib/script/trace_cache.cppm"
-			"cpp/corelib/lib/script/trace.cppm"
+			"cpp/corelib/lib/script/script_cache.cppm"
+			"cpp/corelib/lib/script/script.cppm"
 			"cpp/corelib/lib/util/util_concepts.cppm"
 			"cpp/corelib/lib/util/util_containers.cppm"
 			"cpp/corelib/lib/util/util_funcs.cppm"
@@ -124,10 +123,12 @@ set_target_properties(HastyCuCompute PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "$
 
 find_package(CUDAToolkit REQUIRED)
 
+
 target_include_directories(HastyCuCompute
 	PRIVATE
-	"${CMAKE_CURRENT_SOURCE_DIR}/cpp/external/vkFFT"  # folder with VkFFT headers
+		$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/cpp/external/vkFFT>
 )
+
 target_compile_definitions(HastyCuCompute PRIVATE VKFFT_BACKEND=1)
 
 target_link_libraries(HastyCuCompute PRIVATE CUDA::toolkit)
@@ -233,9 +234,22 @@ list(APPEND HastyCuCompute_INCLUDE_DIRS
     $<BUILD_INTERFACE:${Python_INCLUDE_DIRS}>
 )
 
+set(MODULE_CACHE_RELATIVE_PATH "module_cache")
+set(TENSOR_CACHE_RELATIVE_PATH "tensor_cache")
+configure_file(
+	"${CMAKE_CURRENT_SOURCE_DIR}/cpp/corelib/include/configure_file_settings.hpp.in"
+	"${CMAKE_CURRENT_BINARY_DIR}/generated_includes/configure_file_settings.hpp"
+)
+
+
+
+
 # Apply to target
-target_include_directories(HastyCuCompute PUBLIC
-    ${HastyCuCompute_INCLUDE_DIRS}
+target_include_directories(HastyCuCompute 
+	PUBLIC
+    	${HastyCuCompute_INCLUDE_DIRS}
+	PRIVATE
+		$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/generated_includes>
 )
 
 

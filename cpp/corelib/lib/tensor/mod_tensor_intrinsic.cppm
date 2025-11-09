@@ -379,10 +379,10 @@ namespace hasty {
 		static constexpr bool value = is_tensor_container_impl<T, Depth+1>::value;
 	};
 
-	// Specialization for std::map
+	// Specialization for std::unordered_map
 	template<typename K, typename V, int Depth>
 	requires (Depth < 10) && (std::same_as<K, std::string> || std::same_as<K, std::size_t>)
-	struct is_tensor_container_impl<std::map<K, V>, Depth> {
+	struct is_tensor_container_impl<std::unordered_map<K, V>, Depth> {
 		static constexpr bool value = is_tensor_container_impl<V, Depth+1>::value;
 	};
 
@@ -394,7 +394,10 @@ namespace hasty {
 	};
 
 	export template<typename T>
-	concept is_tensor_container = is_tensor_container_impl<T>::value;
+	concept is_tensor_container = is_tensor_container_impl<T,0>::value;
+
+	export template<typename T, int Depth>
+	concept is_tensor_container_depthlimited = is_tensor_container_impl<T, Depth>::value;
 
 	/*
 	// Explicit instantiations

@@ -262,7 +262,10 @@ namespace hasty {
 
         template<typename T>
         using optcrefw = std::optional<std::reference_wrapper<const T>>;
-        
+
+
+        template<class... T>
+        constexpr bool always_false = false;
 
     }
 
@@ -294,6 +297,16 @@ namespace hasty {
     // Helper variable template
     export template <typename T>
     inline constexpr bool is_std_tuple_v = is_std_tuple<T>::value;
+
+
+    export template<typename T, template<typename...> typename Template>
+    struct is_specialization_of_impl : std::false_type {};
+
+    template<template<typename...> typename Template, typename... Args>
+    struct is_specialization_of_impl<Template<Args...>, Template> : std::true_type {};
+
+    export template<typename T, template<typename...> typename Template>
+    concept is_specialization_of = is_specialization_of_impl<T, Template>::value;
 
 
     export {
