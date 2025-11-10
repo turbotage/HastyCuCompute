@@ -10,6 +10,7 @@ import tensor;
 namespace hasty {
 namespace script {
 
+    // Tensor Prototype
     export template<is_device D, is_tensor_type TT, std::size_t RANK>
     class tensor_prototype {
     public:
@@ -36,21 +37,17 @@ namespace script {
     };
 
     template<typename T>
-    struct tensor_prototype_conversion;
+    requires (is_tensor<T> || is_tensor_prototype<T>)
+    struct tensor_prototype_conversion {
+        using type = std::conditional_t<
+            is_tensor_prototype<T>,
+            tensor<typename T::device_type_t, typename T::tensor_type_t, T::size()>,
+            tensor_prototype<typename T::device_type_t, typename T::tensor_type_t, T::size()>
+        >;
 
-    template<is_tensor_prototype T>
-    struct tensor_prototype_conversion<T> {
-        tensor<typename T::device_type_t, typename T::tensor_type_t, T::size()> operator()(T t);
+        //type operator()()
+        
     };
-
-    template<is_tensor T>
-    struct tensor_prototype_conversion<T> {
-        tensor_prototype<typename T::device_type_t, typename T::tensor_type_t, T::size()> operator()(T t);
-    };
-
-    export template<is_tensor_prototype T>
-    using tensor_prototype_conversion_t = std::invoke_result_t<tensor_prototype_conversion<T>, T>;
-
 
     // We need a tensor_prototype_container concept that can also
     // recognize nested containers of tensor_prototype types.
@@ -71,7 +68,7 @@ namespace script {
 
     // Specialization for std::unordered_map with string or int keys
     template<typename K, typename V, int Depth>
-    requires (Depth < 10) && (std::same_as<K, std::string> || std::same_as<K, std::size_t>)
+    requires (Depth < 10) && is_tensor_dict_keytype<K>
     struct is_tensor_prototype_container_impl<std::unordered_map<K, V>, Depth> {
         static constexpr bool value = is_tensor_prototype_container_impl<V, Depth+1>::value;
     };

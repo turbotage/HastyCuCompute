@@ -55,8 +55,26 @@ namespace hasty {
         using Last = Nth<Size - 1>;
     };
 
+    export template<typename... Args>
+    struct TupleTraits<std::tuple<Args...>> {
+        using Tuple = std::tuple<Args...>;
+        static constexpr size_t Size = sizeof...(Args);
+
+        template <std::size_t N>
+        using Nth = typename std::tuple_element<N, Tuple>::type;
+
+        using First = Nth<0>;
+        using Last = Nth<Size - 1>;
+    };
+
     export template<>
     struct TupleTraits<> {
+        using Tuple = std::tuple<>;
+        static constexpr size_t Size = 0;
+    };
+
+    export template<>
+    struct TupleTraits<std::tuple<>> {
         using Tuple = std::tuple<>;
         static constexpr size_t Size = 0;
     };

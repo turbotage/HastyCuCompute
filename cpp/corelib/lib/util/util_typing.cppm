@@ -1,6 +1,7 @@
 module;
 
 #include "pch.hpp"
+#include <string_view>
 
 export module util:typing;
 
@@ -268,6 +269,27 @@ namespace hasty {
         constexpr bool always_false = false;
 
     }
+
+    export template<typename T>
+    struct NT {
+        NT(std::string_view n) : name(n) {}
+
+        using value_type = T;
+        std::string name;
+
+        const std::string& get_name() const { return name; }
+    };
+
+    export template<typename T>
+    struct NP {
+        NP(std::string_view n, const T& v) : name(n), value(v) {}
+
+        using value_type = T;
+        std::string name;
+        T value;
+
+        const std::string& get_name() const { return name; }
+    };
 
     // Primary template
     template <typename T>

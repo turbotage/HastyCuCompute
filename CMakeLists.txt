@@ -15,6 +15,17 @@ add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:-allow-unsupported-compiler>)
 
 add_library(HastyCuCompute SHARED)
 
+set(CMAKE_COLOR_DIAGNOSTICS ON)
+
+if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+	add_compile_options(
+		-ftemplate-backtrace-limit=5
+		-fdiagnostics-show-template-tree
+		-fcolor-diagnostics
+		-fdiagnostics-format=vi
+	)
+endif()
+
 target_compile_features(HastyCuCompute 
 	PRIVATE cxx_std_23
 	INTERFACE cxx_std_23)
@@ -241,9 +252,6 @@ configure_file(
 	"${CMAKE_CURRENT_BINARY_DIR}/generated_includes/configure_file_settings.hpp"
 )
 
-
-
-
 # Apply to target
 target_include_directories(HastyCuCompute 
 	PUBLIC
@@ -251,7 +259,6 @@ target_include_directories(HastyCuCompute
 	PRIVATE
 		$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/generated_includes>
 )
-
 
 ################ HASTY-CU-TEST ####################
 

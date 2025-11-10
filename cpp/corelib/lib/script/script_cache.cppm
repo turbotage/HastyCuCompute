@@ -137,7 +137,7 @@ private:
     std::unordered_map<Key, Storage, KeyHasher> _module_cache;
 };
 
-
+export script_cache global_trace_cache;
 
 }
 }

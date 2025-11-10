@@ -125,6 +125,20 @@ export namespace hc10 {
     using c10::Error;
     using c10::string_view;
     using c10::complex;
+    using c10::List;
+    using c10::IValue;
+    using c10::ArrayRef;
+    using c10::intrusive_ptr;
+
+    namespace ivalue {
+        using c10::ivalue::Tuple;
+        using c10::ivalue::TupleElements;
+    }
+
+    namespace impl {
+        using c10::impl::GenericList;
+        using c10::impl::toList;
+    }
 }
 
 /*

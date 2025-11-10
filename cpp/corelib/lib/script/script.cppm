@@ -1,5 +1,6 @@
 module;
 
+#include <valarray>
 export module script;
 
 import torch_base;
@@ -12,7 +13,10 @@ namespace script {
 
 export using Module = htorch::jit::Module;
 
-export template<is_tensor_prototype_container ReturnTt, is_tensor_prototype_container... InputTt>
+// This is wrong. The runnable script should take is_tensor_container
+// the prototype should be for the builders...
+
+export template<is_tensor_container ReturnTt, is_tensor_container... InputTt>
 struct runnable_script {
 private:
     std::string _script_name;
@@ -29,27 +33,30 @@ public:
 
     template<typename... Ts>
     requires (sizeof...(Ts) == sizeof...(InputTt)) &&
-            ((std::same_as<std::remove_cvref_t<Ts>, 
-                        tensor_prototype_container_conversion_t<InputTt>> ||
-            std::convertible_to<Ts, tensor_prototype_container_conversion_t<InputTt>>) && ...)
-    auto run(Ts&&... inputs) const -> tensor_prototype_container_conversion_t<ReturnTt> 
+             (std::same_as<std::remove_cvref_t<Ts>, InputTt> && ...)
+    auto run(Ts&&... inputs) const -> ReturnTt
     {
-        auto ttscopy = std::tuple(Ts(std::forward<Ts>(inputs))...);
+        auto ttscopy = std::tuple(InputTt(std::forward<InputTt>(inputs))...);
 
         std::vector<htorch::jit::IValue> ivalue_inputs;
         ivalue_inputs.reserve(sizeof...(InputTt));
 
         // Iterate over tensor_prototype_containers and convert them
-        for_sequence<sizeof...(Ts)>([&](auto i) {
+        for_sequence<sizeof...(InputTt)>([&](auto i) {
             ivalue_inputs.push_back(
-                to_ivalue(std::get<i>(ttscopy))
+                to_ivalue(std::move(std::get<i>(ttscopy)))
             );
         });
 
         // Execute
         htorch::jit::IValue ret_ivalue;
-        //if (_script_unit.)
+        if (_script_module != nullptr) {
+            ret_ivalue = _script_module->forward(ivalue_inputs);
+        } else {
+            throw std::runtime_error("runnable_script has no script unit");
+        }
 
+        return from_ivalue<ReturnTt>(std::move(ret_ivalue));
     }
 
     Module& get_module() const {
@@ -65,18 +72,21 @@ public:
 
 private:
 
+    //====================
+    // tensor_container -> IValue conversion utilities
+    //====================
     template<typename T>
     static htorch::jit::IValue to_ivalue(T&& container) {
         using U = std::remove_cvref_t<T>;
 
         if constexpr (is_tensor<U>) {
-            return tensor_to_ivalue(std::move(container));
-        } else if constexpr (is_specialization_of<U, std::vector>) {
-            return vector_to_ivalue(std::move(container));
-        } else if constexpr (is_specialization_of<U, std::unordered_map>) {
-            return map_to_ivalue(std::move(container));
-        } else if constexpr (is_specialization_of<U, std::tuple>) {
-            return tuple_to_ivalue(std::move(container));
+            return tensor_to_ivalue<U>(std::move(container));
+        } else if constexpr (is_tensor_vector<U>) {
+            return vector_to_ivalue<U>(std::move(container));
+        } else if constexpr (is_tensor_dict<U>) {
+            return dict_to_ivalue<U>(std::move(container));
+        } else if constexpr (is_tensor_tuple<U>) {
+            return tuple_to_ivalue<U>(std::move(container));
         } else {
             static_assert(always_false<T>, "Type is not a tensor container");
         }
@@ -94,16 +104,20 @@ private:
 
     template<is_tensor_container Vec>
     static htorch::jit::IValue vector_to_ivalue(Vec&& vec) {
-        std::vector<htorch::jit::IValue> ivalue_list;
-        ivalue_list.reserve(vec.size());
+        //hc10::List<htorch::jit::IValue> ivalue_list;
+        std::vector<htorch::jit::IValue> ivalue_vec;
+        ivalue_vec.reserve(vec.size());
+        using U = std::remove_cvref_t<Vec>::value_type;
         for (auto&& elem : vec) {
-            ivalue_list.push_back(to_ivalue(std::move(elem)));
+            ivalue_vec.push_back(to_ivalue<U>(std::move(elem)));
         }
+        hc10::List<htorch::jit::IValue> ivalue_list{hc10::ArrayRef<htorch::jit::IValue>(ivalue_vec)};
+        //auto list = hc10::impl::toList(std::move(ivalue_list));
         return htorch::jit::IValue(std::move(ivalue_list));
     }
 
     template<is_tensor_container Map>
-    static htorch::jit::IValue map_to_ivalue(Map&& map) {
+    static htorch::jit::IValue dict_to_ivalue(Map&& map) {
         using U = std::remove_cvref_t<Map>;
         using key_type = typename U::key_type;
         using mapped_type = typename U::mapped_type;
@@ -111,7 +125,7 @@ private:
         std::unordered_map<key_type, htorch::jit::IValue> ivalue_map;
         ivalue_map.reserve(map.size());
         for (auto&& [key, val] : map) {
-            ivalue_map.insert(key, to_ivalue(std::move(val)));
+            ivalue_map.insert(key, to_ivalue<mapped_type>(std::move(val)));
         }
         return htorch::jit::IValue(std::move(ivalue_map));
     }
@@ -120,11 +134,134 @@ private:
     static htorch::jit::IValue tuple_to_ivalue(Tup&& tup) {
         return htorch::jit::IValue(
             std::apply([](auto&&... elements) {
-                return std::make_tuple(to_ivalue(std::move(elements))...);
+                return std::make_tuple(
+                    to_ivalue<std::remove_cvref_t<decltype(elements)>>(std::move(elements))...
+                );
             }, std::forward<Tup>(tup))
         );
     }
 
+    //====================
+    // IValue -> tensor_container conversion utilities
+    //====================
+
+    template<is_tensor_container T>
+    static T from_ivalue(htorch::jit::IValue&& ivalue) {
+        using U = std::remove_cvref_t<T>;
+
+        if constexpr (is_tensor<U>) {
+            return ivalue_to_tensor<U>(std::move(ivalue));
+        } else if constexpr (is_specialization_of<U, std::vector>) {
+            return ivalue_to_vector<U>(std::move(ivalue));
+        } else if constexpr (is_specialization_of<U, std::unordered_map>) {
+            return ivalue_to_dict<U>(std::move(ivalue));
+        } else if constexpr (is_specialization_of<U, std::tuple>) {
+            return ivalue_to_tuple<U>(std::move(ivalue));
+        } else {
+            static_assert(always_false<T>, "Type is not a tensor container");
+        }
+    }
+
+    template<is_tensor T>
+    static T ivalue_to_tensor(htorch::jit::IValue&& ivalue)
+    {
+        if (!ivalue.isTensor()) {
+            throw std::runtime_error("IValue is not a tensor");
+        }
+        hat::Tensor tensor(ivalue.toTensor());
+        if (tensor.dim() != T::size()) {
+            throw std::runtime_error("IValue tensor rank does not match target tensor rank");
+        }
+        if (tensor.device().type() != device_type_func<typename T::device_type_t>()) {
+            throw std::runtime_error("IValue tensor device does not match target tensor device");
+        }
+        if (tensor.scalar_type() != scalar_type_func<typename T::tensor_type_t>()) {
+            throw std::runtime_error("IValue tensor type does not match target tensor type");
+        }
+        
+        std::array<i64, T::size()> new_shape;
+        for_sequence<T::size()>([&](auto i) {
+            new_shape[i] = tensor.size(i);
+        });
+
+        return T(new_shape, tensor);
+    }
+
+    template<is_tensor_container Vec>
+    static Vec ivalue_to_vector(htorch::jit::IValue&& ivalue)
+    {
+        using U = std::remove_cvref_t<Vec>;
+        using value_type = typename U::value_type;
+        if (!ivalue.isList()) {
+            throw std::runtime_error("IValue is not a list");
+        }
+
+        auto&& ivalue_list = std::move(ivalue).toList();
+        Vec result;
+        result.reserve(ivalue_list.size());
+        for (int i = 0; i < ivalue_list.size(); i++) {
+            result.push_back(from_ivalue<value_type>(std::move(ivalue_list.extract(i))));
+        }
+        return result;
+    }
+
+    template<is_tensor_container Map>
+    static Map ivalue_to_dict(htorch::jit::IValue&& ivalue)
+    {
+        using U = std::remove_cvref_t<Map>;
+        using key_type = typename U::key_type;
+        using mapped_type = typename U::mapped_type;
+
+        if (!ivalue.isGenericDict()) {
+            throw std::runtime_error("IValue is not a dict");
+        }
+
+        auto&& ivalue_dict = std::move(ivalue).toGenericDict();
+        Map result;
+        for (auto&& item : ivalue_dict) {
+            key_type key;
+            if constexpr (std::is_same_v<key_type, std::string>) {
+                if (!item.key().isString()) {
+                    throw std::runtime_error("IValue dict key is not a string");
+                }
+                key = item.key().toStringRef();
+            } else if constexpr (std::is_same_v<key_type, i64>) {
+                if (!item.key().isInt()) {
+                    throw std::runtime_error("IValue dict key is not an int");
+                }
+                key = item.key().toInt();
+            } else {
+                throw std::runtime_error("Unsupported key type in IValue dict");
+            }
+
+            //result[key] = from_ivalue<mapped_type>(item.value());
+            result.emplace(
+                std::move(key),
+                from_ivalue<mapped_type>(std::move(item.value()))
+            );
+        }
+        return result;
+    }
+
+    template<is_tensor_container Tup>
+    static Tup ivalue_to_tuple(htorch::jit::IValue&& ivalue)
+    {
+        if (!ivalue.isTuple()) {
+            throw std::runtime_error("IValue is not a tuple");
+        }
+        hc10::intrusive_ptr<hc10::ivalue::Tuple> ivalue_tuple = std::move(ivalue).toTuple();
+        Tup result;
+        hc10::ivalue::TupleElements elements = std::move(std::move(ivalue_tuple)->elements());
+        
+        constexpr std::size_t N = std::tuple_size_v<Tup>;
+        using TT = TupleTraits<Tup>;
+        for_sequence<TT::Size>([&](auto i) {
+            using TYPE = typename TT::template Nth<i>;
+            // Cast away const since we own the tuple and are consuming the IValue
+            std::get<i>(result) = from_ivalue<TYPE>(std::move(elements[i]));
+        });
+        return result;
+    }
 
 };
 
@@ -135,7 +272,7 @@ concept is_runnable_script = requires {
 } && is_specialization_of<T, runnable_script>;
 
 
-template<is_tensor_prototype_container T>
+template<is_tensor_container T>
 std::string get_torchscript_type_string() {
     using U = std::remove_cvref_t<T>;
 
@@ -162,7 +299,7 @@ std::string get_torchscript_type_string() {
         std::string result = "Tuple[";
         constexpr std::size_t N = std::tuple_size_v<U>;
         for_sequence<N>([&](auto i) {
-            result += get_torchscript_type_string<std::tuple_element<i, U>>();
+            result += get_torchscript_type_string<std::tuple_element_t<i, U>>();
             if constexpr (i < N-1) {
                 result += ", ";
             }
@@ -174,14 +311,14 @@ std::string get_torchscript_type_string() {
     }
 }
 
-export template<is_tensor_prototype_container ReturnTt, is_tensor_prototype_container... InputTt>
+export template<is_tensor_container ReturnTt, is_tensor_container... InputTt>
 struct compiled_script_builder {
 private:
     std::string _funcname;
     std::string _scriptstr;
     std::string _forwardname;
     std::string _compiled;
-    std::tuple<InputTt...> _script_tensors;
+    std::tuple<NT<InputTt>...> _script_tensors;
     
     bool _freeze = true;
     bool _optimize_for_inference = true;
@@ -193,16 +330,19 @@ public:
     using ReturnType = ReturnTt;
     using InputTraits = TupleTraits<InputTt...>;
 
+    template<typename... Ts>
+    requires    (is_specialization_of<std::remove_cvref_t<Ts>, NT> && ...) &&
+                (is_tensor_container<typename std::remove_cvref_t<Ts>::value_type> && ...)
     compiled_script_builder(
         std::string_view funcname,
         std::string_view code,
-        InputTt&&... tts
+        Ts&&... tts
     )
         :
         _funcname(funcname),
         _scriptstr(code),
         _script_tensors(
-            std::forward<InputTt>(tts)...
+            std::forward<Ts>(tts)...
         ),
         _freeze(true),
         _optimize_for_inference(true)
@@ -216,9 +356,10 @@ public:
         std::string inputvars = "self";
 
         // Input parameters
-        for_sequence<InputTraits::Size>([this, &inputvars](auto i) {
+        for_sequence<sizeof...(InputTt)>([this, &inputvars](auto i) {
             auto& itt = std::get<i>(_script_tensors);
-            inputvars += ", " + itt.str() + ": " + get_torchscript_type_string<InputTraits::template Nth<i>>();
+            using NI_TYPE = typename InputTraits::template Nth<i>;
+            inputvars += ", " + itt.get_name() + ": " + get_torchscript_type_string<NI_TYPE>();
         });
 
         // Return parameters
@@ -290,13 +431,28 @@ concept is_compiled_script_builder = requires {
 } && is_specialization_of<T, compiled_script_builder>;
 
 
+export template<is_tensor_container ReturnTt, typename... Ts>
+requires    (is_specialization_of<std::remove_cvref_t<Ts>, NT> && ...) && 
+            (is_tensor_container<typename std::remove_cvref_t<Ts>::value_type> && ...)
+auto make_compiled_script_builder(
+    std::string_view funcname,
+    std::string_view code,
+    Ts&&... tts
+) -> compiled_script_builder<ReturnTt, typename std::remove_cvref_t<Ts>::value_type...> 
+{
+    return compiled_script_builder<ReturnTt, typename std::remove_cvref_t<Ts>::value_type...>(
+        funcname,
+        code,
+        std::forward<Ts>(tts)...
+    );
+}
 
 // Type converters
 
 template<typename Builder>
 struct builder_to_runnable;
 
-template<is_tensor_prototype_container ReturnTt, is_tensor_prototype_container... InputTt>
+template<is_tensor_container ReturnTt, is_tensor_container... InputTt>
 struct builder_to_runnable<compiled_script_builder<ReturnTt, InputTt...>> {
     using type = runnable_script<ReturnTt, InputTt...>;
 };
@@ -307,7 +463,7 @@ using builder_to_runnable_t = typename builder_to_runnable<Builder>::type;
 template<typename Runnable>
 struct runnable_to_compiled_builder;
 
-template<is_tensor_prototype_container ReturnTt, is_tensor_prototype_container... InputTt>
+template<is_tensor_container ReturnTt, is_tensor_container... InputTt>
 struct runnable_to_compiled_builder<runnable_script<ReturnTt, InputTt...>> {
     using type = compiled_script_builder<ReturnTt, InputTt...>;
 };

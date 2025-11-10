@@ -483,24 +483,24 @@ namespace hasty {
 				);
 			}
 
-			return std::get<0>(_runner.run(
+			return _runner.run(
 				std::move(out),
 				stacked_diags,
 				_weights.template get<D>(didx)
-			));
+			);
 		}
 
 	protected:
 
-		using X_PROTO_T = script::tensor_prototype<D,TT,DIM>;
-		using STACKED_DIAG_PROTO_T = script::tensor_prototype<D,TT,DIM+1>;
-		using WEIGHTS_PROTO_T = script::tensor_prototype<D,TT,2>;
+		using X_T = tensor<D,TT,DIM>;
+		using STACKED_DIAG_T = tensor<D,TT,DIM+1>;
+		using WEIGHTS_T = tensor<D,TT,2>;
 
 		using RUNNABLE_SCRIPT_T = script::runnable_script<
-			X_PROTO_T,
-			STACKED_DIAG_PROTO_T,
-			STACKED_DIAG_PROTO_T,
-			WEIGHTS_PROTO_T
+			X_T,
+			STACKED_DIAG_T,
+			STACKED_DIAG_T,
+			WEIGHTS_T
 		>;
 
 		using THIS_TYPE_T = NORMAL_IDTW_T1_OP<D,TT,DIM>;
@@ -522,19 +522,19 @@ namespace hasty {
 				return script::global_trace_cache.template get_cached<RUNNABLE_SCRIPT_T>(settings);
 			} else {
 
-				STACKED_DIAG_PROTO_T	  stack_out("stack_out");
-				STACKED_DIAG_PROTO_T	  stacked_diag("stacked_diag");
-				WEIGHTS_PROTO_T           weights("weights");
+				NT<STACKED_DIAG_T>	  stack_out("stack_out");
+				NT<STACKED_DIAG_T>	  stacked_diag("stacked_diag");
+				NT<WEIGHTS_T>         weights("weights");
 
 				static constexpr std::string_view code = R"ts(
 FORWARD_ENTRYPOINT(self, stack_out, stacked_diag, weights):
 	nstack = stacked_diag.shape[0]
 	stack_out[:] = torch.mm(weights, stack_out.view(nstack, -1)).view_as(stack_out)
 	stack_out *= stacked_diag.conj()
-	return (stack_out.sum(dim=0),)
+	return stack_out.sum(dim=0)
 		)ts";
 
-				runnable_to_compiled_builder_t<RUNNABLE_SCRIPT_T> builder(
+				script::runnable_to_compiled_builder_t<RUNNABLE_SCRIPT_T> builder(
 					class_name,
 					code,
 					std::move(stack_out), std::move(stacked_diag), std::move(weights)
@@ -543,42 +543,13 @@ FORWARD_ENTRYPOINT(self, stack_out, stacked_diag, weights):
 				builder.compile();
 				auto runnable_script = builder.decay_to_runnable_script();
 
-				script::global_trace_cache.cache_module(settings, runnable_script);
+				script::global_trace_cache.cache(settings, runnable_script);
 				if (store_module) {
 					script::global_trace_cache.template save<RUNNABLE_SCRIPT_T>(settings);
 				}
 				return runnable_script;
 			}
 
-		}
-
-		static auto build_trace_function() -> RUNNABLE_SCRIPT_T {
-
-			STACKED_DIAG_PROTO_T	  stack_out("stack_out");
-			STACKED_DIAG_PROTO_T	  stacked_diag("stacked_diag");
-			WEIGHTS_PROTO_T           weights("weights");
-
-			using TRACE_FUNC_BUILDER_T = trace::trace_function_builder<
-											typename TRACE_FUNC_T::ReturnTraits::Tuple, 
-											typename TRACE_FUNC_T::InputTraits::Tuple>;
-
-			static constexpr std::string_view code = R"ts(
-FORWARD_ENTRYPOINT(self, stack_out, stacked_diag, weights):
-	nstack = stacked_diag.shape[0]
-	stack_out[:] = torch.mm(weights, stack_out.view(nstack, -1)).view_as(stack_out)
-	stack_out *= stacked_diag.conj()
-	return (stack_out.sum(dim=0),)
-		)ts";
-
-			TRACE_FUNC_BUILDER_T builder(
-				class_name,
-				code,
-				std::move(stack_out), std::move(stacked_diag), std::move(weights)
-			);
-
-			builder.compile();
-
-			return TRACE_FUNC_T(class_name, std::move(builder.release_module()));
 		}
 
 	private:
@@ -589,7 +560,7 @@ FORWARD_ENTRYPOINT(self, stack_out, stacked_diag, weights):
 		cache_tensor<TT,DIM+1> _stacked_diags;
 		cache_tensor<TT,2> _weights;
 
-		RUNNABLE_TRACE_FUNC_T _runner;
+		RUNNABLE_SCRIPT_T _runner;
 	};
 
 	/**
@@ -690,35 +661,29 @@ FORWARD_ENTRYPOINT(self, stack_out, stacked_diag, weights):
 				);
 			}
 
-			return std::get<0>(_runner.run(
+			return _runner.run(
 				std::move(out),
 				_weights.template get<D>(didx)
-			));
+			);
 		}
 
 	protected:
 
-		using STACKED_DIAG_PROTO_T = trace::tensor_prototype<D,TT,DIM+1>;
-		using KERNEL_PROTO_T = trace::tensor_prototype<D,TT,DIM>;
-		using DIAG_PROTO_T = trace::tensor_prototype<D,TT,DIM>;
-		using X_PROTO_T = trace::tensor_prototype<D,TT,DIM>;
-		using WEIGHTS_PROTO_T = trace::tensor_prototype<D,TT,2>;
+		using STACKED_DIAG_T = tensor<D,TT,DIM+1>;
+		using KERNEL_T = tensor<D,TT,DIM>;
+		using DIAG_T = tensor<D,TT,DIM>;
+		using X_T = tensor<D,TT,DIM>;
+		using WEIGHTS_T = tensor<D,TT,2>;
 
-		using TRACE_FUNC_T = trace::trace_function<
-			std::tuple<STACKED_DIAG_PROTO_T>, 
-			std::tuple<	STACKED_DIAG_PROTO_T,
-						WEIGHTS_PROTO_T>
-		>;
-
-		using RUNNABLE_TRACE_FUNC_T = trace::runnable_trace_function<
-			std::tuple<STACKED_DIAG_PROTO_T>,
-			std::tuple<	STACKED_DIAG_PROTO_T,
-						WEIGHTS_PROTO_T>
+		using RUNNABLE_SCRIPT_T = script::runnable_script<
+			STACKED_DIAG_T,
+			STACKED_DIAG_T,
+			WEIGHTS_T
 		>;
 
 		using THIS_TYPE_T = NORMAL_IDTW_T2_OP<D,TT,DIM>;
 
-		static auto build_runner(bool store_module) -> RUNNABLE_TRACE_FUNC_T 
+		static auto build_runner(bool store_module) -> RUNNABLE_SCRIPT_T 
 		{
 			struct Settings{
 				auto to_string() const { return class_name; }
@@ -726,48 +691,36 @@ FORWARD_ENTRYPOINT(self, stack_out, stacked_diag, weights):
 			};
 			Settings settings;
 
-			if (trace::global_trace_cache.template contains_cached<TRACE_FUNC_T>(settings)) {
-				return trace::global_trace_cache.template get_cached_runnable_trace_function<TRACE_FUNC_T>(settings);
-			} else if (trace::global_trace_cache.template contains_file<TRACE_FUNC_T>(settings)) {
-				trace::global_trace_cache.template load_module<TRACE_FUNC_T>(settings);
-				return trace::global_trace_cache.template get_cached_runnable_trace_function<TRACE_FUNC_T>(settings);
+			if (script::global_trace_cache.template contains_cached<RUNNABLE_SCRIPT_T>(settings)) {
+				return script::global_trace_cache.template get_cached<RUNNABLE_SCRIPT_T>(settings);
+			} else if (script::global_trace_cache.template contains_file<RUNNABLE_SCRIPT_T>(settings)) {
+				script::global_trace_cache.template load<RUNNABLE_SCRIPT_T>(settings);
+				return script::global_trace_cache.template get_cached<RUNNABLE_SCRIPT_T>(settings);
 			} else {
-				auto trace_func = std::make_shared<TRACE_FUNC_T>(THIS_TYPE_T::build_trace_function());
-				trace::global_trace_cache.cache_module(settings, std::move(trace_func));
-				if (store_module) {
-					trace::global_trace_cache.template save_module<TRACE_FUNC_T>(settings);
-				}
-				return trace::global_trace_cache.template get_cached_runnable_trace_function<TRACE_FUNC_T>(settings);
-			}
-		}
+				NT<STACKED_DIAG_T>	  	stack_out("stack_out");
+				NT<WEIGHTS_T>           weights("weights");
 
-		static auto build_trace_function() -> TRACE_FUNC_T 
-		{
-
-			STACKED_DIAG_PROTO_T	  stack_out("stack_out");
-			WEIGHTS_PROTO_T           weights("weights");
-
-			using TRACE_FUNC_BUILDER_T = trace::trace_function_builder<
-											typename TRACE_FUNC_T::ReturnTraits::Tuple, 
-											typename TRACE_FUNC_T::InputTraits::Tuple>;
-
-			static constexpr std::string_view code = R"ts(
+				static constexpr std::string_view code = R"ts(
 FORWARD_ENTRYPOINT(self, stack_out, weights):
 	nstack = stack_out.shape[0]
 	stack_out_shape = stack_out.shape
 	stack_out[:] = torch.mm(weights, stack_out.view(nstack, -1)).view(stack_out_shape)
 	return (stack_out,)
 )ts";
-
-			TRACE_FUNC_BUILDER_T builder(
-				class_name,
-				code,
-				std::move(stack_out), std::move(weights)
-			);
-
-			builder.compile();
-
-			return TRACE_FUNC_T(class_name, std::move(builder.release_module()));
+				script::runnable_to_compiled_builder_t<RUNNABLE_SCRIPT_T> builder(
+					class_name,
+					code,
+					std::move(stack_out), std::move(weights)
+				);
+		
+				builder.compile();
+				auto runnable_script = builder.decay_to_runnable_script();
+				script::global_trace_cache.cache(settings, runnable_script);
+				if (store_module) {
+					script::global_trace_cache.template save<RUNNABLE_SCRIPT_T>(settings);
+				}
+				return runnable_script;
+			}
 		}
 
 	private:
@@ -778,7 +731,7 @@ FORWARD_ENTRYPOINT(self, stack_out, weights):
 		cache_tensor<TT,DIM> _x;
 		cache_tensor<TT,2> _weights;
 
-		RUNNABLE_TRACE_FUNC_T _runner;
+		RUNNABLE_SCRIPT_T _runner;
 	};
 
 }

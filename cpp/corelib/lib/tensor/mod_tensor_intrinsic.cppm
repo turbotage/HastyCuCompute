@@ -333,12 +333,6 @@ namespace hasty {
 		friend tensor<D1,TT1,0> sum(const tensor<D1,TT1,R>& t);
 
 	};
-	
-	export template<typename T>
-	concept is_tensor = requires(T t) {
-		[]<is_device D2, is_tensor_type TT2, size_t RANK2>(tensor<D2,TT2,RANK2>&){}(t);
-	};
-
 
 	export template<is_tensor_type TT>
 	class scalar {
@@ -355,17 +349,41 @@ namespace hasty {
 		base_t<TT> _val;
 	};
  
-	// Define the is_vector_of_tensors concept
-	export template<typename T>
-	concept is_vector_of_tensors = requires(T t) {
-		[]<is_device D2, is_tensor_type TT2, size_t RANK2>(std::vector<tensor<D2,TT2,RANK2>>&){}(t);
-	};
+	template<typename T>
+	struct is_tensor_impl : std::false_type {};
+
+	template<is_device D, is_tensor_type TT, size_t RANK>
+	struct is_tensor_impl<tensor<D,TT,RANK>> : std::true_type {};
 
 	export template<typename T>
-	concept is_tensor_or_vector_of_tensors = is_tensor<T> || is_vector_of_tensors<T>;
+	concept is_tensor = is_tensor_impl<T>::value;
+
+	export template<typename T>
+	concept is_tensor_vector = 
+		is_specialization_of<T, std::vector> &&
+		is_tensor<typename T::value_type>;
+
+	export template<typename T>
+	concept is_tensor_dict_keytype =
+		std::same_as<T, std::string> || std::same_as<T, i64>;
+
+	export template<typename T>
+	concept is_tensor_dict =
+		is_specialization_of<T, std::unordered_map> &&
+		is_tensor_dict_keytype<typename T::key_type> &&
+		is_tensor<typename T::mapped_type>;
+
+	export template<typename T>
+	concept is_tensor_tuple = 
+		is_specialization_of<T, std::tuple> &&
+		[]<std::size_t... Is>(std::index_sequence<Is...>) {
+			return (is_tensor<std::tuple_element_t<Is, T>> && ...);
+		}(std::make_index_sequence<std::tuple_size_v<T>>{});
+
 
 	// We also create a concept for being a tensor container. This is a type that is
-	// mirrored by the tensor_prototype types
+	// mirrored by the tensor_prototype types, note that being a tensor container
+	// is not the same as fullfilling one of the concepts above, tensor containers may be nested
 
 	template<typename T, int Depth = 0>
 	struct is_tensor_container_impl {
@@ -380,8 +398,9 @@ namespace hasty {
 	};
 
 	// Specialization for std::unordered_map
+
 	template<typename K, typename V, int Depth>
-	requires (Depth < 10) && (std::same_as<K, std::string> || std::same_as<K, std::size_t>)
+	requires (Depth < 10) && is_tensor_dict_keytype<K>
 	struct is_tensor_container_impl<std::unordered_map<K, V>, Depth> {
 		static constexpr bool value = is_tensor_container_impl<V, Depth+1>::value;
 	};
@@ -398,99 +417,6 @@ namespace hasty {
 
 	export template<typename T, int Depth>
 	concept is_tensor_container_depthlimited = is_tensor_container_impl<T, Depth>::value;
-
-	/*
-	// Explicit instantiations
-
-	// f32_t
-	template class tensor<cpu_t, f32_t, 1>;
-	template class tensor<cpu_t, f32_t, 2>;
-	template class tensor<cpu_t, f32_t, 3>;
-	template class tensor<cpu_t, f32_t, 4>;
-
-	template class tensor<cuda_t, f32_t, 1>;
-	template class tensor<cuda_t, f32_t, 2>;
-	template class tensor<cuda_t, f32_t, 3>;
-	template class tensor<cuda_t, f32_t, 4>;
-
-	// f64_t
-	template class tensor<cpu_t, f64_t, 1>;
-	template class tensor<cpu_t, f64_t, 2>;
-	template class tensor<cpu_t, f64_t, 3>;
-	template class tensor<cpu_t, f64_t, 4>;
-
-	template class tensor<cuda_t, f64_t, 1>;
-	template class tensor<cuda_t, f64_t, 2>;
-	template class tensor<cuda_t, f64_t, 3>;
-	template class tensor<cuda_t, f64_t, 4>;
-
-	// c64_t
-	template class tensor<cpu_t, c64_t, 1>;
-	template class tensor<cpu_t, c64_t, 2>;
-	template class tensor<cpu_t, c64_t, 3>;
-	template class tensor<cpu_t, c64_t, 4>;
-
-	template class tensor<cuda_t, c64_t, 1>;
-	template class tensor<cuda_t, c64_t, 2>;
-	template class tensor<cuda_t, c64_t, 3>;
-	template class tensor<cuda_t, c64_t, 4>;
-
-	// c128_t
-	template class tensor<cpu_t, c128_t, 1>;
-	template class tensor<cpu_t, c128_t, 2>;
-	template class tensor<cpu_t, c128_t, 3>;
-	template class tensor<cpu_t, c128_t, 4>;
-
-	template class tensor<cuda_t, c128_t, 1>;
-	template class tensor<cuda_t, c128_t, 2>;
-	template class tensor<cuda_t, c128_t, 3>;
-	template class tensor<cuda_t, c128_t, 4>;
-
-	// i16_t
-	template class tensor<cpu_t, i16_t, 1>;
-	template class tensor<cpu_t, i16_t, 2>;
-	template class tensor<cpu_t, i16_t, 3>;
-	template class tensor<cpu_t, i16_t, 4>;
-
-	template class tensor<cuda_t, i16_t, 1>;
-	template class tensor<cuda_t, i16_t, 2>;
-	template class tensor<cuda_t, i16_t, 3>;
-	template class tensor<cuda_t, i16_t, 4>;
-
-	// i32_t
-	template class tensor<cpu_t, i32_t, 1>;
-	template class tensor<cpu_t, i32_t, 2>;
-	template class tensor<cpu_t, i32_t, 3>;
-	template class tensor<cpu_t, i32_t, 4>;
-
-	template class tensor<cuda_t, i32_t, 1>;
-	template class tensor<cuda_t, i32_t, 2>;
-	template class tensor<cuda_t, i32_t, 3>;
-	template class tensor<cuda_t, i32_t, 4>;
-
-	// i64_t
-	template class tensor<cpu_t, i64_t, 1>;
-	template class tensor<cpu_t, i64_t, 2>;
-	template class tensor<cpu_t, i64_t, 3>;
-	template class tensor<cpu_t, i64_t, 4>;
-
-	template class tensor<cuda_t, i64_t, 1>;
-	template class tensor<cuda_t, i64_t, 2>;
-	template class tensor<cuda_t, i64_t, 3>;
-	template class tensor<cuda_t, i64_t, 4>;
-
-	// b8_t
-	template class tensor<cpu_t, b8_t, 1>;
-	template class tensor<cpu_t, b8_t, 2>;
-	template class tensor<cpu_t, b8_t, 3>;
-	template class tensor<cpu_t, b8_t, 4>;
-
-	template class tensor<cuda_t, b8_t, 1>;
-	template class tensor<cuda_t, b8_t, 2>;
-	template class tensor<cuda_t, b8_t, 3>;
-	template class tensor<cuda_t, b8_t, 4>;
-	*/
-
 
 }
 

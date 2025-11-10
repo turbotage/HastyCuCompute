@@ -8,8 +8,8 @@ import hdf5;
 import fft;
 
 import mri;
-import trace;
-import trace_cache;
+import script;
+import script_cache;
 
 namespace ffi {
 
@@ -19,7 +19,7 @@ namespace ffi {
 
 		using namespace hasty;
 
-		cache_dir = "/home/turbotage/Documents/hasty_cache/";
+		//cache_dir = "/home/turbotage/Documents/hasty_cache/";
 
 		/*
 		std::vector<std::regex> matchers = {
@@ -163,8 +163,8 @@ namespace ffi {
 
 		hat::InferenceMode im_guard{};
 
-		cache_dir = "/home/turbotage/Documents/hasty_cache/";
-		trace::module_cache_dir = cache_dir / "modules/";
+		//cache_dir = "/home/turbotage/Documents/hasty_cache/";
+		//trace::module_cache_dir = cache_dir / "modules/";
 
 		int xres = 320;
 		int yres = 320;
@@ -452,20 +452,20 @@ namespace ffi {
 
 		using namespace hasty;
 
-		using T1 = trace::tensor_prototype<cuda_t, f32_t, 1>;
-		using T2 = trace::tensor_prototype<cuda_t, c64_t, 2>;
-		using T3 = trace::tensor_prototype_vector<cuda_t, f32_t, 3>;
+		using T1 = tensor<cuda_t, f32_t, 1>;
+		using T2 = tensor<cuda_t, c64_t, 2>;
+		using T3 = std::vector<tensor<cuda_t, f32_t, 3>>;
 
-		T1 t1("t1");
-		T2 t2("t2");
-		T3 t3("t3");
+		NT<T1> t1("t1");
+		NT<T2> t2("t2");
+		NT<T3> t3("t3");
 
-		using OUT_T1 = trace::tensor_prototype<cuda_t, f32_t,1>;
-		using OUT_T2 = trace::tensor_prototype_vector<cuda_t, c64_t, 2>;
+		using OUT_T1 = tensor<cuda_t, f32_t,1>;
+		using OUT_T2 = std::vector<tensor<cuda_t, c64_t, 2>>;
 
-		auto builder = trace::trace_function_builder_factory<OUT_T1, OUT_T2>::make(
-							"func",
-							R"ts(
+		auto builder = script::make_compiled_script_builder<std::tuple<OUT_T1, OUT_T2>>(
+			"func",
+			R"ts(
 FORWARD_ENTRYPOINT(self, t1, t2, t3):
 	a = []
 	for t in t3:
@@ -474,17 +474,17 @@ FORWARD_ENTRYPOINT(self, t1, t2, t3):
 		a.append(temp)
 
 	return (a[0][:,0],a)
-		)ts", t1, t2, t3);
+		)ts",
+			t1, t2, t3
+		);
 
 		builder.compile();
 
-		auto trace_func = builder.build_trace_function();
-
-		auto runner = trace_func.get_runnable();
-
 		std::cout << "Uncompiled:" << builder.uncompiled_str() << std::endl;
-
 		std::cout << "Compiled:" << builder.compiled_str() << std::endl;
+
+		auto runnable_script = builder.decay_to_runnable_script();
+
 
 		//std::vector<hasty::tensor<hasty::empty_strong_typedef<hasty::cuda_>, hasty::strong_typedef<float, hasty::f32_>, 3>> &
 
@@ -502,7 +502,7 @@ FORWARD_ENTRYPOINT(self, t1, t2, t3):
 		std::cout << in3[1].str() << std::endl;
 		std::cout << in3[2].str() << std::endl;
 
-		auto a = runner.run(std::move(in1), std::move(in2), std::move(in3));
+		auto a = runnable_script.run(std::move(in1), std::move(in2), std::move(in3));
 
 		std::cout << std::get<0>(a).str() << std::endl;
 		std::cout << std::get<1>(a)[0].str() << std::endl;
