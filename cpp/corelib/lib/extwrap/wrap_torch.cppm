@@ -42,6 +42,9 @@ export namespace hat {
     using at::OptionalArrayRef;
     using at::InferenceMode;
 
+    inline constexpr auto kCPU = at::kCPU;
+    inline constexpr auto kCUDA = at::kCUDA;
+
     inline constexpr auto kFloat = at::kFloat;
     inline constexpr auto kDouble = at::kDouble;
     inline constexpr auto kComplexFloat = at::kComplexFloat;

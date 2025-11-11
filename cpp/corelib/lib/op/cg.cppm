@@ -23,16 +23,15 @@ auto conjugate_gradient(sptr<Op> A, sptr<PrecondOp> P, i32 max_inner_iter, i32 m
 	using TT = typename Op::input_tensor_type_t;
 	constexpr size_t R = Op::input_rank_t();
 
-	script::tensor_prototype<D,TT,R> x("x");
-	script::tensor_prototype<D,TT,R> p("p");
-	script::tensor_prototype<D,TT,R> Ap("Ap");
-	script::tensor_prototype<D,TT,R> r("r");
-	script::tensor_prototype<D,TT,R> z("z");
-	script::tensor_prototype<D,real_t<TT>,0> rzold("rzold");
-	script::tensor_prototype<D,b8_t,0> restart("restart");
+	NT<tensor<D,TT,R>> x("x");
+	NT<tensor<D,TT,R>> p("p");
+	NT<tensor<D,TT,R>> Ap("Ap");
+	NT<tensor<D,TT,R>> r("r");
+	NT<tensor<D,TT,R>> z("z");
+	NT<tensor<D,real_t<TT>,0>> rzold("rzold");
+	NT<tensor<D,b8_t,0>> restart("restart");
 
-
-	auto cg1_builder = script::compiled_script_builder<decltype(x)>(
+	auto cg1_builder = script::make_compiled_script_builder<decltype(x)>(
 		"cg_step1",
 		std::format(R"ts(
 FORWARD_ENTRYPOINT(self, x, p, Ap, r):
@@ -46,9 +45,9 @@ FORWARD_ENTRYPOINT(self, x, p, Ap, r):
 	);
 
 	cg1_builder.compile();
-	auto cg1 = cg1_builder.build_runnable_script();
+	auto cg1 = cg1_builder.decay_to_runnable_script();
 
-	auto cg2_builder = script::compiled_script_builder<decltype(z)>(
+	auto cg2_builder = script::make_compiled_script_builder<decltype(z)>(
 		"cg_step2",
 		std::format(R"ts(
 FORWARD_ENTRYPOINT(self, z, r, p, rzold, restart):
@@ -62,7 +61,7 @@ FORWARD_ENTRYPOINT(self, z, r, p, rzold, restart):
 		z,r,p,rzold,restart
 	);
 	cg2_builder.compile();
-	auto cg2 = cg2_builder.build_runnable_script();
+	auto cg2 = cg2_builder.decay_to_runnable_script();
 
 
 	auto cgl = [cg1=std::move(cg1), cg2=std::move(cg2), A=std::move(A), P=std::move(P), 
@@ -128,14 +127,14 @@ auto conjugate_gradient(sptr<Op> A, i32 max_iter = 0, double tol = 1e-6)
 	constexpr size_t R = Op::input_rank_t();
 
 
-	script::tensor_prototype<D,TT,R> x("x");
-	script::tensor_prototype<D,TT,R> p("p");
-	script::tensor_prototype<D,TT,R> Ap("Ap");
-	script::tensor_prototype<D,TT,R> r("r");
-	script::tensor_prototype<D,real_t<TT>,0> rzold("rzold");
-	
+	NT<tensor<D,TT,R>> x("x");
+	NT<tensor<D,TT,R>> p("p");
+	NT<tensor<D,TT,R>> Ap("Ap");
+	NT<tensor<D,TT,R>> r("r");
+	NT<tensor<D,real_t<TT>,0>> rzold("rzold");
 
-	auto cg_builder = script::compiled_script_builder<decltype(x), decltype(r), decltype(p), decltype(rzold)>(
+
+	auto cg_builder = script::make_compiled_script_builder<decltype(x), decltype(r), decltype(p), decltype(rzold)>(
 		"cg_step",
 		std::format(R"ts(
 FORWARD_ENTRYPOINT(self, x, p, Ap, r):
@@ -153,7 +152,7 @@ FORWARD_ENTRYPOINT(self, x, p, Ap, r):
 	);
 
 	cg_builder.compile();
-	auto cg = cg_builder.build_runnable_script();
+	auto cg = cg_builder.decay_to_runnable_script();
 
 	auto cgl = [cg = std::move(cg), A = std::move(A), max_iter, tol]
 					(tensor<D,TT,R>& x, const tensor<D,TT,R>& b) 

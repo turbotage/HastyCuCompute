@@ -61,8 +61,8 @@ public:
 
     template<is_runnable_script Script, is_sc_settings Settings>
     bool contains_file(const Settings& settings) const {
-        auto modpath = module_cache_dir / std::format("mod_{}_type_{}.pt", 
-                                                settings.to_string(), 
+        auto modpath = module_cache_dir / std::format("mod_{}_type_{}.pt",
+                                                settings.to_string(),
                                                 typeid(Script).name());
         if (!std::filesystem::exists(modpath)) {
             return false;

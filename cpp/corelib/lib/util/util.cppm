@@ -19,190 +19,167 @@ export import :io;
 
 namespace debug {
 
-    export void print_memory_usage(const std::string& prepend = "") {
-        std::ifstream file("/proc/self/status");
-        std::string line;
-        while (std::getline(file, line)) {
-            if (line.substr(0, 6) == "VmRSS:") {
-                std::cout << prepend << " Resident Set Size: " << line.substr(6) << std::endl;
-            } else if (line.substr(0, 6) == "VmSize:") {
-                std::cout << prepend << " Virtual Memory Size: " << line.substr(6) << std::endl;
-            }
-        }
-    }
+export void print_memory_usage(const std::string& prepend = "") {
+	std::ifstream file("/proc/self/status");
+	std::string line;
+	while (std::getline(file, line)) {
+		if (line.substr(0, 6) == "VmRSS:") {
+			std::cout << prepend << " Resident Set Size: " << line.substr(6) << std::endl;
+		} else if (line.substr(0, 6) == "VmSize:") {
+			std::cout << prepend << " Virtual Memory Size: " << line.substr(6) << std::endl;
+		}
+	}
+}
 
 }
 
 namespace hasty {
 
-    export template<typename T>
-    class move {
-    public:
-    
-        explicit move(T&& obj) : _obj(std::move(obj)) {}
+export template<typename T>
+class move {
+public:
 
-        // Deleted copy constructor and copy assignment operator
-        move(const move&) = delete;
-        move& operator=(const move&) = delete;
+	explicit move(T&& obj) : _obj(std::move(obj)) {}
 
-        // Deleted move constructor and move assignment operator
-        move(move&&) = delete;
-        move& operator=(move&&) = delete;
+	// Deleted copy constructor and copy assignment operator
+	move(const move&) = delete;
+	move& operator=(const move&) = delete;
 
-        // Access the underlying object
-        T& get() { return _obj; }
-        const T& get() const { return _obj; }
+	// Deleted move constructor and move assignment operator
+	move(move&&) = delete;
+	move& operator=(move&&) = delete;
 
-    private:
-        T&& _obj;
-    };
+	// Access the underlying object
+	T& get() { return _obj; }
+	const T& get() const { return _obj; }
 
-    export enum struct device_idx {
-        CPU = -1,
-        CUDA0 = 0,
-        CUDA1 = 1,
-        CUDA2 = 2,
-        CUDA3 = 3,
-        CUDA4 = 4,
-        CUDA5 = 5,
-        CUDA6 = 6,
-        CUDA7 = 7,
-        CUDA8 = 8,
-        CUDA9 = 9,
-        CUDA10 = 10,
-        CUDA11 = 11,
-        CUDA12 = 12,
-        CUDA13 = 13,
-        CUDA14 = 14,
-        CUDA15 = 15,
-        MAX_CUDA_DEVICES = 16
-    };
+private:
+	T&& _obj;
+};
 
-    export void synchronize() {
-        htorch::cuda::synchronize();
-    }
+export void synchronize() {
+	htorch::cuda::synchronize();
+}
 
-    export void synchronize(device_idx idx) {
-        htorch::cuda::synchronize(i32(idx));
-    }
+export void synchronize(device_idx idx) {
+	htorch::cuda::synchronize(i32(idx));
+}
 
-    namespace util {
-        
-        export template<typename T>
-        T future_catcher(std::future<T>& fut)
-        {
-            try {
-                return fut.get();
-            }
-            catch (hc10::Error& e) {
-                std::string err = e.what();
-                std::cerr << err << std::endl;
-                throw std::runtime_error(err);
-            }
-            catch (std::exception& e) {
-                std::string err = e.what();
-                std::cerr << err << std::endl;
-                throw std::runtime_error(err);
-            }
-            catch (...) {
-                std::cerr << "caught something strange: " << std::endl;
-                throw std::runtime_error("caught something strange: ");
-            }
-        }
-    
-        export template<typename T>
-        T future_catcher(const std::function<T()>& func)
-        {
-            try {
-                return func();
-            }
-            catch (hc10::Error& e) {
-                std::string err = e.what();
-                std::cerr << err << std::endl;
-                throw std::runtime_error(err);
-            }
-            catch (std::exception& e) {
-                std::string err = e.what();
-                std::cerr << err << std::endl;
-                throw std::runtime_error(err);
-            }
-            catch (...) {
-                std::cerr << "caught something strange: " << std::endl;
-                throw std::runtime_error("caught something strange: ");
-            }
-        }
-    
-        export void future_catcher(std::future<void>& fut)
-        {
-            try {
-                fut.get();
-            }
-            catch (hc10::Error& e) {
-                std::string err = e.what();
-                std::cerr << err << std::endl;
-                throw std::runtime_error(err);
-            }
-            catch (std::exception& e) {
-                std::string err = e.what();
-                std::cerr << err << std::endl;
-                throw std::runtime_error(err);
-            }
-            catch (...) {
-                std::cerr << "caught something strange: " << std::endl;
-                throw std::runtime_error("caught something strange: ");
-            }
-        }
-    
-        export void future_catcher(const std::function<void()>& func)
-        {
-            try {
-                func();
-            }
-            catch (hc10::Error& e) {
-                std::string err = e.what();
-                std::cerr << err << std::endl;
-                throw std::runtime_error(err);
-            }
-            catch (std::exception& e) {
-                std::string err = e.what();
-                std::cerr << err << std::endl;
-                throw std::runtime_error(err);
-            }
-            catch (...) {
-                std::cerr << "caught something strange: " << std::endl;
-                throw std::runtime_error("caught something strange: ");
-            }
-        }
+namespace util {
 
-        export inline void print_cuda_memory(device_idx idx, const std::string& prepend = "", bool empty_cache = false) {
-            hasty::synchronize(idx);
-            auto devicestats = hat::cuda::CUDACachingAllocator::getDeviceStats((int)idx);
+export template<typename T>
+T future_catcher(std::future<T>& fut)
+{
+	try {
+		return fut.get();
+	}
+	catch (hc10::Error& e) {
+		std::string err = e.what();
+		std::cerr << err << std::endl;
+		throw std::runtime_error(err);
+	}
+	catch (std::exception& e) {
+		std::string err = e.what();
+		std::cerr << err << std::endl;
+		throw std::runtime_error(err);
+	}
+	catch (...) {
+		std::cerr << "caught something strange: " << std::endl;
+		throw std::runtime_error("caught something strange: ");
+	}
+}
+	
+export template<typename T>
+T future_catcher(const std::function<T()>& func)
+{
+	try {
+		return func();
+	}
+	catch (hc10::Error& e) {
+		std::string err = e.what();
+		std::cerr << err << std::endl;
+		throw std::runtime_error(err);
+	}
+	catch (std::exception& e) {
+		std::string err = e.what();
+		std::cerr << err << std::endl;
+		throw std::runtime_error(err);
+	}
+	catch (...) {
+		std::cerr << "caught something strange: " << std::endl;
+		throw std::runtime_error("caught something strange: ");
+	}
+}
+	
+export void future_catcher(std::future<void>& fut)
+{
+	try {
+		fut.get();
+	}
+	catch (hc10::Error& e) {
+		std::string err = e.what();
+		std::cerr << err << std::endl;
+		throw std::runtime_error(err);
+	}
+	catch (std::exception& e) {
+		std::string err = e.what();
+		std::cerr << err << std::endl;
+		throw std::runtime_error(err);
+	}
+	catch (...) {
+		std::cerr << "caught something strange: " << std::endl;
+		throw std::runtime_error("caught something strange: ");
+	}
+}
+	
+export void future_catcher(const std::function<void()>& func)
+{
+	try {
+		func();
+	}
+	catch (hc10::Error& e) {
+		std::string err = e.what();
+		std::cerr << err << std::endl;
+		throw std::runtime_error(err);
+	}
+	catch (std::exception& e) {
+		std::string err = e.what();
+		std::cerr << err << std::endl;
+		throw std::runtime_error(err);
+	}
+	catch (...) {
+		std::cerr << "caught something strange: " << std::endl;
+		throw std::runtime_error("caught something strange: ");
+	}
+}
 
-            auto mb = [](size_t b){ return b / (1024.0 * 1024.0); };
+export inline void print_cuda_memory(device_idx idx, const std::string& prepend = "", bool empty_cache = false) {
+	hasty::synchronize(idx);
+	auto devicestats = hat::cuda::CUDACachingAllocator::getDeviceStats((int)idx);
 
-            std::println("{}, device: {}", prepend, (int)idx);
+	auto mb = [](size_t b){ return b / (1024.0 * 1024.0); };
 
-            std::println("AGGREGATE: allocated: {}, reserved: {}",
-                    mb(devicestats.allocated_bytes[0].current),
-                    mb(devicestats.reserved_bytes[0].current)
-            );
+	std::println("{}, device: {}", prepend, (int)idx);
 
-            std::println("SMALL_POOL: allocated: {}, reserved: {}",
-                    mb(devicestats.allocated_bytes[1].current),
-                    mb(devicestats.reserved_bytes[1].current)
-            );
- 
-            std::println("LARGE_POOL: allocated: {}, reserved: {} \n",
-                    mb(devicestats.allocated_bytes[2].current),
-                    mb(devicestats.reserved_bytes[2].current)
-            );
+	std::println("AGGREGATE: allocated: {}, reserved: {}",
+			mb(devicestats.allocated_bytes[0].current),
+			mb(devicestats.reserved_bytes[0].current)
+	);
 
-            if (empty_cache) {
-                hat::cuda::CUDACachingAllocator::emptyCache();
-            }
-        }
+	std::println("SMALL_POOL: allocated: {}, reserved: {}",
+			mb(devicestats.allocated_bytes[1].current),
+			mb(devicestats.reserved_bytes[1].current)
+	);
 
-    }
+	std::println("LARGE_POOL: allocated: {}, reserved: {} \n",
+			mb(devicestats.allocated_bytes[2].current),
+			mb(devicestats.reserved_bytes[2].current)
+	);
 
+	if (empty_cache) {
+		hat::cuda::CUDACachingAllocator::emptyCache();
+	}
+}
 
+}
 }

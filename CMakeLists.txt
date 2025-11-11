@@ -107,7 +107,7 @@ target_sources(HastyCuCompute
 # LIB INTERFACE CPP SOURCES
 target_sources(HastyCuCompute
 	PRIVATE
-		"cpp/corelib/interface/interface.cpp"
+		"cpp/corelib/interface/test_interface.cpp"
 		"cpp/corelib/interface/py_interface.cpp"
 )
 # LIB INTERFACE CPP MODULE SOURCES
@@ -115,6 +115,7 @@ target_sources(HastyCuCompute
 	PUBLIC 
 		FILE_SET CXX_MODULES FILES
 			"cpp/corelib/interface/interface_cache.cppm"
+			"cpp/corelib/interface/interface.cppm"
 )
 
 set(DB_PRODUCTION_MODE ON)
@@ -247,6 +248,7 @@ list(APPEND HastyCuCompute_INCLUDE_DIRS
 
 set(MODULE_CACHE_RELATIVE_PATH "module_cache")
 set(TENSOR_CACHE_RELATIVE_PATH "tensor_cache")
+set(DATA_RELATIVE_PATH "data")
 configure_file(
 	"${CMAKE_CURRENT_SOURCE_DIR}/cpp/corelib/include/configure_file_settings.hpp.in"
 	"${CMAKE_CURRENT_BINARY_DIR}/generated_includes/configure_file_settings.hpp"
@@ -336,8 +338,8 @@ include(GNUInstallDirs)
 # Copy models folder to build directory (for Debug/Release builds)
 add_custom_command(TARGET HastyCuCompute POST_BUILD
 	COMMAND ${CMAKE_COMMAND} -E copy_directory
-		${CMAKE_SOURCE_DIR}/models
-		${CMAKE_BINARY_DIR}/models
+		${CMAKE_SOURCE_DIR}/data/models
+		${CMAKE_BINARY_DIR}/data/models
 	COMMENT "Copying wavelet models to build directory"
 )
 
@@ -363,7 +365,7 @@ install(EXPORT HastyCuComputeTargets
 install(FILES "${NVRTC_PATH}" "${CUDART_PATH}" DESTINATION lib)
 
 # Install models folder at top level
-install(DIRECTORY ${CMAKE_SOURCE_DIR}/models
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/data/models
 	DESTINATION .
 	FILES_MATCHING PATTERN "*.pt"
 	PATTERN "*.gitkeep" EXCLUDE
@@ -393,9 +395,10 @@ install(FILES
 	DESTINATION lib/cmake/HastyCuCompute
 )
 
-install(DIRECTORY ${finufft_SOURCE_DIR}/include/
-	DESTINATION include/finufft
-	FILES_MATCHING PATTERN "*.h"
-)
+
+#install(DIRECTORY ${finufft_SOURCE_DIR}/include/
+#	DESTINATION include/finufft
+#	FILES_MATCHING PATTERN "*.h"
+#)
 
 install(CODE "file(REMOVE_RECURSE \"${CMAKE_INSTALL_PREFIX}/share/finufft/examples\")")

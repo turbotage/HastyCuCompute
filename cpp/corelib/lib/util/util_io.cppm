@@ -7,6 +7,7 @@ module;
 #elif defined(__linux__) || defined(__APPLE__)
     #include <dlfcn.h>
 #endif
+#include "configure_file_settings.hpp"
 
 export module util:io;
 
@@ -39,6 +40,9 @@ export std::filesystem::path get_library_path() {
     throw std::runtime_error("Unsupported platform for get_library_path");
 }
 
+export std::filesystem::path get_data_path() {
+    return get_library_path() / DATA_RELATIVE_PATH;
+}
 
 export void export_binary_tensor(hat::Tensor tensor, const std::filesystem::path& path)
 {

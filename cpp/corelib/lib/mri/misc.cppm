@@ -14,12 +14,12 @@ export template<is_device D, is_fp_complex_tensor_type TT, size_t DIM>
 auto magnitude_reg_gradient_stepper() 
 	-> std::function<tensor<D,TT,DIM>(const tensor<D,TT,DIM>&, const tensor<D,b8_t,DIM>&, const tensor<D,TT,DIM>&)>
 {
-	script::tensor_prototype<D,TT,DIM> xproto("x");
-	script::tensor_prototype<D,b8_t,DIM> maskproto("mask");
-	script::tensor_prototype<D,TT,DIM> xmeanproto("xmean");
-	script::tensor_prototype<D,TT,DIM> output("output");
+	NT<tensor<D,TT,DIM>> xproto("x");
+	NT<tensor<D,b8_t,DIM>> maskproto("mask");
+	NT<tensor<D,TT,DIM>> xmeanproto("xmean");
+	NT<tensor<D,TT,DIM>> output("output");
 
-	auto builder = script::compiled_script_builder<decltype(output)>(
+	auto builder = script::make_compiled_script_builder<decltype(output)>(
 		"magnitude_reg_gradient_stepper",
 		std::format(R"ts(
 FORWARD_ENTRYPOINT(self, x, mask, xmean):

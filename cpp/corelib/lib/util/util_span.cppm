@@ -13,190 +13,190 @@ import :typing;
 
 namespace hasty {
 
-    export template<std::integral T, size_t N>
-    struct arbspan {
+export template<std::integral T, size_t N>
+struct arbspan {
 
-        //nullspan
-        arbspan() : _data(nullptr) {};
+	//nullspan
+	arbspan() : _data(nullptr) {};
 
-        arbspan(T const (&list)[N]) 
-            : _data(list) {}
+	arbspan(T const (&list)[N]) 
+		: _data(list) {}
 
-        arbspan(const T* listptr)
-            : _data(listptr) {}
+	arbspan(const T* listptr)
+		: _data(listptr) {}
 
-        arbspan(hat::ArrayRef<T> arr)
-            : _data(arr.data())
-        {}
+	arbspan(hat::ArrayRef<T> arr)
+		: _data(arr.data())
+	{}
 
-        arbspan(const std::array<T, N>& arr)
-            : _data(arr.data())
-        {}
+	arbspan(const std::array<T, N>& arr)
+		: _data(arr.data())
+	{}
 
-        /*
-        span(std::span<const T, N> span) 
-            : _data(span.data()) {}
-        */
-        hat::ArrayRef<T> to_arr_ref() {
-            return hat::ArrayRef<T>(_data, N);
-        }
+	/*
+	span(std::span<const T, N> span) 
+		: _data(span.data()) {}
+	*/
+	hat::ArrayRef<T> to_arr_ref() {
+		return hat::ArrayRef<T>(_data, N);
+	}
 
-        std::array<T, N> to_arr() {
-            std::array<T, N> arr;
-            for (size_t i = 0; i < N; i++) {
-                arr[i] = _data[i];
-            }
-            return arr;
-        }
+	std::array<T, N> to_arr() {
+		std::array<T, N> arr;
+		for (size_t i = 0; i < N; i++) {
+			arr[i] = _data[i];
+		}
+		return arr;
+	}
 
-        arbspan(std::nullopt_t)
-            : _data(nullptr) {}
+	arbspan(std::nullopt_t)
+		: _data(nullptr) {}
 
-        const T& operator[](size_t index) const {
-            if (index >= N) {
-                throw std::out_of_range("Index out of range");
-            }
-            return _data[index];
-        }
+	const T& operator[](size_t index) const {
+		if (index >= N) {
+			throw std::out_of_range("Index out of range");
+		}
+		return _data[index];
+	}
 
-        template<size_t I>
-        requires less_than<I,N>
-        const T& get() {
-            return _data[I];
-        }
+	template<size_t I>
+	requires less_than<I,N>
+	const T& get() {
+		return _data[I];
+	}
 
-        constexpr size_t size() const { return N; }
+	constexpr size_t size() const { return N; }
 
-        bool has_value() const {
-            return _data != nullptr;
-        }
+	bool has_value() const {
+		return _data != nullptr;
+	}
 
-    private:
-        const T* _data;
-    };
-    
-    export template<std::integral I, size_t R>
-    constexpr std::string span_to_str(arbspan<I,R> arr, bool as_tuple = true) {
-        std::string retstr = as_tuple ? "(" : "[";
-        
-        for_sequence<R>([&](auto i) {
-            retstr += std::to_string(arr.template get<i>());
-            if constexpr(i < R - 1) {
-                retstr += ",";
-            }
-        });
-        retstr += as_tuple ? ")" : "]";
-        return retstr;
-    }
+private:
+	const T* _data;
+};
 
-    export template<size_t N>
-    struct span {
+export template<std::integral I, size_t R>
+constexpr std::string span_to_str(arbspan<I,R> arr, bool as_tuple = true) {
+	std::string retstr = as_tuple ? "(" : "[";
+	
+	for_sequence<R>([&](auto i) {
+		retstr += std::to_string(arr.template get<i>());
+		if constexpr(i < R - 1) {
+			retstr += ",";
+		}
+	});
+	retstr += as_tuple ? ")" : "]";
+	return retstr;
+}
 
-        //nullspan
-        span() : _data(nullptr) {};
+export template<size_t N>
+struct span {
 
-        span(i64 const (&list)[N]) 
-            : _data(list) {}
+	//nullspan
+	span() : _data(nullptr) {};
 
-        span(const i64* listptr)
-            : _data(listptr) {}
+	span(i64 const (&list)[N]) 
+		: _data(list) {}
 
-        span(hat::ArrayRef<i64> arr)
-            : _data(arr.data())
-        {}
+	span(const i64* listptr)
+		: _data(listptr) {}
 
-        span(const std::array<i64, N>& arr)
-            : _data(arr.data())
-        {}
+	span(hat::ArrayRef<i64> arr)
+		: _data(arr.data())
+	{}
 
-        span(const std::array<i64, N>& arr, i32 offset)
-            : _data(arr.data() + offset)
-        {}
+	span(const std::array<i64, N>& arr)
+		: _data(arr.data())
+	{}
 
-        std::array<i64,N> operator*(i64 m) const {
-            std::array<i64, N> arr;
-            for_sequence<N>([&](auto i) {
-                arr[i] = _data[i] * m;
-            });
-            return arr;
-        }
+	span(const std::array<i64, N>& arr, i32 offset)
+		: _data(arr.data() + offset)
+	{}
 
-        hat::ArrayRef<i64> to_arr_ref() {
-            return hat::ArrayRef<i64>(_data, N);
-        }
+	std::array<i64,N> operator*(i64 m) const {
+		std::array<i64, N> arr;
+		for_sequence<N>([&](auto i) {
+			arr[i] = _data[i] * m;
+		});
+		return arr;
+	}
 
-        hat::OptionalArrayRef<i64> to_opt_arr_ref() {
-            if (N == 0) {
-                return std::nullopt;
-            }
-            return hat::ArrayRef<i64>(_data, N);
-        }
+	hat::ArrayRef<i64> to_arr_ref() {
+		return hat::ArrayRef<i64>(_data, N);
+	}
 
-        std::array<i64, N> to_arr() {
-            std::array<i64, N> arr;
-            for (size_t i = 0; i < N; i++) {
-                arr[i] = _data[i];
-            }
-            return arr;
-        }
+	hat::OptionalArrayRef<i64> to_opt_arr_ref() {
+		if (N == 0) {
+			return std::nullopt;
+		}
+		return hat::ArrayRef<i64>(_data, N);
+	}
 
-        span(std::nullopt_t)
-            : _data(nullptr) {}
+	std::array<i64, N> to_arr() {
+		std::array<i64, N> arr;
+		for (size_t i = 0; i < N; i++) {
+			arr[i] = _data[i];
+		}
+		return arr;
+	}
 
-        const i64& operator[](size_t index) const {
-            if (index >= N) {
-                throw std::out_of_range("Index out of range");
-            }
-            return _data[index];
-        }
+	span(std::nullopt_t)
+		: _data(nullptr) {}
 
-        template<size_t I>
-        requires less_than<I,N>
-        const i64& get() const {
-            return _data[I];
-        }
+	const i64& operator[](size_t index) const {
+		if (index >= N) {
+			throw std::out_of_range("Index out of range");
+		}
+		return _data[index];
+	}
 
-        constexpr size_t size() const { return N; }
+	template<size_t I>
+	requires less_than<I,N>
+	const i64& get() const {
+		return _data[I];
+	}
 
-        bool has_value() const {
-            return _data != nullptr;
-        }
+	constexpr size_t size() const { return N; }
 
-        template<size_t R1, size_t R2>
-        friend std::array<i64,R1+R2> operator+(const span<R1>& s1, const span<R2>& s2);
+	bool has_value() const {
+		return _data != nullptr;
+	}
 
-    private:
-        const i64* _data;
-    };
+	template<size_t R1, size_t R2>
+	friend std::array<i64,R1+R2> operator+(const span<R1>& s1, const span<R2>& s2);
 
-    export template<size_t R1, size_t R2>
-    std::array<i64,R1+R2> operator+(const span<R1>& s1, const span<R2>& s2) {
-        std::array<i64,R1+R2> ret;
-        for_sequence<R1>([&](auto i) {
-            ret[i] = s1.template get<i>();
-        });
-        for_sequence<R2>([&](auto i) {
-            ret[i+R1] = s2.template get<i>();
-        });
-        return ret;
-    }
+private:
+	const i64* _data;
+};
 
-    export using nullspan = span<0>;
+export template<size_t R1, size_t R2>
+std::array<i64,R1+R2> operator+(const span<R1>& s1, const span<R2>& s2) {
+	std::array<i64,R1+R2> ret;
+	for_sequence<R1>([&](auto i) {
+		ret[i] = s1.template get<i>();
+	});
+	for_sequence<R2>([&](auto i) {
+		ret[i+R1] = s2.template get<i>();
+	});
+	return ret;
+}
 
-    export template<size_t R>
-    constexpr std::string span_to_str(span<R> arr, bool as_tuple = true) {
-        std::string retstr = as_tuple ? "(" : "[";
-        
-        for_sequence<R>([&](auto i) {
-            retstr += std::to_string(arr.template get<i>());
-            if constexpr(i < R - 1) {
-                retstr += ",";
-            }
-        });
+export using nullspan = span<0>;
 
-        retstr += as_tuple ? ")" : "]";
-        return retstr;
-    }
+export template<size_t R>
+constexpr std::string span_to_str(span<R> arr, bool as_tuple = true) {
+	std::string retstr = as_tuple ? "(" : "[";
+	
+	for_sequence<R>([&](auto i) {
+		retstr += std::to_string(arr.template get<i>());
+		if constexpr(i < R - 1) {
+			retstr += ",";
+		}
+	});
+
+	retstr += as_tuple ? ")" : "]";
+	return retstr;
+}
 
 
 }

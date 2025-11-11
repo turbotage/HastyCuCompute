@@ -59,6 +59,15 @@ public:
         return from_ivalue<ReturnTt>(std::move(ret_ivalue));
     }
 
+    void to(device_idx idx) {
+        if (_script_module != nullptr) {
+            auto device = tch::get_device(idx);
+            _script_module->to(device);
+        } else {
+            throw std::runtime_error("runnable_script has no script unit");
+        }
+    }
+
     Module& get_module() const {
         if (_script_module == nullptr) {
             throw std::runtime_error("Module in runnable_script was null");
@@ -111,9 +120,18 @@ private:
         for (auto&& elem : vec) {
             ivalue_vec.push_back(to_ivalue<U>(std::move(elem)));
         }
-        hc10::List<htorch::jit::IValue> ivalue_list{hc10::ArrayRef<htorch::jit::IValue>(ivalue_vec)};
+        
+        auto typeptr = ivalue_vec[0].type();
+        hc10::impl::GenericList ivalue_generic_list(typeptr);
+        ivalue_generic_list.reserve(ivalue_vec.size());
+        for (auto& ivalue_elem : ivalue_vec) {
+            if (ivalue_elem.type() != typeptr) {
+                throw std::runtime_error("Inconsistent types in vector_to_ivalue");
+            }
+            ivalue_generic_list.push_back(std::move(ivalue_elem));
+        }
         //auto list = hc10::impl::toList(std::move(ivalue_list));
-        return htorch::jit::IValue(std::move(ivalue_list));
+        return htorch::jit::IValue(std::move(ivalue_generic_list));
     }
 
     template<is_tensor_container Map>
