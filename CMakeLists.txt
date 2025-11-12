@@ -64,6 +64,7 @@ target_sources(HastyCuCompute
 			"cpp/corelib/lib/fft/nufft.cppm"
 			"cpp/corelib/lib/fft/toeplitz.cppm"
 			"cpp/corelib/lib/fft/vkfft.cppm"
+			"cpp/corelib/lib/generic_value/generic_value.cppm"
 			"cpp/corelib/lib/io/hdf5.cppm"
 			"cpp/corelib/lib/mri/adjoint.cppm"
 			"cpp/corelib/lib/mri/forward.cppm"
@@ -89,6 +90,7 @@ target_sources(HastyCuCompute
 			"cpp/corelib/lib/tensor/mod_tensor_intrinsic.cppm"
 			"cpp/corelib/lib/tensor/mod_tensor.cppm"
 			"cpp/corelib/lib/script/tensor_proto.cppm"
+			"cpp/corelib/lib/script/dynamic_script.cppm"
 			"cpp/corelib/lib/script/script_cache.cppm"
 			"cpp/corelib/lib/script/script.cppm"
 			"cpp/corelib/lib/util/util_concepts.cppm"
@@ -97,7 +99,7 @@ target_sources(HastyCuCompute
 			"cpp/corelib/lib/util/util_idx.cppm"
 			"cpp/corelib/lib/util/util_io.cppm"
 			"cpp/corelib/lib/util/util_meta.cppm"
-			"cpp/corelib/lib/util/util_span.cppm"   
+			"cpp/corelib/lib/util/util_span.cppm"
 			"cpp/corelib/lib/util/util_torch.cppm"
 			"cpp/corelib/lib/util/util_typing.cppm"
 			"cpp/corelib/lib/util/util.cppm"
@@ -116,6 +118,7 @@ target_sources(HastyCuCompute
 		FILE_SET CXX_MODULES FILES
 			"cpp/corelib/interface/interface_cache.cppm"
 			"cpp/corelib/interface/interface.cppm"
+			"cpp/corelib/interface/interface_typing.cppm"
 )
 
 set(DB_PRODUCTION_MODE ON)

@@ -18,5 +18,7 @@ LIB_EXPORT void test_trace_function();
 
 LIB_EXPORT void jit_checking();
 
+LIB_EXPORT void test_dispatcher_interface();
+
 }
 

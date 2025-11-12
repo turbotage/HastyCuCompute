@@ -10,6 +10,8 @@ import fft;
 import mri;
 import script;
 import script_cache;
+import interface_typing;
+import generic_value;
 
 namespace ffi {
 

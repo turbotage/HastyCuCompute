@@ -43,9 +43,12 @@ constexpr V for_sequence(F f, const V& t) {
 	return tcopy;
 }
 
+template<typename T>
+struct type_tag { using type = T; };
+
 template<typename Tuple, typename F, std::size_t... I>
 constexpr void for_each_type_impl(F&& f, std::index_sequence<I...>) {
-	(f(std::tuple_element_t<I,Tuple>{}), ...);
+    (f(type_tag<std::tuple_element_t<I, Tuple>>{}), ...);
 }
 
 export template<typename Tuple, typename F>

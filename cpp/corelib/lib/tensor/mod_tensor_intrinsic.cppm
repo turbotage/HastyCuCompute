@@ -363,8 +363,7 @@ concept is_tensor_vector =
 	is_tensor<typename T::value_type>;
 
 export template<typename T>
-concept is_tensor_dict_keytype =
-	std::same_as<T, std::string> || std::same_as<T, i64>;
+concept is_tensor_dict_keytype = std::same_as<T, std::string>;
 
 export template<typename T>
 concept is_tensor_dict =
