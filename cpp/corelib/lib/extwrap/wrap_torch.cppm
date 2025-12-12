@@ -10,6 +10,26 @@ module;
 #include "c10/cuda/CUDAStream.h"
 #include <c10/cuda/CUDAGuard.h>
 
+namespace std {
+    template<>
+    void swap(std::pair<c10::IValue, c10::IValue>& lhs, std::pair<c10::IValue, c10::IValue>& rhs)
+        noexcept(noexcept(lhs.swap(rhs))) {
+        lhs.first.swap(rhs.first);
+        lhs.second.swap(rhs.second);
+    }
+}
+
+namespace c10 {
+    inline void swap(
+        std::pair<c10::IValue, c10::IValue>& lhs, 
+        std::pair<c10::IValue, c10::IValue>& rhs
+    ) noexcept 
+    {
+        using std::swap;
+        swap(lhs.first, rhs.first);
+        swap(lhs.second, rhs.second);
+    }
+}
 
 export module torch_base;
 
@@ -129,10 +149,13 @@ export namespace hc10 {
     using c10::string_view;
     using c10::complex;
     using c10::List;
+    using c10::Dict;
     using c10::IValue;
     using c10::ArrayRef;
     using c10::intrusive_ptr;
     using c10::StringType;
+    using c10::Type;
+    using c10::TypePtr;
 
     namespace ivalue {
         using c10::ivalue::Tuple;

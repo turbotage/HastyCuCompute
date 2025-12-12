@@ -135,6 +135,16 @@ bool container_contains(const Container& c, typename Container::const_reference 
 	return std::find(c.begin(), c.end(), v) != c.end();
 }
 
+export template<typename Container> 
+requires std::ranges::range<Container> && 
+         requires(typename Container::value_type a, typename Container::value_type b) { a * b; typename Container::value_type(1); }
+typename Container::value_type container_product(const Container& c)
+{
+	if (c.empty()) return typename Container::value_type(1);  // Product of empty is 1
+	return std::accumulate(c.begin(), c.end(), typename Container::value_type(1), 
+		[](const typename Container::value_type& a, const typename Container::value_type& b) { return a * b; });
+}
+
 export std::string hash_string(size_t num, size_t len)
 {
 	std::string numstr = std::to_string(num);

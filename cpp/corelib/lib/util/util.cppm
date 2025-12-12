@@ -1,6 +1,7 @@
 module;
 
 #include "pch.hpp"
+#include <cuda_runtime.h>
 
 export module util;
 
@@ -151,6 +152,27 @@ export void future_catcher(const std::function<void()>& func)
 		std::cerr << "caught something strange: " << std::endl;
 		throw std::runtime_error("caught something strange: ");
 	}
+}
+
+export std::vector<device_idx> get_cuda_devices(std::function<bool(const cudaDeviceProp&)> device_selector = 
+	[](const cudaDeviceProp& prop)
+	{ 
+		return true; 
+	}
+) 
+{
+	i32 device_count = hat::cuda::device_count();
+	std::vector<device_idx> devices;
+	devices.reserve(device_count);
+	for (int idx = 0; idx < device_count; idx++) {
+		cudaDeviceProp prop;
+		cudaGetDeviceProperties(&prop, idx);
+		if (device_selector(prop)) {
+			devices.push_back(device_idx(idx));
+		}
+
+	}
+	return devices;
 }
 
 export inline void print_cuda_memory(device_idx idx, const std::string& prepend = "", bool empty_cache = false) {

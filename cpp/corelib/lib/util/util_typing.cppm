@@ -45,7 +45,7 @@ using f32 = float;
 using f64 = double;
 using c64 = std::complex<float>;
 using c128 = std::complex<double>;
-
+	
 template<typename T, typename U>
 struct strong_typedef : public strong_typedef_base {
 

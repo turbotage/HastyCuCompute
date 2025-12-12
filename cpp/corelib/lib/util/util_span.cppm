@@ -198,5 +198,4 @@ constexpr std::string span_to_str(span<R> arr, bool as_tuple = true) {
 	return retstr;
 }
 
-
 }

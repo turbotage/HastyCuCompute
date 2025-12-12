@@ -104,6 +104,7 @@ target_sources(HastyCuCompute
 			"cpp/corelib/lib/util/util_typing.cppm"
 			"cpp/corelib/lib/util/util.cppm"
 			"cpp/corelib/lib/threading/threading.cppm"
+			"cpp/corelib/lib/threading/thread_stream.cppm"
 )
 
 # LIB INTERFACE CPP SOURCES
@@ -333,6 +334,88 @@ target_link_libraries(VKFFTTest PRIVATE CUDA::nvrtc)
 target_link_libraries(VKFFTTest PRIVATE CUDA::cudart)
 target_link_libraries(VKFFTTest PRIVATE CUDA::cufft)
 target_link_libraries(VKFFTTest PRIVATE CUDA::cuda_driver)
+
+
+################ HASTY-CU-SERVER ####################
+add_executable(HastyCuServer "cpp/server/server.cpp")
+
+target_compile_features(HastyCuServer
+	PRIVATE cxx_std_23
+	INTERFACE cxx_std_23
+)
+
+set_target_properties(HastyCuServer PROPERTIES
+	CXX_STANDARD 23
+	CXX_STANDARD_REQUIRED ON
+	CXX_SCAN_FOR_MODULES ON
+	#CXX_MODULE_STD ON
+)
+
+
+set(gRPC_PROTOBUF_PROVIDER "package")
+# Fetch gRPC
+FetchContent_Declare(
+  grpc
+  GIT_REPOSITORY https://github.com/grpc/grpc.git
+  GIT_TAG        v1.76.0
+)
+set(FETCHCONTENT_QUIET OFF)
+
+# Prevent using system protobuf
+set(gRPC_INSTALL OFF)
+set(gRPC_BUILD_TESTS OFF)
+FetchContent_MakeAvailable(grpc)
+
+
+target_link_libraries(HastyCuServer PRIVATE
+    HastyCuCompute
+    pybind11::headers
+    Python3::Python
+    gRPC::grpc++
+    protobuf::libprotobuf
+    server_protos
+)
+
+# If you want to install the server executable
+install(TARGETS HastyCuServer
+	RUNTIME DESTINATION bin
+)
+
+set(PROTO_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cpp/server/protos")
+set(PROTO_GEN_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated_protos")
+
+file(GLOB PROTO_FILES "${PROTO_SRC_DIR}/*.proto")
+
+foreach(proto_file ${PROTO_FILES})
+	get_filename_component(proto_name ${proto_file} NAME_WE)
+	set(proto_src "${PROTO_GEN_DIR}/${proto_name}.pb.cc")
+	set(proto_hdr "${PROTO_GEN_DIR}/${proto_name}.pb.h")
+	set(grpc_src "${PROTO_GEN_DIR}/${proto_name}.grpc.pb.cc")
+	set(grpc_hdr "${PROTO_GEN_DIR}/${proto_name}.grpc.pb.h")
+
+	add_custom_command(
+		OUTPUT ${proto_src} ${proto_hdr} ${grpc_src} ${grpc_hdr}
+		COMMAND ${Protobuf_PROTOC_EXECUTABLE}
+		ARGS --proto_path=${PROTO_SRC_DIR}
+			 --cpp_out=${PROTO_GEN_DIR}
+			 --grpc_out=${PROTO_GEN_DIR}
+			 --plugin=protoc-gen-grpc=$<TARGET_FILE:gRPC::grpc_cpp_plugin>
+			 ${proto_file}
+		DEPENDS ${proto_file}
+		COMMENT "Generating C++ sources from ${proto_file}"
+	)
+
+	list(APPEND PROTO_SRCS ${proto_src} ${grpc_src})
+	list(APPEND PROTO_HDRS ${proto_hdr} ${grpc_hdr})
+endforeach()
+
+# Make sure generated files are available for server build
+add_library(server_protos STATIC ${PROTO_SRCS})
+target_include_directories(server_protos PUBLIC ${PROTO_GEN_DIR})
+target_link_libraries(server_protos PUBLIC protobuf::libprotobuf gRPC::grpc++)
+
+# Link server_protos to your server executable
+target_link_libraries(HastyCuServer PRIVATE server_protos)
 
 
 ################ INSTALL ####################

@@ -64,6 +64,17 @@ public:
 		return interface_obj;
 	}
 
+	InterfaceObject& get_object(std::size_t id, std::type_index type_index) {
+		auto it = _cache.find(id);
+		if (it == _cache.end()) {
+			throw std::runtime_error("InterfaceObjectCache: Object ID not found");
+		}
+		if (it->second->type_info() != type_index) {
+			throw std::runtime_error("InterfaceObjectCache: Type mismatch in get_object");
+		}
+		return *(it->second);
+	}
+
 	void remove_object(std::size_t id, std::type_index type_index) {
 		std::lock_guard<std::mutex> lock(_mutex);
 		auto it = _cache.find(id);

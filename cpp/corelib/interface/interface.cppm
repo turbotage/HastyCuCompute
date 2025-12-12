@@ -5,13 +5,12 @@ export module interface;
 namespace hasty {
 namespace interface {
 
-class TensorInterface {
+export class Interface {
 public:
 
-	
+    void push_generic_value();
 
 private:
-
 };
 	
 }

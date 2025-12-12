@@ -39,7 +39,7 @@ namespace hasty {
 		cache_tensor<TT,DIM+1>& smaps,
 		cache_tensor<TT,2>& bil,
 		cache_tensor<TT,DIM+1>& cjl,
-		storage_thread_pool_interface& thread_pool,
+		threading::storage_thread_pool_interface& thread_pool,
 		bool free_bil = true,
 		bool free_cjl = true,
 		bool free_nufft_plan = true
@@ -55,7 +55,7 @@ namespace hasty {
 		auto output = make_empty_tensor<cpu_t,TT,2>(span<2>{smaps.template shape<0>(), coords[0].template shape<0>()});
 
 		auto run_lambda = [&output, &coords, &image, &smaps, &bil, &cjl, number_of_datapts, interp_steps](
-			storage& store, i32 data_idx)
+			threading::storage& store, i32 data_idx)
 		{
 			device_idx didx = store.get_ref_throw<device_idx>("device_idx");
 
@@ -136,10 +136,10 @@ namespace hasty {
 		futures.reserve(smaps.template shape<0>());
 
 		for (int i = 0; i < smaps.template shape<0>(); i++) {
-			auto runner = [i, &run_lambda](storage& store) {
+			auto runner = [i, &run_lambda](threading::storage& store) {
 				run_lambda(store, i);
 			};
-			auto fut = thread_pool.enqueue(run_lambda, i);
+			auto fut = thread_pool.enqueue(runner, i);
 			futures.push_back(std::move(fut));
 		}
 

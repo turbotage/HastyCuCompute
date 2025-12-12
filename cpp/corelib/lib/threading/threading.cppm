@@ -1,7 +1,6 @@
 module;
 
 #include "pch.hpp"
-#include <cuda_runtime.h>
 
 export module threading;
 
@@ -11,27 +10,7 @@ import util;
 import tensor;
 
 namespace hasty {
-
-export std::vector<device_idx> get_cuda_devices(std::function<bool(const cudaDeviceProp&)> device_selector = 
-	[](const cudaDeviceProp& prop)
-	{ 
-		return true; 
-	}
-) 
-{
-	i32 device_count = hat::cuda::device_count();
-	std::vector<device_idx> devices;
-	devices.reserve(device_count);
-	for (int idx = 0; idx < device_count; idx++) {
-		cudaDeviceProp prop;
-		cudaGetDeviceProperties(&prop, idx);
-		if (device_selector(prop)) {
-			devices.push_back(device_idx(idx));
-		}
-
-	}
-	return devices;
-}
+namespace threading {
 
 export class storage {
 private:
@@ -413,5 +392,6 @@ private:
 	vset<std::string> _good_to_have_names;
 };
 
+}
 }
 
